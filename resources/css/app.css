@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom colors adjusted for army green aesthetic */
+@layer base {
+    :root {
+        --color-navbar: #2e3b2c;           /* Dark olive/army green */
+        --color-sidebar: #1c241b;          /* Very dark green/olive drab */
+        --color-sidebar-hover: #3f4e3a;    /* Hover mid-tone military green */
+        --color-sidebar-active: #556b2f;   /* Army green (similar to olive drab) */
+        --color-dark-bg: #121a13;          /* Deeper forest green */
+        --color-dark-line: #2a3527;        /* Muted dark line accent */
+    }
+
+    .bg-navbar { background-color: var(--color-navbar); }
+    .bg-sidebar { background-color: var(--color-sidebar); }
+    .bg-sidebar-hover:hover { background-color: var(--color-sidebar-hover); }
+    .bg-sidebar-active { background-color: var(--color-sidebar-active); }
+    .bg-dark-bg { background-color: var(--color-dark-bg); }
+    .border-dark-line { border-color: var(--color-dark-line); }
+}
