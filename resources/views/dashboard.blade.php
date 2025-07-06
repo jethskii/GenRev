@@ -14,6 +14,8 @@
             ];
         @endphp
 
+
+
         @foreach ($metrics as $metric)
         <div class="bg-dark-bg text-white border border-dark-line shadow-md p-4 rounded-lg">
             <h2 class="text-xs uppercase font-semibold text-gray-300">{{ $metric['label'] }}</h2>
