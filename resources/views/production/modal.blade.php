@@ -11,7 +11,6 @@
     <form id="globalOrderForm" method="POST" class="space-y-3">
       @csrf
 
-      
       {{-- Product selector --}}
     <div>
     <label class="block text-sm mb-1">Product</label>
