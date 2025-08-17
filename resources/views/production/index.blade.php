@@ -1,131 +1,175 @@
 @extends('layout.mainlayout')
 
 @section('content')
-<div class="bg-dark-bg text-white p-6 rounded shadow-md border border-dark-line">
+<div class="glass section-liquid-shine text-white p-6 rounded-2xl shadow-md border border-dark-line">
+
     {{-- Header --}}
     <div class="flex justify-between items-center mb-6">
-        <h2 class="text-xl font-semibold">Production Overview</h2>
-        <button onclick="document.getElementById('addModal').classList.remove('hidden')" class="btn-armygreen">+ Add Production</button>
+        <h2 class="text-xl font-semibold tracking-wide">Production Overview</h2>
+        <button onclick="openAddModal()" class="px-4 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold shadow hover:opacity-90 transition">
+            + Add Order
+        </button>
     </div>
 
-    {{-- Filter/Search Bar --}}
+    {{-- Category Filter --}}
+    <div class="flex flex-wrap gap-3 mb-6" id="category-buttons">
+        @foreach ($categories as $category)
+            <button
+                class="px-4 py-2 rounded-full text-white/95 bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition category-btn"
+                data-category="{{ $category }}"
+                type="button"
+            >
+                {{ $category }}
+            </button>
+        @endforeach
+        @if(count($categories))
+            <button type="button" class="text-sm text-red-300 underline ml-2 clear-filter">Clear Filter</button>
+        @endif
+    </div>
+
+    {{-- Search + Sort --}}
     <div class="mb-6">
-        <form method="GET" action="{{ route('production.index') }}" class="flex flex-wrap gap-2">
-            <input type="text" name="search" placeholder="Search product name..."
-                   value="{{ request('search') }}"
-                   class="bg-dark-field text-white px-3 py-2 rounded focus:outline-none w-full sm:w-1/3">
-            <button type="submit" class="btn-armygreen">Search</button>
+        <form method="GET" action="{{ route('production.index') }}" class="flex flex-wrap gap-2 items-center" id="filtersForm">
+            <input
+                type="text"
+                name="search"
+                placeholder="Search product name..."
+                value="{{ request('search') }}"
+                class="w-full sm:w-1/3 rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-white/90 placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+            <select name="sort" id="sort-select"
+                    class="rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-white/90 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                @php $currentSort = request('sort', $sort ?? 'urgency'); @endphp
+                <option value="urgency" {{ $currentSort === 'urgency' ? 'selected' : '' }}>Urgency (Low Stock First)</option>
+                <option value="expiry"  {{ $currentSort === 'expiry'  ? 'selected' : '' }}>Soonest Expiry</option>
+                <option value="name"    {{ $currentSort === 'name'    ? 'selected' : '' }}>Name A–Z</option>
+            </select>
+            <button type="submit" class="px-4 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold shadow hover:opacity-90 transition">Apply</button>
         </form>
     </div>
 
     {{-- Summary Cards --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
         @foreach ([
-            ['label' => 'Forecasted Demand', 'value' => $forecastedDemand . ' kg'],
-            ['label' => 'Current Inventory', 'value' => $actualInventory . ' kg'],
-            ['label' => 'Shortfall', 'value' => $shortfall . ' kg', 'class' => 'text-red-400'],
-            ['label' => 'Recommended Production', 'value' => $recommendedProduction . ' kg', 'class' => 'text-green-400'],
+            ['label' => 'Forecasted Demand', 'value' => number_format((float)$forecastedDemand, 3) . ' kg'],
+            ['label' => 'Current Inventory', 'value' => number_format((float)$actualInventory, 3) . ' kg'],
+            ['label' => 'Shortfall', 'value' => number_format((float)$shortfall, 3) . ' kg', 'class' => 'text-red-300'],
+            ['label' => 'Recommended Production', 'value' => number_format((float)$recommendedProduction, 3) . ' kg', 'class' => 'text-emerald-300'],
         ] as $card)
-            <div class="bg-sidebar text-white p-4 rounded shadow">
-                <p class="text-sm text-gray-300">{{ $card['label'] }}</p>
+            <div class="glass rounded-2xl p-4 border border-dark-line">
+                <p class="text-sm text-white/70">{{ $card['label'] }}</p>
                 <h3 class="text-lg font-bold {{ $card['class'] ?? '' }}">{{ $card['value'] }}</h3>
             </div>
         @endforeach
     </div>
 
-    {{-- Product Table --}}
-    <div class="overflow-x-auto rounded-lg">
-        <table class="min-w-full text-sm text-left bg-dark-bg rounded-lg overflow-hidden">
-            <thead class="bg-sidebar text-white uppercase text-xs">
-                <tr>
-                    <th class="py-3 px-4">Product Name</th>
-                    <th class="py-3 px-4">Forecasted Demand</th>
-                    <th class="py-3 px-4">Current Inventory</th>
-                    <th class="py-3 px-4">Unit Cost</th>
-                    <th class="py-3 px-4">Production Date</th>
-                    <th class="py-3 px-4 text-center">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="text-gray-100 divide-y divide-dark-line">
-                @forelse ($products as $product)
-                    <tr class="hover:bg-sidebar-hover transition">
-                        <td class="py-3 px-4">{{ $product->product_name }}</td>
-                        <td class="py-3 px-4">{{ $product->forecasted_demand }} kg</td>
-                        <td class="py-3 px-4">{{ $product->current_inventory }} kg</td>
-                        <td class="py-3 px-4">₱{{ number_format($product->unit_cost, 2) }}</td>
-                        <td class="py-3 px-4">{{ \Carbon\Carbon::parse($product->production_date)->format('M d, Y') }}</td>
-                        <td class="py-3 px-4 text-center space-x-2">
-                            <a href="{{ route('production.edit', $product->id) }}" class="text-yellow-400 hover:underline">Edit</a>
-                            <form action="{{ route('production.destroy', $product->id) }}" method="POST" class="inline-block" onsubmit="return confirm('Are you sure you want to delete this?')">
-                                @csrf
-                                @method('DELETE')
-                                <button type="submit" class="text-red-400 hover:underline">Delete</button>
-                            </form>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="6" class="py-4 text-center text-gray-400">No production records found.</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
+    {{-- Product cards --}}
+    <div id="product-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {{-- This partial should use new helpers like $p->days_to_expiry, $p->is_expired, $p->remaining_qty --}}
+        @include('production.partials.product-cards', ['products' => $products])
     </div>
 </div>
 
-{{-- Add Production Modal --}}
-<div id="addModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 hidden">
-    <div class="bg-dark-bg p-6 rounded-lg shadow-lg w-full max-w-md">
-        <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-bold">Add Production</h3>
-            <button onclick="document.getElementById('addModal').classList.add('hidden')" class="text-gray-400 hover:text-white">&times;</button>
-        </div>
-       <form action="{{ route('production.store') }}" method="POST">
-    @csrf
+{{-- Modal (updated Add Order modal) --}}
+@include('production.modal', ['products' => $allProducts])
 
-    {{-- Product Name --}}
-    <div class="mb-4">
-        <label class="block text-sm text-gray-200">Product Name</label>
-        <input name="product_name" required
-            class="w-full px-3 py-2 bg-white text-black placeholder-gray-500 border border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-armygreen"
-            placeholder="e.g. Hotdog ni Arjay">
-    </div>
+{{-- Scripts --}}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('addModal');
+    const sortSelect = document.getElementById('sort-select');
 
-    {{-- Forecasted Demand --}}
-    <div class="mb-4">
-        <label class="block text-sm text-gray-200">Forecasted Demand (kg)</label>
-        <input type="number" name="forecasted_demand" required
-            class="w-full px-3 py-2 bg-white text-black placeholder-gray-500 border border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-armygreen"
-            placeholder="e.g. 100">
-    </div>
+    // Open/Close modal (ensure centering by toggling flex)
+    window.openAddModal = () => {
+        resetModalFields();
+        generateBatchNumber();
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
+    };
+    window.closeAddModal = () => {
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+    };
 
-    {{-- Current Inventory --}}
-    <div class="mb-4">
-        <label class="block text-sm text-gray-200">Current Inventory (kg)</label>
-        <input type="number" name="current_inventory" required
-            class="w-full px-3 py-2 bg-white text-black placeholder-gray-500 border border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-armygreen"
-            placeholder="e.g. 50">
-    </div>
+    // Batch number generator
+    function generateBatchNumber() {
+        const now = new Date();
+        const pad = n => n.toString().padStart(2, '0');
+        const batch = `B-${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        const input = document.getElementById('batch_number');
+        if (input && !input.value) input.value = batch;
+    }
 
-    {{-- Unit Cost --}}
-    <div class="mb-4">
-        <label class="block text-sm text-gray-200">Unit Cost</label>
-        <input type="number" step="0.01" name="unit_cost" required
-            class="w-full px-3 py-2 bg-white text-black placeholder-gray-500 border border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-armygreen"
-            placeholder="e.g. 120.50">
-    </div>
+    // Reset fields in modal (supports updated Add Order modal fields)
+    function resetModalFields() {
+        [
+            'product_id','product_name','batch_number',
+            'forecasted_demand','produced_qty_kg',
+            'unit_cost','unit_price',
+            'production_date','expiration_date',
+            'order_date','order_quantity_kg',
+            'customer_name','notes'
+        ].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (el.tagName === 'SELECT') el.selectedIndex = 0;
+            else el.value = '';
+        });
+    }
 
-    {{-- Production Date --}}
-    <div class="mb-4">
-        <label class="block text-sm text-gray-200">Production Date</label>
-        <input type="date" name="production_date" required
-            class="w-full px-3 py-2 bg-white text-black border border-gray-400 rounded focus:outline-none focus:ring-2 focus:ring-armygreen">
-    </div>
+    // Optional: name-based product info fetch (kept for backward compat)
+    window.loadProductInfo = () => {
+        const sel = document.getElementById("product_name");
+        const name = (sel?.value || '').trim();
+        if (!name) return;
 
-    <button type="submit" class="btn-armygreen w-full mt-2">Add Production</button>
-</form>
+        fetch(`{{ url('/production/info') }}/${encodeURIComponent(name)}`)
+            .then(res => res.ok ? res.json() : Promise.reject())
+            .then(data => {
+                const fd = document.getElementById("forecasted_demand");
+                const ci = document.getElementById("current_inventory");
+                const uc = document.getElementById("unit_cost");
+                if (fd) fd.value = data.forecasted_demand ?? '';
+                if (ci) ci.value = data.current_inventory ?? '';
+                if (uc) uc.value = data.unit_cost ?? '';
+            })
+            .catch(() => {
+                ["forecasted_demand","current_inventory","unit_cost"].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = '';
+                });
+            });
+    };
 
+    // AJAX category filter (now passes &sort=)
+    document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const category = btn.dataset.category;
+            const sort = sortSelect ? sortSelect.value : 'urgency';
+            fetch(`{{ route('production.filter') }}?category=${encodeURIComponent(category)}&sort=${encodeURIComponent(sort)}`)
+                .then(res => res.json())
+                .then(data => { document.getElementById('product-container').innerHTML = data.html; })
+                .catch(console.error);
+        });
+    });
 
-    </div>
-</div>
+    // Clear filter (keeps current sort)
+    const clear = document.querySelector('.clear-filter');
+    if (clear) clear.addEventListener('click', () => {
+        const sort = sortSelect ? sortSelect.value : 'urgency';
+        fetch(`{{ route('production.filter') }}?sort=${encodeURIComponent(sort)}`)
+            .then(res => res.json())
+            .then(data => { document.getElementById('product-container').innerHTML = data.html; })
+            .catch(console.error);
+    });
+
+    // Prevent double-submit anywhere on this page
+    document.querySelectorAll('form').forEach(f => {
+        f.addEventListener('submit', () => {
+            const btn = f.querySelector('button[type="submit"], input[type="submit"]');
+            if (btn) { btn.disabled = true; btn.classList.add('opacity-70','cursor-not-allowed'); }
+        });
+    });
+});
+</script>
 @endsection

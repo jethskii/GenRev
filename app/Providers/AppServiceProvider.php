@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use App\Services\InventoryService;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -11,7 +12,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Bind InventoryService as a singleton so it reuses the same instance
+        $this->app->singleton(InventoryService::class, function ($app) {
+            return new InventoryService();
+        });
     }
 
     /**
