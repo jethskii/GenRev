@@ -14,7 +14,7 @@ class Sale extends Model
     protected $table = 'sales';
 
     protected $fillable = [
-        // new schema
+        // New schema
         'product_id',
         'production_id',
         'order_number',
@@ -25,7 +25,12 @@ class Sale extends Model
         'status',
         'customer_name',
         'notes',
-        // legacy (kept for backward compatibility)
+
+        // Optional timeline fields used by controllers (if columns exist)
+        'production_date',
+        'expiration_date',
+
+        // Legacy (kept for backward compatibility)
         'invoice_number',
         'product',
         'date',
@@ -35,20 +40,26 @@ class Sale extends Model
     ];
 
     protected $casts = [
-        'order_date'   => 'date',
-        'quantity_kg'  => 'decimal:3',
-        'unit_price'   => 'decimal:2',
-        'total_price'  => 'decimal:2',
-        // legacy
-        'date'         => 'date',
-        'quantity'     => 'decimal:3',
-        'price'        => 'decimal:2',
-        'total'        => 'decimal:2',
+        // New
+        'order_date'     => 'date',
+        'quantity_kg'    => 'decimal:3',
+        'unit_price'     => 'decimal:2',
+        'total_price'    => 'decimal:2',
+
+        // Optional columns
+        'production_date'=> 'date',
+        'expiration_date'=> 'date',
+
+        // Legacy
+        'date'           => 'date',
+        'quantity'       => 'decimal:3',
+        'price'          => 'decimal:2',
+        'total'          => 'decimal:2',
     ];
 
     /* ---------------- Relationships ---------------- */
 
-    // Prevent clash with legacy "product" column
+    // Avoid name clash with legacy string column "product"
     public function productRef()
     {
         return $this->belongsTo(Product::class, 'product_id');
@@ -66,7 +77,7 @@ class Sale extends Model
 
     /* ---------------- Unified Accessors ---------------- */
 
-    /** Quantity in kg regardless of schema */
+    /** Quantity (kg) regardless of schema */
     public function qtyKg(): float
     {
         return (float) ($this->quantity_kg ?? $this->quantity ?? 0);
@@ -99,11 +110,52 @@ class Sale extends Model
         return optional($this->productRef)->product_name ?? '';
     }
 
+    /** Unified sale date: prefer new order_date, then legacy date */
+    public function getSaleDateAttribute(): ?\Illuminate\Support\Carbon
+    {
+        return $this->order_date ?? $this->date ?? null;
+    }
+
+    /* ---------------- Mutators (normalize totals) ---------------- */
+
+    public function setQuantityKgAttribute($value): void
+    {
+        $this->attributes['quantity_kg'] = is_null($value) ? null : (float) $value;
+        // Auto-sync total_price if using new schema
+        if (array_key_exists('unit_price', $this->attributes) && !is_null($this->attributes['unit_price'])) {
+            $this->attributes['total_price'] = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
+        }
+    }
+
+    public function setUnitPriceAttribute($value): void
+    {
+        $this->attributes['unit_price'] = is_null($value) ? null : (float) $value;
+        if (array_key_exists('quantity_kg', $this->attributes) && !is_null($this->attributes['quantity_kg'])) {
+            $this->attributes['total_price'] = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
+        }
+    }
+
+    public function setQuantityAttribute($value): void
+    {
+        $this->attributes['quantity'] = is_null($value) ? null : (float) $value;
+        if (array_key_exists('price', $this->attributes) && !is_null($this->attributes['price'])) {
+            $this->attributes['total'] = round(($this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
+        }
+    }
+
+    public function setPriceAttribute($value): void
+    {
+        $this->attributes['price'] = is_null($value) ? null : (float) $value;
+        if (array_key_exists('quantity', $this->attributes) && !is_null($this->attributes['quantity'])) {
+            $this->attributes['total'] = round(($this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
+        }
+    }
+
     /* ---------------- Inventory Side-Effects ---------------- */
 
     protected static function booted()
     {
-        // Before create: auto compute total if not set
+        // Before create: ensure a total exists (new or legacy)
         static::creating(function (self $m) {
             if (is_null($m->total_price) && is_null($m->total)) {
                 $m->total_price = round(

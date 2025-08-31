@@ -103,8 +103,10 @@
 
     <h3 id="modalTitle" class="text-xl font-semibold mb-4">Add Order ({{ $product->product_name }})</h3>
 
-    <form id="addOrderForm" action="{{ route('production.storeOrder', $product->id) }}" method="POST" class="space-y-3">
+    {{-- IMPORTANT: post to production.orders.store (no URL params). Provide product_id as a hidden field. --}}
+    <form id="addOrderForm" action="{{ route('production.orders.store') }}" method="POST" class="space-y-3">
       @csrf
+      <input type="hidden" id="po_product_id" name="product_id" value="{{ (int) $product->id }}">
 
       {{-- Product select + quick add --}}
       <div>
@@ -179,9 +181,10 @@
         </div>
         <div>
           <label class="block text-sm mb-1">Produced Quantity (kg)</label>
-          <input id="po_prod_qty" name="produced_qty_kg" type="number" step="any" required
+          {{-- IMPORTANT: controller expects "quantity" --}}
+          <input id="po_prod_qty" name="quantity" type="number" step="any" required
                  class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                 value="{{ old('produced_qty_kg') }}">
+                 value="{{ old('quantity') }}">
         </div>
       </div>
 
@@ -221,24 +224,20 @@
         </div>
       </div>
 
-      {{-- Order fields --}}
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm mb-1">Order Date</label>
-          <input id="po_order_date" name="order_date" type="date"
-                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                 value="{{ old('order_date', now()->toDateString()) }}">
-          <p class="text-xs text-[var(--muted,#A3B4A7)] mt-1">Leave blank to use today.</p>
-        </div>
-        <div>
-          <label class="block text-sm mb-1">Order Quantity (kg)</label>
-          <input id="po_order_qty" name="order_quantity_kg" type="number" step="any" required
-                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                 value="{{ old('order_quantity_kg') }}">
-        </div>
+      {{-- Optional order fields (kept / ignored by controller) --}}
+      <div>
+        <label class="block text-sm mb-1">Order Date</label>
+        <input id="po_order_date" name="order_date" type="date"
+               class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+               value="{{ old('order_date', now()->toDateString()) }}">
+        <p class="text-xs text-[var(--muted,#A3B4A7)] mt-1">Leave blank to use today.</p>
       </div>
-
-      {{-- Optional --}}
+      <div>
+        <label class="block text-sm mb-1">Order Quantity (kg)</label>
+        <input id="po_order_qty" name="order_quantity_kg" type="number" step="any"
+               class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+               value="{{ old('order_quantity_kg') }}">
+      </div>
       <div>
         <label class="block text-sm mb-1">Customer (optional)</label>
         <input name="customer_name"
@@ -273,7 +272,6 @@
 
   function openOrderModal(){
     syncExpiryPreview();
-    // Seed defaults for the initially-selected product
     const sel = $$('#po_product_select');
     if (sel) {
       const opt = sel.options[sel.selectedIndex];
@@ -337,14 +335,10 @@
 
   const csrfToken = () => (document.querySelector('#addOrderForm input[name=_token]')?.value || '');
 
+  // ✅ Only update hidden product_id and the modal title (do NOT rewrite form action)
   function updateFormForProduct(productId, productName){
-    // update form action (POST /production/{id}/order)
-    const form = document.getElementById('addOrderForm');
-    if (form) {
-      const base = @json(route('production.storeOrder', ['product' => 'PRODUCT_ID_PLACEHOLDER']));
-      form.action = base.replace('PRODUCT_ID_PLACEHOLDER', String(productId));
-    }
-    // update modal title
+    const hid = $$('#po_product_id');
+    if (hid) hid.value = String(productId);
     const title = document.getElementById('modalTitle');
     if (title) title.textContent = `Add Order (${productName})`;
   }
@@ -357,12 +351,9 @@
     const cancel= document.getElementById('po_new_cancel');
     const err   = document.getElementById('po_new_err');
 
-    // change product -> update action/title and fetch defaults
     sel?.addEventListener('change', () => {
       const opt = sel.options[sel.selectedIndex];
       updateFormForProduct(opt.value, opt.textContent.trim());
-      // Clear price/cost to allow server defaults to fill if user wants
-      // (or keep as-is if you prefer)
       autoFillCostPriceForName(opt.textContent.trim());
     });
 
@@ -403,17 +394,14 @@
           })
         });
         if (!res.ok) throw new Error('Failed to create product');
-        const data = await res.json(); // { id, product_name, category?, unit_cost?, shelf_life_days? }
+        const data = await res.json();
 
-        // add to select + select it
         const opt = new Option(data.product_name, data.id, true, true);
         sel.add(opt);
         sel.value = data.id;
 
-        // update form + title
         updateFormForProduct(data.id, data.product_name);
 
-        // seed Unit Cost with just-entered value if empty
         if ($$('#po_cost') && !$$('#po_cost').value && typeof data.unit_cost !== 'undefined') {
           $$('#po_cost').value = Number(data.unit_cost).toFixed(2);
         }

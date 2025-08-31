@@ -4,6 +4,10 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * (Optional) Legacy placeholder.
+ * Not used by the new Inventory dashboard which reads canonical tables.
+ */
 class Inventory extends Model
 {
     protected $table = 'inventory';

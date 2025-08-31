@@ -5,20 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Production;
 use App\Models\Sale;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;   // column checks
-use Illuminate\Support\Facades\View;     // render card html
-use Illuminate\View\View as ViewReturn;  // avoid name clash with Facade
+use Illuminate\View\View;
 
 class SalesController extends Controller
 {
     /** List sales + feed Add-Sale modal */
-    public function index(): ViewReturn
+    public function index(): View
     {
         $sales = Sale::with([
                 'productRef:id,product_name',
@@ -38,13 +35,14 @@ class SalesController extends Controller
             });
 
         $statusOptions = ['Pending','Completed','Cancelled','Paid'];
-        $nextInvoice   = $this->peekNextInvoiceNumber();
+        $nextInvoice   = $this->peekNextInvoiceNumber(); // UI preview (does not reserve)
 
         return view('sales.index', compact('sales','nextInvoice','products','statusOptions'));
     }
 
     /* ---------------- Invoice number helpers (atomic + fallback) ---------------- */
 
+    /** Reserve & return next invoice number for today (INV-YYYYMMDD-###). */
     protected function nextInvoiceNumber(): string
     {
         $todayDate = now()->toDateString();
@@ -52,7 +50,10 @@ class SalesController extends Controller
 
         try {
             return DB::transaction(function () use ($todayDate, $ymd) {
-                $row = DB::table('invoice_sequences')->where('date_key', $todayDate)->lockForUpdate()->first();
+                $row = DB::table('invoice_sequences')
+                    ->where('date_key', $todayDate)
+                    ->lockForUpdate()
+                    ->first();
 
                 if (!$row) {
                     DB::table('invoice_sequences')->insert([
@@ -64,10 +65,9 @@ class SalesController extends Controller
                     $seq = 1;
                 } else {
                     $seq = (int)$row->last_seq + 1;
-                    DB::table('invoice_sequences')->where('date_key', $todayDate)->update([
-                        'last_seq' => $seq,
-                        'updated_at' => now(),
-                    ]);
+                    DB::table('invoice_sequences')
+                        ->where('date_key', $todayDate)
+                        ->update(['last_seq' => $seq, 'updated_at' => now()]);
                 }
 
                 return 'INV-' . $ymd . '-' . str_pad((string)$seq, 3, '0', STR_PAD_LEFT);
@@ -81,6 +81,7 @@ class SalesController extends Controller
         }
     }
 
+    /** Peek next invoice (no reservation) for UI display. */
     protected function peekNextInvoiceNumber(): string
     {
         $todayDate = now()->toDateString();
@@ -110,13 +111,15 @@ class SalesController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'product_id'      => ['required','integer','exists:products,id'],
-            'production_id'   => ['nullable','integer','exists:productions,id'],
-            'date'            => ['required','date'],
-            'quantity'        => ['required','numeric','min:0.001'],
-            'price'           => ['required','numeric','min:0'],
-            'status'          => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
-            'product'         => ['sometimes','nullable','string','max:150'],
+            'product_id'     => ['required','integer','exists:products,id'],
+            'production_id'  => ['nullable','integer','exists:productions,id'],
+            'date'           => ['required','date'],
+            'quantity'       => ['required','numeric','min:0.001'],
+            'price'          => ['required','numeric','min:0'],
+            // status now optional; default applied below
+            'status'         => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
+            'product'        => ['sometimes','nullable','string','max:150'],
+            // Optional extra fields (if you store them; otherwise ignore)
             'production_date' => ['nullable','date'],
             'expiration_date' => ['nullable','date','after_or_equal:production_date'],
             'notes'           => ['nullable','string','max:2000'],
@@ -133,7 +136,7 @@ class SalesController extends Controller
         $displayName = $validated['product'] ?? $product->product_name;
         $invoice     = $this->nextInvoiceNumber(); // atomic
         $total       = round(((float)$validated['quantity']) * ((float)$validated['price']), 2);
-        $status      = $validated['status'] ?? 'Completed';
+        $status      = $validated['status'] ?? 'Completed'; // ✅ default to Completed
 
         try {
             DB::transaction(function () use ($validated, $displayName, $invoice, $total, $status, $product) {
@@ -149,13 +152,14 @@ class SalesController extends Controller
                     'status'         => $status,
                 ];
 
-                if (Schema::hasColumn('sales','production_date') && !empty($validated['production_date'])) {
+                // Store optional fields only if columns exist
+                if (Schema()->hasColumn('sales','production_date') && !empty($validated['production_date'])) {
                     $payload['production_date'] = $validated['production_date'];
                 }
-                if (Schema::hasColumn('sales','expiration_date') && !empty($validated['expiration_date'])) {
+                if (Schema()->hasColumn('sales','expiration_date') && !empty($validated['expiration_date'])) {
                     $payload['expiration_date'] = $validated['expiration_date'];
                 }
-                if (Schema::hasColumn('sales','notes') && !empty($validated['notes'])) {
+                if (Schema()->hasColumn('sales','notes') && !empty($validated['notes'])) {
                     $payload['notes'] = trim($validated['notes']);
                 }
 
@@ -187,13 +191,13 @@ class SalesController extends Controller
     public function update(Request $request, Sale $sale): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
-            'product_id'      => ['required','integer','exists:products,id'],
-            'production_id'   => ['nullable','integer','exists:productions,id'],
-            'date'            => ['required','date'],
-            'quantity'        => ['required','numeric','min:0.001'],
-            'price'           => ['required','numeric','min:0'],
-            'status'          => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
-            'product'         => ['sometimes','nullable','string','max:150'],
+            'product_id'     => ['required','integer','exists:products,id'],
+            'production_id'  => ['nullable','integer','exists:productions,id'],
+            'date'           => ['required','date'],
+            'quantity'       => ['required','numeric','min:0.001'],
+            'price'          => ['required','numeric','min:0'],
+            'status'         => ['nullable','string','in:Pending,Completed,Cancelled,Paid'], // now optional
+            'product'        => ['sometimes','nullable','string','max:150'],
             'production_date' => ['nullable','date'],
             'expiration_date' => ['nullable','date','after_or_equal:production_date'],
             'notes'           => ['nullable','string','max:2000'],
@@ -207,6 +211,7 @@ class SalesController extends Controller
         }
 
         $oldProductId = (int)$sale->product_id;
+
         $product     = Product::select('id','product_name')->findOrFail($validated['product_id']);
         $displayName = $validated['product'] ?? $product->product_name;
         $total       = round(((float)$validated['quantity']) * ((float)$validated['price']), 2);
@@ -225,19 +230,20 @@ class SalesController extends Controller
                     'status'        => $status,
                 ];
 
-                if (Schema::hasColumn('sales','production_date')) {
+                if (Schema()->hasColumn('sales','production_date')) {
                     $payload['production_date'] = $validated['production_date'] ?? null;
                 }
-                if (Schema::hasColumn('sales','expiration_date')) {
+                if (Schema()->hasColumn('sales','expiration_date')) {
                     $payload['expiration_date'] = $validated['expiration_date'] ?? null;
                 }
-                if (Schema::hasColumn('sales','notes')) {
+                if (Schema()->hasColumn('sales','notes')) {
                     $payload['notes'] = $validated['notes'] ?? null;
                 }
 
                 $sale->update($payload);
             });
 
+            // Recompute balances for both old and (possibly) new product
             $this->recomputeProductBalance($oldProductId);
             $this->recomputeProductBalance((int)$product->id);
 
@@ -276,76 +282,6 @@ class SalesController extends Controller
         ]);
     }
 
-    /** -------------------- NEW: One-click Quick Add (AJAX) -------------------- */
-    public function quickStore(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'product_id'    => ['required','integer','exists:products,id'],
-            'quantity'      => ['nullable','numeric','min:0.001'],
-            'price'         => ['nullable','numeric','min:0'],
-            'production_id' => ['nullable','integer','exists:productions,id'],
-            'date'          => ['nullable','date'],
-        ]);
-
-        $product   = Product::findOrFail((int)$validated['product_id']);
-        $quantity  = (float)($validated['quantity'] ?? 1);
-        $price     = (float)($validated['price'] ?? ($product->price ?? $product->default_price ?? $product->unit_cost ?? 0));
-        $date      = !empty($validated['date']) ? Carbon::parse($validated['date'])->toDateString() : now()->toDateString();
-
-        // Ensure production_id belongs to product or pick latest batch
-        $batch = null;
-        if (!empty($validated['production_id'])) {
-            $b = Production::select('id','product_id')->findOrFail($validated['production_id']);
-            if ((int)$b->product_id === (int)$product->id) $batch = $b;
-        }
-        if (!$batch) {
-            $batch = Production::where('product_id', $product->id)
-                ->orderByDesc('production_date')->orderByDesc('id')->first();
-        }
-
-        $invoice = $this->nextInvoiceNumber();
-
-        DB::transaction(function () use ($product, $quantity, $price, $date, $batch, $invoice) {
-            Sale::create([
-                'invoice_number' => $invoice,
-                'product_id'     => $product->id,
-                'production_id'  => $batch?->id,
-                'product'        => $product->product_name,
-                'date'           => $date,
-                'quantity'       => $quantity,
-                'price'          => $price,
-                'total'          => round($quantity * $price, 2),
-                'status'         => 'Completed',
-            ]);
-
-            // recompute balance (produced - sold)
-            $this->recomputeProductBalance($product->id);
-        });
-
-        // Build refreshed card html for UI swap
-        [$cardHtml, $pid] = $this->buildProductCardHtml($product->id);
-
-        // Dashboard totals
-        $all = Product::all();
-        $forecastedDemand      = (float) $all->sum('forecasted_demand');
-        $actualInventory       = (float) $all->sum('quantity');
-        $shortfall             = max($forecastedDemand - $actualInventory, 0.0);
-        $recommendedProduction = $shortfall;
-
-        return response()->json([
-            'ok'        => true,
-            'message'   => 'Sale recorded.',
-            'product_id'=> $pid,
-            'card_html' => $cardHtml,
-            'totals'    => [
-                'forecastedDemand'      => $forecastedDemand,
-                'actualInventory'       => $actualInventory,
-                'shortfall'             => $shortfall,
-                'recommendedProduction' => $recommendedProduction,
-            ],
-        ]);
-    }
-
     /* ----------------------------- Helpers ----------------------------- */
 
     protected function respondValidationError(Request $request, array $errors)
@@ -358,6 +294,7 @@ class SalesController extends Controller
 
     protected function recomputeProductBalance(int $productId): void
     {
+        // Produced - Sold, never negative
         $produced = (float) Production::where('product_id', $productId)->sum('quantity');
         $sold     = (float) Sale::where('product_id', $productId)->sum('quantity');
         $balance  = max(0.0, $produced - $sold);
@@ -369,28 +306,5 @@ class SalesController extends Controller
             'stock_status'    => $balance > 0 ? 'in_stock' : 'out_of_stock',
             'production_date' => $latestProdDate,
         ]);
-    }
-
-    /**
-     * Build single product card HTML consistent with ProductionController rendering.
-     */
-    protected function buildProductCardHtml(int $productId): array
-    {
-        $fresh = Product::find($productId);
-        if (!$fresh) return [null, $productId];
-
-        // Mirror ProductionController@attachCardMedia minimal behavior
-        $orig = $fresh->image_url ?? asset('images/default-product.png');
-        $fresh->card_image_url     = $orig;
-        $fresh->image_thumb_url    = null;
-        $fresh->image_medium_url   = null;
-        $fresh->image_original_url = $orig;
-        $fresh->card_image_srcset  = null;
-
-        $cardHtml = View::exists('production.partials.product-card')
-            ? view('production.partials.product-card', ['p' => $fresh])->render()
-            : view('production.partials.product-cards', ['products' => collect([$fresh])])->render();
-
-        return [$cardHtml, $fresh->id];
     }
 }

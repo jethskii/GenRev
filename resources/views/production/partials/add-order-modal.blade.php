@@ -1,198 +1,208 @@
 @php
-/** @var \Illuminate\Support\Collection|\App\Models\Product[]|null $products */
-$products = $products ?? collect();
-$statusOptions = $statusOptions ?? ['Pending','Completed','Cancelled','Paid'];
+/** @var \Illuminate\Support\Collection|\App\Models\Product[] $products */
+use Illuminate\Support\Str;
 @endphp
 
-<div id="addSaleModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/60">
-  <div class="w-full max-w-2xl mx-4 rounded-2xl overflow-hidden border border-white/15 bg-gradient-to-br from-[#1F1E1E] to-[#001C00]">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-white/10">
-      <h3 class="text-white font-semibold text-lg">Add New Sale</h3>
-      <button type="button" class="text-white/60 hover:text-white" onclick="toggleAddSaleModal(false)">✕</button>
+@once
+<style>
+  .prod-card-img{
+    width: 100%;
+    height: 10rem;
+    object-fit: cover;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: linear-gradient(135deg, #657423 0%, #2a2a2a 100%);
+  }
+  .prod-card:hover .prod-card-img{ filter: brightness(1.02); }
+
+  /* Safety */
+  .prod-card { pointer-events: auto; }
+  .btn-busy { opacity: .7; pointer-events: none; }
+</style>
+@endonce
+
+@forelse($products as $p)
+  @php
+    $qty     = number_format((float)($p->quantity ?? 0), 3);
+    $demand  = number_format((float)($p->forecasted_demand ?? 0), 3);
+    $unit    = number_format((float)($p->unit_cost ?? 0), 2);
+    $status  = $p->stock_status ?? ((float)($p->quantity ?? 0) > 0 ? 'in_stock' : 'out_of_stock');
+
+    $delta = (float)($p->quantity ?? 0) - (float)($p->forecasted_demand ?? 0);
+    $ring  = $delta <= 0 ? 'ring-1 ring-rose-700/50'
+          : ($delta <= 10 ? 'ring-1 ring-amber-600/40' : '');
+
+    $badge = null; $badgeCls = '';
+    if (isset($p->is_expired) || isset($p->days_to_expiry)) {
+        if ($p->is_expired ?? false) { $badge = 'Expired'; $badgeCls = 'bg-rose-600/15 text-rose-300 border border-rose-700/40'; }
+        elseif (($p->days_to_expiry ?? 99) <= 3) { $badge = ($p->days_to_expiry).'d left'; $badgeCls = 'bg-amber-500/15 text-amber-300 border border-amber-600/40'; }
+    }
+
+    $imgPrimary  = $p->card_image_url ?? $p->image_thumb_url ?? $p->image_url ?? asset('images/default-product.png');
+    $srcset      = $p->card_image_srcset ?? null;
+    $sku         = $p->sku ?? '—';
+  @endphp
+
+  <div
+    class="prod-card glass rounded-2xl border border-white/10 p-4 flex flex-col gap-3 hover:bg-white/5 transition {{ $ring }}"
+    id="product-card-{{ $p->id }}"
+    data-id="{{ $p->id }}"
+    data-name="{{ e($p->product_name) }}"
+    data-unit-cost="{{ (float)($p->unit_cost ?? 0) }}"
+    data-forecasted="{{ (float)($p->forecasted_demand ?? 0) }}"
+  >
+    {{-- Image --}}
+    <div class="relative">
+      <img
+        @if($srcset) srcset="{{ $srcset }}" sizes="(min-width:1280px) 25vw, (min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw" @endif
+        src="{{ $imgPrimary }}"
+        alt="{{ $p->product_name }} image"
+        class="prod-card-img"
+        width="400" height="300"
+        loading="lazy" decoding="async"
+        onerror="this.onerror=null;this.src='{{ asset('images/default-product.png') }}';"
+      >
+      @if($badge)
+        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs {{ $badgeCls }} backdrop-blur">
+          {{ $badge }}
+        </span>
+      @endif
+      @if(!empty($p->category))
+        <span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/80 border border-white/20 backdrop-blur">
+          {{ $p->category }}
+        </span>
+      @endif
     </div>
 
-    <form id="saleForm" action="{{ route('sales.store') }}" method="POST" class="px-5 py-4 space-y-4">
-      @csrf
-
-      {{-- Product --}}
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm text-white/70 mb-1">Product</label>
-          <select id="product_id" name="product_id"
-                  class="w-full rounded-xl liquid-input px-3 py-2"
-                  required>
-            <option value="" disabled selected>— Select product —</option>
-            @foreach ($products as $p)
-              <option value="{{ $p->id }}"
-                      data-name="{{ $p->name ?? $p->product_name }}"
-                      data-price="{{ (float)($p->price ?? $p->unit_cost ?? 0) }}">
-                {{ $p->name ?? $p->product_name }}
-              </option>
-            @endforeach
-          </select>
-        </div>
-
-        {{-- Batch (optional) --}}
-        <div>
-          <label class="block text-sm text-white/70 mb-1">Batch (optional)</label>
-          <select id="production_id" name="production_id" class="w-full rounded-xl liquid-input px-3 py-2">
-            <option value="" selected>— Any batch —</option>
-          </select>
-        </div>
+    {{-- Info --}}
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <h3 class="text-lg font-semibold text-white truncate" title="{{ $p->product_name }}">{{ $p->product_name }}</h3>
+        <p class="text-xs text-white/60">SKU: {{ $sku }}</p>
       </div>
+    </div>
 
-      {{-- Date & Status --}}
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <label class="block text-sm text-white/70 mb-1">Date</label>
-          <input type="date" id="date" name="date" class="w-full rounded-xl liquid-input px-3 py-2" required
-                 value="{{ now()->toDateString() }}">
-        </div>
-        <div>
-          <label class="block text-sm text-white/70 mb-1">Status</label>
-          <select id="status" name="status" class="w-full rounded-xl liquid-input px-3 py-2" required>
-            @foreach ($statusOptions as $s)
-              <option value="{{ $s }}">{{ $s }}</option>
-            @endforeach
-          </select>
-        </div>
-        <div>
-          <label class="block text-sm text-white/70 mb-1">Invoice (preview)</label>
-          <input type="text" class="w-full rounded-xl liquid-input px-3 py-2" value="{{ $nextInvoice }}" disabled>
-        </div>
+    <div class="grid grid-cols-2 gap-3 text-sm">
+      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
+        <p class="text-white/60">Inventory</p>
+        <p class="text-white font-semibold">{{ $qty }} kg</p>
       </div>
+      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
+        <p class="text-white/60">Forecasted Demand</p>
+        <p class="text-white font-semibold">{{ $demand }} kg</p>
+      </div>
+      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
+        <p class="text-white/60">Unit Cost</p>
+        <p class="text-white font-semibold">₱ {{ $unit }}</p>
+      </div>
+      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
+        <p class="text-white/60">Status</p>
+        @php
+          $cls = $status === 'in_stock'
+            ? 'bg-emerald-600/15 text-emerald-300 border-emerald-700/40'
+            : 'bg-rose-600/15 text-rose-300 border-rose-700/40';
+        @endphp
+        <span class="px-2 py-0.5 rounded-full text-xs border {{ $cls }}">{{ Str::of($status)->replace('_',' ')->title() }}</span>
+      </div>
+    </div>
 
-      {{-- Qty / Price --}}
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <label class="block text-sm text-white/70 mb-1">Quantity (kg)</label>
-          <input type="number" step="0.001" min="0.001" id="quantity" name="quantity"
-                 class="w-full rounded-xl liquid-input px-3 py-2" required>
-        </div>
-        <div>
-          <label class="block text-sm text-white/70 mb-1">Unit Price</label>
-          <input type="number" step="0.01" min="0" id="price" name="price"
-                 class="w-full rounded-xl liquid-input px-3 py-2" required>
-        </div>
-        <div>
-          <label class="block text-sm text-white/70 mb-1">Total</label>
-          <input type="text" id="total" class="w-full rounded-xl liquid-input px-3 py-2" value="₱ 0.00" disabled>
-        </div>
-      </div>
+    {{-- Actions --}}
+    <div class="flex items-center justify-end gap-2 pt-2">
+      @if (Route::has('production.show'))
+        <a href="{{ route('production.show', $p->id) }}"
+           class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/90 hover:bg-white/10">
+          Manage Orders
+        </a>
+      @endif
 
-      {{-- Display Name override (optional) --}}
-      <div>
-        <label class="block text-sm text-white/70 mb-1">Display Product Name (optional)</label>
-        <input type="text" id="product" name="product" maxlength="150"
-               class="w-full rounded-xl liquid-input px-3 py-2"
-               placeholder="Override product name on receipt">
-      </div>
-
-      {{-- Availability peek --}}
-      <div id="availRow" class="text-sm text-white/70">
-        <span id="availText">Available: —</span>
-        <span class="mx-2">•</span>
-        <span id="priceText">Suggested price: —</span>
-      </div>
-
-      <div class="flex items-center justify-end gap-3 pt-2">
-        <button type="button" class="btn-ghost px-4 py-2 rounded-xl" onclick="toggleAddSaleModal(false)">Cancel</button>
-        <button id="saleSubmitBtn" type="submit" class="btn-primary px-4 py-2 rounded-xl">Save Sale</button>
-      </div>
-    </form>
+      {{-- Dynamic Quick Add (no inline handlers) --}}
+      <button
+        type="button"
+        class="js-quick-add px-3 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold hover:opacity-90 relative z-10"
+        data-id="{{ (int)$p->id }}"
+        aria-label="Quick add to Sales"
+      >
+        + Quick Add
+      </button>
+    </div>
   </div>
-</div>
+@empty
+  <div class="col-span-full text-center text-white/70 py-10">No products yet.</div>
+@endforelse
 
-@push('scripts')
+@once
 <script>
-(function(){
-  const $ = sel => document.querySelector(sel);
+(function() {
+  if (window.__quickAddBound) return;
+  window.__quickAddBound = true;
 
-  const productSelect = $('#product_id');
-  const batchSelect   = $('#production_id');
-  const qtyInput      = $('#quantity');
-  const priceInput    = $('#price');
-  const totalOutput   = $('#total');
-  const submitBtn     = $('#saleSubmitBtn');
-  const availText     = $('#availText');
-  const priceText     = $('#priceText');
+  const openSalesModal = (payload) => {
+    const { id, name, price } = payload || {};
+    const saleModal      = document.querySelector('#saleModal');
+    const fldProductSel  = document.querySelector('#sale_product_id');   // <select>
+    const fldProductName = document.querySelector('#sale_product_name'); // optional text
+    const fldPrice       = document.querySelector('#sale_price');
+    const fldQty         = document.querySelector('#sale_quantity');
 
-  function formatMoney(n){
-    const v = isFinite(n) ? Number(n) : 0;
-    return '₱ ' + v.toFixed(2);
-  }
+    if (fldProductSel && id) {
+      fldProductSel.value = String(id);
+      fldProductSel.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (fldProductName && name) fldProductName.value = name;
+    if (fldPrice && typeof price === 'number' && isFinite(price)) fldPrice.value = price.toFixed(2);
+    if (fldQty && !fldQty.value) fldQty.value = '1';
 
-  function computeTotal(){
-    const q = parseFloat(qtyInput?.value || '0') || 0;
-    const p = parseFloat(priceInput?.value || '0') || 0;
-    totalOutput.value = formatMoney(q * p);
-  }
-
-  qtyInput?.addEventListener('input', computeTotal);
-  priceInput?.addEventListener('input', computeTotal);
-
-  // On product change: load batches, peek availability and default price
-  productSelect?.addEventListener('change', async (e) => {
-    const pid = e.target.value;
-    const opt = e.target.selectedOptions[0];
-    if (!pid) return;
-
-    // Reset batches
-    batchSelect.innerHTML = `<option value="">— Any batch —</option>`;
-
-    // Fetch batches for product
-    try {
-      const res = await fetch(`{{ url('/production') }}/${pid}/batches`, { headers: { 'X-Requested-With': 'XMLHttpRequest' }});
-      if (res.ok) {
-        const rows = await res.json();
-        rows.forEach(b => {
-          const o = document.createElement('option');
-          o.value = b.id;
-          o.textContent = `${b.batch_number} — ${Number(b.current_inventory ?? 0).toFixed(3)} kg`;
-          batchSelect.appendChild(o);
-        });
-      }
-    } catch(err){ console.error(err); }
-
-    // Peek availability & suggested price
-    try {
-      const form = new FormData();
-      form.append('product_id', pid);
-      const res = await fetch(`{{ route('sales.available') }}`, {
-        method: 'POST',
-        headers: {
-          'X-CSRF-TOKEN': document.querySelector('input[name=_token]')?.value || '{{ csrf_token() }}'
-        },
-        body: form
-      });
-      if (res.ok) {
-        const j = await res.json();
-        availText.textContent = `Available: ${Number(j.available ?? 0).toFixed(3)} kg`;
-        priceText.textContent = `Suggested price: ${formatMoney(Number(j.price ?? 0))}`;
-        if (!priceInput.value) priceInput.value = (j.price ?? 0);
-        computeTotal();
-      } else {
-        availText.textContent = 'Available: —';
-        priceText.textContent = 'Suggested price: —';
-      }
-    } catch(err){
-      availText.textContent = 'Available: —';
-      priceText.textContent = 'Suggested price: —';
+    if (typeof window.prefillSaleModal === 'function') {
+      try { window.prefillSaleModal({ id, name, price }); } catch(_) {}
     }
 
-    // If option has data-price, use as default when user hasn’t typed yet
-    const defaultPrice = parseFloat(opt?.dataset?.price || '0') || 0;
-    if (!priceInput.value && defaultPrice > 0) {
-      priceInput.value = defaultPrice.toFixed(2);
-      computeTotal();
+    if (saleModal) {
+      if (window.bootstrap && window.bootstrap.Modal) {
+        try { window.bootstrap.Modal.getOrCreateInstance(saleModal).show(); return; } catch(_) {}
+      }
+      try { saleModal.showModal && saleModal.showModal(); } catch(_) {}
+      try { saleModal.classList.remove('hidden'); saleModal.removeAttribute('aria-hidden'); } catch(_) {}
+    } else {
+      console.warn('Sales modal (#saleModal) not found.');
     }
-  });
+  };
 
-  // Prevent double submit
-  document.getElementById('saleForm')?.addEventListener('submit', () => {
-    submitBtn.disabled = true;
-    submitBtn.classList.add('opacity-70','cursor-not-allowed');
-  });
+  const endpointFor = (id) => `/production/quick-add/${id}`;
+
+  // Delegate clicks so it works on dynamically injected cards
+  document.addEventListener('click', async function(e) {
+    const btn = e.target.closest('.js-quick-add');
+    if (!btn) return;
+
+    const id = Number(btn.dataset.id || 0);
+    if (!id) return;
+
+    const originalHTML = btn.innerHTML;
+    btn.classList.add('btn-busy');
+    btn.innerHTML = 'Loading…';
+
+    try {
+      // Fetch live quick-add payload (name + price). Keeps things dynamic.
+      const res = await fetch(endpointFor(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const payload = {
+        id:  data.id ?? id,
+        name: (data.name || '').toString(),
+        price: Number(data.price ?? 0)
+      };
+
+      openSalesModal(payload);
+    } catch (err) {
+      console.warn('Quick Add payload fetch failed, falling back.', err);
+      // Minimal fallback if endpoint isn’t available
+      openSalesModal({ id, name: '', price: 0 });
+    } finally {
+      btn.classList.remove('btn-busy');
+      btn.innerHTML = originalHTML;
+    }
+  }, true);
 })();
 </script>
-@endpush
+@endonce

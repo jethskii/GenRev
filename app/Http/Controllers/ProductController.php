@@ -4,96 +4,120 @@ namespace App\Http\Controllers;
 
 use App\Models\Product;
 use App\Models\Material;
-use App\Models\ProductRecipe; // pivot table: product_id, material_id, quantity, unit, cost
+use App\Models\ProductRecipe;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
+    /* ============================== LIST / SHOW ============================== */
+
     /**
-     * Show all products (with recipes count).
+     * Products index with filters, sort, and pagination.
+     * Matches resources/views/products/index.blade.php
      */
-    public function index()
+    public function index(Request $request)
     {
-        $products = Product::withCount('recipes')->get();
-        return view('products.index', compact('products'));
+        $perPage = max(1, (int) $request->integer('per_page', 10));
+
+        $products = Product::query()
+            ->search($request->get('search'))
+            ->category($request->get('category'))
+            ->status($request->get('status'))
+            ->sorted($request->get('sort'))
+            ->withCount('recipes')
+            ->paginate($perPage)
+            ->appends($request->query());
+
+        $categories = Product::query()
+            ->whereNotNull('category')
+            ->distinct()
+            ->orderBy('category')
+            ->pluck('category');
+
+        return view('products.index', compact('products', 'categories'));
     }
 
     /**
-     * Show a single product with its recipe (ingredients list).
+     * Single product page with batches, recipe, and quick sale.
+     * Matches resources/views/products/show.blade.php
      */
     public function show(Product $product)
     {
-        // eager load ingredients with pivot data
-        $product->load(['recipes.material']);
-
-        $allMaterials = Material::orderBy('name')->get();
-        return view('products.show', compact('product', 'allMaterials'));
-    }
-
-    /**
-     * Store a new product.
-     */
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'name'  => 'required|string|max:255|unique:products,name',
-            'image' => 'nullable|image|max:2048',
+        $product->load([
+            'productions' => fn ($q) => $q->orderByDesc('production_date')->orderByDesc('id'),
+            'recipes.material:id,material_name,unit,default_unit_price',
         ]);
 
-        $product = new Product();
-        $product->name = $validated['name'];
+        $materials = Material::query()
+            ->orderBy('material_name')
+            ->get(['id', 'material_name', 'unit', 'default_unit_price']);
+
+        $recipe = $product->recipes;
+
+        return view('products.show', compact('product', 'materials', 'recipe'));
+    }
+
+    /* ============================== CREATE / EDIT ============================== */
+
+    public function create()
+    {
+        return view('products.create', [
+            'categories'     => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
+            'unitOptions'    => ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'],
+            'statusOptions'  => ['active' => 'Active', 'inactive' => 'Inactive', 'pending' => 'Pending', 'on_sale' => 'On Sale'],
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $data = $this->validateProduct($request);
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('products', 'public');
-            $product->image_path = $path;
+            $data['image'] = $request->file('image')->store('products', 'public');
         }
 
-        $product->save();
+        $product = Product::create($data);
 
-        return redirect()->route('products.index')->with('success', 'Product added.');
+        return redirect()
+            ->route('products.show', $product)
+            ->with('success', 'Product created.');
     }
 
-    /**
-     * Archive a product (soft deactivate).
-     */
-    public function archive($id)
+    public function edit(Product $product)
     {
-        $product = Product::findOrFail($id);
-        $product->archived = true;
-        $product->save();
-
-        return back()->with('success', 'Product archived.');
+        return view('products.edit', [
+            'product'       => $product,
+            'categories'    => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
+            'unitOptions'   => ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'],
+            'statusOptions' => ['active' => 'Active', 'inactive' => 'Inactive', 'pending' => 'Pending', 'on_sale' => 'On Sale'],
+        ]);
     }
 
-    /**
-     * Update product image.
-     */
-    public function updateImage(Request $request, $id)
+    public function update(Request $request, Product $product)
     {
-        $product = Product::findOrFail($id);
+        $data = $this->validateProduct($request, $product->id);
 
-        $request->validate(['image' => 'required|image|max:2048']);
-
-        if ($product->image_path) {
-            Storage::disk('public')->delete($product->image_path);
+        if ($request->hasFile('image')) {
+            if (!empty($product->image)) {
+                Storage::disk('public')->delete($product->image);
+            }
+            $data['image'] = $request->file('image')->store('products', 'public');
         }
 
-        $path = $request->file('image')->store('products', 'public');
-        $product->image_path = $path;
-        $product->save();
+        $product->update($data);
 
-        return back()->with('success', 'Image updated.');
+        return redirect()
+            ->route('products.show', $product)
+            ->with('success', 'Product updated.');
     }
 
-    /**
-     * Delete product permanently.
-     */
-    public function destroy($id)
+    public function destroy(Product $product)
     {
-        $product = Product::findOrFail($id);
-        if ($product->image_path) {
-            Storage::disk('public')->delete($product->image_path);
+        if (!empty($product->image)) {
+            Storage::disk('public')->delete($product->image);
         }
         $product->delete();
 
@@ -101,47 +125,187 @@ class ProductController extends Controller
     }
 
     /**
-     * Quick-store (used by modals).
+     * Quick-store for inline "Quick add" in index header.
+     * Accepts either `name` or `product_name` to stay compatible with older blades.
      */
     public function quickStore(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255|unique:products,name',
+        $incomingName = $request->input('product_name') ?? $request->input('name');
+
+        $validated = $request->validate([
+            // validate the field that actually came in
+            $incomingName === null ? 'product_name' : 'tmp' => ['nullable'], // no-op when name provided
         ]);
 
-        $product = Product::create(['name' => $request->name]);
-
-        return response()->json(['id' => $product->id, 'name' => $product->name]);
-    }
-
-    /* ==================== RECIPE / BOM FUNCTIONS ==================== */
-
-    /**
-     * Add or update product recipe (ingredients).
-     */
-    public function updateRecipe(Request $request, Product $product)
-    {
-        $request->validate([
-            'materials'   => 'required|array',
-            'materials.*.id'     => 'required|exists:materials,id',
-            'materials.*.qty'    => 'required|numeric|min:0.01',
-            'materials.*.unit'   => 'required|string|max:50',
-            'materials.*.cost'   => 'required|numeric|min:0',
-        ]);
-
-        // Clear existing recipe
-        $product->recipes()->delete();
-
-        foreach ($request->materials as $mat) {
-            ProductRecipe::create([
-                'product_id'  => $product->id,
-                'material_id' => $mat['id'],
-                'quantity'    => $mat['qty'],
-                'unit'        => $mat['unit'],
-                'cost'        => $mat['cost'],
-            ]);
+        $name = trim((string) $incomingName);
+        if ($name === '') {
+            return $request->wantsJson()
+                ? response()->json(['ok' => false, 'message' => 'Name is required'], 422)
+                : back()->withErrors(['name' => 'Product name is required'])->withInput();
         }
 
-        return back()->with('success', 'Recipe updated.');
+        // Uniqueness check against product_name
+        if (Product::where('product_name', $name)->exists()) {
+            $msg = 'Product name already exists.';
+            return $request->wantsJson()
+                ? response()->json(['ok' => false, 'message' => $msg], 422)
+                : back()->withErrors(['name' => $msg])->withInput();
+        }
+
+        $product = Product::create([
+            'product_name' => $name,
+            'status'       => 'active',
+            'unit'         => 'kg',
+        ]);
+
+        if ($request->wantsJson()) {
+            return response()->json(['ok' => true, 'id' => $product->id, 'name' => $product->product_name]);
+        }
+        return back()->with('success', 'Product added.');
+    }
+
+    /* ============================== MATERIALS / RECIPE ============================== */
+
+    /**
+     * Per-product materials (Recipe/BOM) page.
+     * Matches resources/views/products/materials/index.blade.php
+     */
+    public function materialsIndex(Product $product)
+    {
+        $product->load('recipes.material');
+
+        $materials = Material::query()
+            ->orderBy('material_name')
+            ->get(['id', 'material_name', 'unit', 'default_unit_price']);
+
+        $recipe = $product->recipes;
+
+        return view('products.materials.index', compact('product', 'materials', 'recipe'));
+    }
+
+    /**
+     * Save (sync) recipe lines for a product.
+     * Expected payload from the BOM editor (rows[]):
+     *  - ingredient_id (int, materials.id)
+     *  - qty (number)
+     *  - unit_price (number)  // snapshot
+     *
+     * Upserts submitted rows, then removes any that were not submitted.
+     * Prevents duplicates and keeps historical snapshot pricing.
+     */
+    public function recipeStore(Request $request, Product $product)
+    {
+        $validated = $request->validate([
+            'rows'                   => ['required','array','min:1'],
+            'rows.*.ingredient_id'   => ['required','integer', Rule::exists('materials','id')],
+            'rows.*.qty'             => ['required','numeric','min:0'],
+            'rows.*.unit_price'      => ['required','numeric','min:0'],
+        ]);
+
+        DB::transaction(function () use ($product, $validated) {
+            $keepIds = [];
+
+            foreach ($validated['rows'] as $row) {
+                $matId = (int) $row['ingredient_id'];
+                $keepIds[] = $matId;
+
+                // Upsert on (product_id, ingredient_id) to avoid duplicate lines
+                ProductRecipe::updateOrCreate(
+                    [
+                        'product_id'    => (int) $product->id,
+                        'ingredient_id' => $matId,          // legacy column in DB
+                    ],
+                    [
+                        'qty'                 => (float) $row['qty'],
+                        'unit_price_snapshot' => (float) $row['unit_price'],
+                        // If your table also has material_id, the model mutator will mirror it.
+                    ]
+                );
+            }
+
+            // Delete lines not in current submission (sync behavior)
+            ProductRecipe::where('product_id', $product->id)
+                ->whereNotIn('ingredient_id', $keepIds)
+                ->delete();
+        });
+
+        return back()->with('success', 'Recipe saved.');
+    }
+
+    /**
+     * Remove a single recipe line.
+     */
+    public function recipeDestroy(Product $product, ProductRecipe $line)
+    {
+        if ((int) $line->product_id !== (int) $product->id) {
+            abort(404);
+        }
+        $line->delete();
+
+        return back()->with('success', 'Recipe line removed.');
+    }
+
+    /**
+     * Provide default recipe rows as JSON to "Load Defaults" button.
+     * Default behavior: return current recipe lines; else return [].
+     */
+    public function materialsDefaults(Product $product)
+    {
+        $rows = $product->recipes()
+            ->with('material:id,unit')
+            ->get()
+            ->map(fn ($r) => [
+                'ingredient_id' => (int) ($r->material_id ?? $r->ingredient_id),
+                'unit'          => (string) ($r->material->unit ?? ''),
+                'qty'           => (float) ($r->qty ?? 0),
+                'unit_price'    => (float) ($r->unit_price_snapshot ?? 0),
+            ])->values();
+
+        return response()->json($rows);
+    }
+
+    /* ============================== IMAGE ONLY ============================== */
+
+    public function updateImage(Request $request, Product $product)
+    {
+        $request->validate(['image' => ['required', 'image', 'max:4096']]);
+
+        if (!empty($product->image)) {
+            Storage::disk('public')->delete($product->image);
+        }
+        $product->image = $request->file('image')->store('products', 'public');
+        $product->save();
+
+        return back()->with('success', 'Image updated.');
+    }
+
+    /* ============================== VALIDATION ============================== */
+
+    /**
+     * Centralized validator: keep create/update identical.
+     * Columns align with Product::$fillable and your forms.
+     */
+    protected function validateProduct(Request $request, ?int $productId = null): array
+    {
+        return $request->validate([
+            'product_code'        => ['nullable', 'string', 'max:100', Rule::unique('products', 'product_code')->ignore($productId)],
+            'product_name'        => ['required', 'string', 'max:255', Rule::unique('products', 'product_name')->ignore($productId)],
+            'category'            => ['nullable', 'string', 'max:100'],
+            'unit'                => ['nullable', Rule::in(['kg','pcs','lt'])],
+            'status'              => ['nullable', Rule::in(['active','inactive','pending','on_sale'])],
+            'default_price'       => ['nullable', 'numeric', 'min:0'],
+            'shelf_life_days'     => ['nullable', 'integer', 'min:0'],
+            'yield_rate'          => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'standard_batch_size' => ['nullable', 'numeric', 'min:0'],
+            'lead_time_days'      => ['nullable', 'integer', 'min:0'],
+            'min_run_qty'         => ['nullable', 'numeric', 'min:0'],
+            'max_run_qty'         => ['nullable', 'numeric', 'min:0'],
+            'storage_zone'        => ['nullable', Rule::in(['chiller','freezer','ambient'])],
+            'unit_cost'           => ['nullable', 'numeric', 'min:0'],
+            'last_cost_date'      => ['nullable', 'date'],
+            'temp_requirements'   => ['nullable', 'string', 'max:2000'],
+            'line_constraints'    => ['nullable'], // array or JSON string; Product mutator normalizes
+            'image'               => ['nullable', 'image', 'max:4096'],
+        ]);
     }
 }
