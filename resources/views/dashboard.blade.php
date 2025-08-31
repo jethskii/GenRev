@@ -11,7 +11,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Inria+Sans:wght@300;400;700&display=swap" rel="stylesheet">
 
-  <!-- Modern Liquid/Glass UI Theme -->
   <style>
     :root{
       --navbar: linear-gradient(135deg,#1F1E1E 0%,#100E00 80%);
@@ -24,39 +23,21 @@
       --brand-green:#047705;
       --brand-green-20: rgba(4,119,5,.20);
     }
-    body{
-      font-family:'Inria Sans',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      color:var(--text);
-      background:linear-gradient(135deg,#1F1E1E 0%,#001C00 100%) fixed!important;
-      min-height:100vh;overflow-x:hidden;
-    }
-    body::before{
-      content:'';position:fixed;inset:-50% -50%;width:200%;height:200%;
+    body{font-family:'Inria Sans',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);
+      background:linear-gradient(135deg,#1F1E1E 0%,#001C00 100%) fixed!important;min-height:100vh;overflow-x:hidden;}
+    body::before{content:'';position:fixed;inset:-50% -50%;width:200%;height:200%;
       background:linear-gradient(to bottom right,rgba(18,108,7,.15) 0%,rgba(113,200,98,.15) 25%,rgba(210,220,50,.12) 50%,rgba(113,200,98,.15) 75%,rgba(10,56,14,.15) 100%);
-      transform:rotate(30deg);animation:liquidFlow 15s linear infinite;z-index:-1;opacity:.5;
-    }
+      transform:rotate(30deg);animation:liquidFlow 15s linear infinite;z-index:-1;opacity:.5;}
     @keyframes liquidFlow{0%{transform:rotate(30deg) translate(-10%,-10%)}50%{transform:rotate(30deg) translate(10%,10%)}100%{transform:rotate(30deg) translate(-10%,-10%)}}
-    .glass{background:var(--sidebar)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--dark-line)!important;box-shadow:0 10px 24px rgba(0,0,0,.35)!important;color:var(--text)}
-    .bg-navbar{background:var(--navbar)!important;border-bottom:.5px solid var(--dark-line);box-shadow:0 8px 26px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.06) inset}
-    .bg-navbar:hover{box-shadow:0 8px 28px rgba(0,123,0,.35),0 0 0 1px rgba(4,119,5,.2) inset}
+    .glass{background:var(--sidebar)!important;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+      border:1px solid var(--dark-line)!important;box-shadow:0 10px 24px rgba(0,0,0,.35)!important;color:var(--text)}
+    .bg-navbar{background:var(--navbar)!important;border-bottom:.5px solid var(--dark-line);
+      box-shadow:0 8px 26px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.06) inset}
     .brand-title{font-family:'Kalam',cursive;letter-spacing:.02em;text-shadow:-2px 1px 0 var(--brand-green)}
-    aside{border-right:.5px solid var(--dark-line)}
-    aside .p-6.text-2xl{font-family:'Kalam',cursive;color:#fff;text-shadow:-2px 1px 0 var(--brand-green)}
-    .bg-sidebar{background-color:var(--sidebar)}
-    .bg-sidebar-hover:hover{background-color:var(--sidebar-hover);transition:background-color .25s ease}
-    .bg-sidebar-active{background:var(--sidebar-active)!important;color:#1F1E1E!important;font-weight:700;position:relative;box-shadow:0 6px 18px rgba(237,209,0,.25)}
-    .bg-sidebar-active::before{content:'';position:absolute;left:0;top:0;width:4px;height:100%;background:#91EAAF;border-radius:0 4px 4px 0}
-    aside nav a{position:relative;overflow:hidden;color:#E7F3E9;border-radius:9999px 0 0 9999px}
-    aside nav a::before{content:'';position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:0;height:2px;background:linear-gradient(90deg,transparent,#EDD100,transparent);transition:width .35s ease}
-    aside nav a:hover::before{width:80%}
-    aside nav a::after{content:'';position:absolute;top:50%;left:50%;width:6px;height:6px;background:rgba(237,209,0,.35);opacity:0;border-radius:9999px;transform:translate(-50%,-50%) scale(1)}
-    aside nav a:hover::after{animation:ripple 1s ease-out}
-    @keyframes ripple{0%{transform:translate(-50%,-50%) scale(0);opacity:.45}100%{transform:translate(-50%,-50%) scale(18);opacity:0}}
-    .border-dark-line{border-color:var(--dark-line)}
     .text-muted{color:var(--muted)}
-    @media (max-width:1024px){aside{position:fixed;z-index:50;transform:translateX(-100%);transition:transform .3s ease}aside.open{transform:translateX(0)}body{padding-left:0}}
     .section-liquid-shine{position:relative}
-    .section-liquid-shine::after{content:'';position:absolute;inset:0;background:linear-gradient(45deg,rgba(4,119,5,.10) 0%,rgba(237,209,0,.10) 50%,rgba(4,119,5,.10) 100%);border-radius:inherit;animation:cardShine 8s ease infinite;pointer-events:none}
+    .section-liquid-shine::after{content:'';position:absolute;inset:0;background:linear-gradient(45deg,rgba(4,119,5,.10) 0%,rgba(237,209,0,.10) 50%,rgba(4,119,5,.10) 100%);
+      border-radius:inherit;animation:cardShine 8s ease infinite;pointer-events:none}
     @keyframes cardShine{0%{opacity:.3}50%{opacity:.1}100%{opacity:.3}}
   </style>
 </head>
@@ -64,7 +45,7 @@
   <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
     <aside id="sidebar" class="w-64 glass flex-shrink-0 flex flex-col">
-      <div class="p-6 text-2xl font-bold tracking-wide border-b border-dark-line flex justify-between items-center">
+      <div class="p-6 text-2xl font-bold tracking-wide border-b border-[var(--dark-line)] flex justify-between items-center">
         GenRev
         <button id="sidebarClose" class="lg:hidden text-xl font-bold">&times;</button>
       </div>
@@ -72,7 +53,7 @@
       <!-- User Info -->
       <div class="px-6 pt-4 pb-2">
         <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 bg-[var(--sidebar-active)] rounded-full flex items-center justify-center font-bold text-[#1F1E1E] shadow-[0_0_0_2px_rgba(4,119,5,.35),0_6px_16px_rgba(0,0,0,.35)]">
+          <div class="w-10 h-10 bg-[var(--sidebar-active)] rounded-full flex items-center justify-center font-bold text-[#1F1E1E]">
             {{ Auth::check() ? strtoupper(substr(Auth::user()->name, 0, 1)) : '?' }}
           </div>
           <div class="text-sm">
@@ -97,13 +78,13 @@
         @endphp
         @foreach($routes as $route => $label)
           <a href="{{ route($route) }}"
-             class="block px-6 py-3 rounded-r-full transition-all duration-150 hover:bg-sidebar-hover {{ request()->routeIs($route . '*') ? 'bg-sidebar-active' : '' }}">
+             class="block px-6 py-3 rounded-r-full transition-all duration-150 hover:bg-[rgba(4,119,5,.24)] {{ request()->routeIs($route . '*') ? 'bg-[var(--sidebar-active)] text-[#1F1E1E] font-bold' : '' }}">
             {{ $label }}
           </a>
         @endforeach
       </nav>
 
-      <div class="p-6 text-xs text-muted border-t border-dark-line">© 2025 GenRev</div>
+      <div class="p-6 text-xs text-muted border-t border-[var(--dark-line)]">© 2025 GenRev</div>
     </aside>
 
     <!-- Main Content -->
@@ -114,28 +95,30 @@
           <h1 class="text-xl font-bold tracking-wide brand-title">Dashboard Overview</h1>
         </div>
 
-        <!-- User Menu -->
-        <div class="relative z-50">
-          <button id="userMenuButton" class="focus:outline-none">
-            <div class="w-9 h-9 rounded-full bg-[#91EAAF] flex items-center justify-center font-bold uppercase text-sm text-[#1F1E1E] shadow-[0_0_0_2px_rgba(4,119,5,.35),0_6px_16px_rgba(0,0,0,.35)]">
-              {{ Auth::check() ? strtoupper(substr(Auth::user()->name, 0, 1)) : '?' }}
-            </div>
-          </button>
-          <div id="userDropdown" class="hidden absolute right-0 mt-2 w-52 glass border border-dark-line rounded-lg shadow-lg overflow-hidden">
-            <div class="px-4 py-3 border-b border-dark-line text-sm">
-              Logged in as<br>
-              <span class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</span>
-              @if(Auth::check() && Auth::user()->role)
-                <div class="text-xs text-muted capitalize">({{ Auth::user()->role }})</div>
-              @endif
-            </div>
-            <form method="POST" action="{{ route('logout') }}">
-              @csrf
-              <button type="submit" class="w-full text-left px-4 py-2 text-sm hover:bg-[var(--brand-green-20)] transition-colors">
-                Logout
-              </button>
-            </form>
-          </div>
+        <!-- Controls -->
+        <div class="flex flex-wrap items-center gap-4">
+          <!-- Master toggle -->
+          <label class="flex items-center gap-2 text-xs">
+            <input id="toggle3D" type="checkbox" checked class="sr-only peer">
+            <span class="px-2 py-1 rounded-full glass border border-white/15">
+              <span class="inline-block w-2 h-2 rounded-full align-middle mr-1 peer-checked:bg-emerald-400 bg-red-400"></span>
+              3D ON/OFF
+            </span>
+          </label>
+
+          <!-- Depth -->
+          <label class="flex items-center gap-2 text-xs">
+            Depth
+            <input id="depthRange" type="range" min="0" max="24" value="10" class="w-28 accent-emerald-400">
+            <span id="depthVal" class="tabular-nums">10</span>
+          </label>
+
+          <!-- Tilt -->
+          <label class="flex items-center gap-2 text-xs">
+            Tilt
+            <input id="liftRange" type="range" min="-16" max="0" value="-6" class="w-28 accent-emerald-400">
+            <span id="liftVal" class="tabular-nums">-6</span>
+          </label>
         </div>
       </header>
 
@@ -150,10 +133,9 @@
                 ['label' => 'Total Products',        'value' => $totalProducts,                          'note' => 'Based on weekly production', 'icon' => '📦'],
                 ['label' => 'Total Materials (kg)',  'value' => number_format($totalMaterialsWeight, 2), 'note' => 'Weekly materials',           'icon' => '⚖️'],
                 ['label' => 'Total Revenue',         'value' => '₱' . number_format($totalRevenue, 2),   'note' => 'Weekly product sales',      'icon' => '💰'],
-                ['label' => 'Sales Transactions',    'value' => $totalSales,                             'note' => 'Weekly transactions',        'icon' => '📈'],
+                ['label' => 'Sales Transactions',    'value' => $totalSales,                             'note' => 'Weekly transactions',       'icon' => '📈'],
               ];
             @endphp
-
             @foreach ($metrics as $metric)
               <div class="glass section-liquid-shine p-5 rounded-2xl shadow-md hover:shadow-xl transition">
                 <div class="flex items-center space-x-4">
@@ -170,8 +152,8 @@
             @endforeach
           </div>
 
-          {{-- 📊 Sales Report Widget (with sparkline) --}}
-          <div class="glass section-liquid-shine border border-dark-line shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- 📊 Sales Report Widget (sparkline) --}}
+          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
             <div class="flex items-center justify-between mb-4">
               <div>
                 <h2 class="text-lg font-semibold mb-1">📈 Sales Report</h2>
@@ -213,7 +195,7 @@
           </div>
 
           {{-- 🏆 Most Sold Products --}}
-          <div class="glass section-liquid-shine border border-dark-line shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
             <div class="flex items-center justify-between mb-4">
               <div>
                 <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products</h2>
@@ -255,7 +237,7 @@
           </div>
 
           {{-- 🧾 Recent Sales Table --}}
-          <div class="glass section-liquid-shine border border-dark-line shadow-md p-5 rounded-2xl backdrop-blur-lg overflow-auto">
+          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg overflow-auto">
             <div class="flex items-center justify-between">
               <div>
                 <h2 class="text-base font-semibold mb-1">Recent Sales</h2>
@@ -265,7 +247,7 @@
             </div>
 
             <table class="w-full text-sm text-left border-collapse">
-              <thead class="uppercase border-b border-dark-line bg-opacity-20">
+              <thead class="uppercase border-b border-[var(--dark-line)] bg-opacity-20">
                 <tr>
                   <th class="py-2 px-3">Product</th>
                   <th class="py-2 px-3">Qty</th>
@@ -275,7 +257,7 @@
               </thead>
               <tbody>
                 @forelse ($recentSales as $sale)
-                  <tr class="border-t border-dark-line hover:bg-[rgba(255,255,255,.06)] transition">
+                  <tr class="border-t border-[var(--dark-line)] hover:bg-[rgba(255,255,255,.06)] transition">
                     <td class="py-2 px-3">{{ $sale->product_name }}</td>
                     <td class="py-2 px-3">{{ $sale->quantity }}</td>
                     <td class="py-2 px-3">₱{{ number_format($sale->price, 2) }}</td>
@@ -290,8 +272,8 @@
             </table>
           </div>
 
-          {{-- 📦 Materials Snapshot (recently added this week) --}}
-          <div class="glass section-liquid-shine border border-dark-line shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- 📦 Materials Snapshot --}}
+          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Materials Logged (This Week)</h2>
               <span class="text-xs text-[var(--muted)]">On hand: {{ number_format($totalMaterialsWeight, 2) }} kg</span>
@@ -301,7 +283,7 @@
               <div class="text-sm text-[var(--muted)]">No materials logged this week.</div>
             @else
               <table class="w-full text-sm text-left border-collapse">
-                <thead class="uppercase border-b border-dark-line bg-opacity-20">
+                <thead class="uppercase border-b border-[var(--dark-line)] bg-opacity-20">
                   <tr>
                     <th class="py-2 px-3">Material</th>
                     <th class="py-2 px-3">Qty (kg)</th>
@@ -310,7 +292,7 @@
                 </thead>
                 <tbody>
                   @foreach($recentMaterials as $m)
-                    <tr class="border-t border-dark-line hover:bg-[rgba(255,255,255,.06)] transition">
+                    <tr class="border-t border-[var(--dark-line)] hover:bg-[rgba(255,255,255,.06)] transition">
                       <td class="py-2 px-3">{{ $m->name ?? $m->material_name ?? 'Material' }}</td>
                       <td class="py-2 px-3">{{ number_format($m->quantity_kg, 2) }}</td>
                       <td class="py-2 px-3">{{ \Carbon\Carbon::parse($m->created_at)->format('M d, Y') }}</td>
@@ -321,11 +303,14 @@
             @endif
           </div>
 
-          {{-- 📈 Expiration Trend (NEW) --}}
-          <div class="glass section-liquid-shine border border-dark-line shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- 📈 Expiration Trend (3D BAR + per-chart toggle) --}}
+          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Expiration Trend</h2>
-              <span class="text-xs text-[var(--muted)]">Upcoming expirations</span>
+              <label class="text-xs flex items-center gap-2">
+                <input id="toggleExpiry" type="checkbox" checked class="sr-only peer">
+                <span class="px-2 py-1 rounded-full glass border border-white/15">3D</span>
+              </label>
             </div>
             <div class="h-56 relative">
               <canvas id="expiryChart" aria-label="Expiration Trend"></canvas>
@@ -333,11 +318,14 @@
             </div>
           </div>
 
-          {{-- 📊 Weekly Production Chart --}}
-          <div class="glass section-liquid-shine border border-dark-line shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- 📊 Weekly Production Chart (3D BAR + per-chart toggle) --}}
+          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Weekly Production</h2>
-              <span class="text-xs text-[var(--muted)]">Live report</span>
+              <label class="text-xs flex items-center gap-2">
+                <input id="toggleProduction" type="checkbox" checked class="sr-only peer">
+                <span class="px-2 py-1 rounded-full glass border border-white/15">3D</span>
+              </label>
             </div>
             <div class="h-56 relative">
               <canvas id="productionChart" aria-label="Weekly Production"></canvas>
@@ -345,11 +333,14 @@
             </div>
           </div>
 
-          {{-- 💸 Weekly Sales Chart --}}
-          <div class="glass section-liquid-shine border border-dark-line shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- 💸 Weekly Sales Chart (Qty 3D + Revenue line + per-chart toggle) --}}
+          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Weekly Sales</h2>
-              <span class="text-xs text-[var(--muted)]">Live report</span>
+              <label class="text-xs flex items-center gap-2">
+                <input id="toggleSales" type="checkbox" checked class="sr-only peer">
+                <span class="px-2 py-1 rounded-full glass border border-white/15">3D (Qty)</span>
+              </label>
             </div>
             <div class="h-56 relative">
               <canvas id="salesChart" aria-label="Weekly Sales"></canvas>
@@ -362,8 +353,8 @@
     </div>
   </div>
 
-  {{-- 📦 Materials Used (This Week) – from production × recipe --}}
-  <div class="mx-8 my-6 glass section-liquid-shine border border-dark-line shadow-md p-5 rounded-2xl backdrop-blur-lg">
+  {{-- 📦 Materials Used --}}
+  <div class="mx-8 my-6 glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
     <div class="flex items-center justify-between mb-2">
       <div>
         <h2 class="text-base font-semibold">Materials Used (This Week)</h2>
@@ -381,7 +372,7 @@
     @else
       <div class="overflow-x-auto">
         <table class="w-full text-sm text-left border-collapse">
-          <thead class="uppercase border-b border-dark-line bg-opacity-20">
+          <thead class="uppercase border-b border-[var(--dark-line)] bg-opacity-20">
             <tr>
               <th class="py-2 px-3">Material</th>
               <th class="py-2 px-3 text-right">Qty Used</th>
@@ -390,7 +381,7 @@
           </thead>
           <tbody>
             @foreach($rows as $r)
-              <tr class="border-t border-dark-line hover:bg-[rgba(255,255,255,.06)] transition">
+              <tr class="border-t border-[var(--dark-line)] hover:bg-[rgba(255,255,255,.06)] transition">
                 <td class="py-2 px-3">{{ $r->material_name }}</td>
                 <td class="py-2 px-3 text-right">{{ number_format($r->qty_used, 3) }} {{ $r->unit ?? 'kg' }}</td>
                 <td class="py-2 px-3 text-right">₱{{ number_format($r->cost_used, 2) }}</td>
@@ -402,32 +393,123 @@
     @endif
   </div>
 
-  <!-- Scripts -->
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+
+  <!-- ===== Chart.js Bar 3D plugin (isometric faces) ===== -->
+  <script>
+    const Bar3DPlugin = {
+      id: 'bar3d',
+      afterDatasetDraw(chart, args, pluginOptions) {
+        const enabled = (pluginOptions && pluginOptions.enabled) ?? true;
+        if (!enabled) return;
+
+        const {ctx, chartArea} = chart;
+        const meta = args.meta;
+        if (meta.type !== 'bar') return;
+
+        const depth  = pluginOptions?.depth ?? 10;
+        const lift   = pluginOptions?.lift ?? -6;
+
+        const shade = (rgba, factor=0.85) => {
+          const m = rgba && rgba.toString().match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+          if (!m) return rgba || 'rgba(67,160,71,0.35)';
+          const [r,g,b] = [m[1],m[2],m[3]].map(n => Math.max(0, Math.min(255, Math.floor(n*factor))));
+          const aMatch = rgba.match(/rgba\(.+,\s*([.\d]+)\)/i);
+          const a = aMatch ? parseFloat(aMatch[1]) : 1;
+          return `rgba(${r},${g},${b},${a})`;
+        };
+
+        const dataset = chart.config.data.datasets[args.index];
+        const baseFill   = dataset.backgroundColor || 'rgba(67,160,71,0.35)';
+        const baseStroke = dataset.borderColor     || 'rgba(67,160,71,1)';
+        const topFill    = dataset.topFaceColor    || shade(baseFill, 1.15);
+        const sideFill   = dataset.sideFaceColor   || shade(baseFill, 0.75);
+        const topStroke  = dataset.topStrokeColor  || shade(baseStroke, 1.1);
+        const sideStroke = dataset.sideStrokeColor || shade(baseStroke, 0.8);
+
+        meta.data.forEach((bar) => {
+          const p = bar.getProps(['x','y','base','width'], true);
+          if (!p) return;
+          const x = p.x - p.width/2;
+          const y = p.y;
+          const w = p.width;
+          const h = Math.max(0, (p.base ?? chartArea.bottom) - y);
+          if (!isFinite(h) || h === 0) return;
+
+          const dx = depth, dy = lift;
+
+          const top = [
+            {x: x,     y: y},
+            {x: x+dx,  y: y+dy},
+            {x: x+dx+w,y: y+dy},
+            {x: x+w,   y: y},
+          ];
+          const side = [
+            {x: x+w,   y: y},
+            {x: x+w+dx,y: y+dy},
+            {x: x+w+dx,y: y+dy+h},
+            {x: x+w,   y: y+h},
+          ];
+
+          const drawPoly = (pts, fill, stroke) => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let j=1;j<pts.length;j++) ctx.lineTo(pts[j].x, pts[j].y);
+            ctx.closePath();
+            ctx.fillStyle = fill; ctx.fill();
+            if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+            ctx.restore();
+          };
+
+          // top face with soft shadow
+          ctx.save();
+          ctx.shadowColor = 'rgba(0,0,0,0.25)';
+          ctx.shadowBlur = 8;
+          ctx.shadowOffsetX = 0;
+          ctx.shadowOffsetY = 4;
+          drawPoly(top, topFill, topStroke);
+          ctx.restore();
+
+          // side face
+          drawPoly(side, sideFill, sideStroke);
+        });
+      }
+    };
+    Chart.register(Bar3DPlugin);
+  </script>
+
+  <!-- ===== Dashboard Charts + Toggles ===== -->
   <script>
     document.addEventListener("DOMContentLoaded", () => {
-      const userMenuBtn   = document.getElementById('userMenuButton');
-      const userDropdown  = document.getElementById('userDropdown');
-      const sidebar       = document.getElementById('sidebar');
+      const userMenuButton = document.getElementById('userMenuButton');
+      const userDropdown = document.getElementById('userDropdown');
+      const sidebar = document.getElementById('sidebar');
       const sidebarToggle = document.getElementById('sidebarToggle');
-      const sidebarClose  = document.getElementById('sidebarClose');
+      const sidebarClose = document.getElementById('sidebarClose');
 
-      // User dropdown
-      userMenuBtn?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        userDropdown?.classList.toggle('hidden');
+      // UI toggles
+      const toggle3D = document.getElementById('toggle3D');
+      const toggleProduction = document.getElementById('toggleProduction');
+      const toggleSales = document.getElementById('toggleSales');
+      const toggleExpiry = document.getElementById('toggleExpiry');
+      const depthRange = document.getElementById('depthRange');
+      const liftRange = document.getElementById('liftRange');
+      const depthVal = document.getElementById('depthVal');
+      const liftVal = document.getElementById('liftVal');
+
+      // dropdown
+      userMenuButton?.addEventListener('click', (e)=>{e.stopPropagation();userDropdown?.classList.toggle('hidden')});
+      document.addEventListener('click', (e)=>{
+        if (!userMenuButton?.contains(e.target) && !userDropdown?.contains(e.target)) userDropdown?.classList.add('hidden');
       });
-      document.addEventListener('click', (e) => {
-        if (!userMenuBtn?.contains(e.target) && !userDropdown?.contains(e.target)) {
-          userDropdown?.classList.add('hidden');
-        }
-      });
 
-      // Sidebar toggle (mobile)
-      sidebarToggle?.addEventListener('click', () => sidebar?.classList.add('open'));
-      sidebarClose?.addEventListener('click', () => sidebar?.classList.remove('open'));
+      // sidebar mobile
+      sidebarToggle?.addEventListener('click', ()=> sidebar?.classList.add('open'));
+      sidebarClose?.addEventListener('click', ()=> sidebar?.classList.remove('open'));
 
-      // ===== Charts (dark theme tuned) =====
+      // ==== Data ====
       const labels = @json($labels ?? []);
       const prod   = @json($weeklyProductionSeries ?? []);
       const qty    = @json($weeklySalesQtySeries ?? []);
@@ -437,11 +519,11 @@
       const grid  = 'rgba(255,255,255,0.12)';
       const tick  = '#E8F5E9';
       const title = '#F6F9F6';
-
       const barFill = 'rgba(67,160,71,0.35)';
       const barLine = 'rgba(67,160,71,1)';
       const lineClr = 'rgba(145,234,175,1)';
       const yellow  = 'rgba(237,209,0,1)';
+      const barRadius = 6;
 
       const showIfEmpty = (arr, elId) => {
         const el = document.getElementById(elId);
@@ -450,92 +532,108 @@
         else el.classList.add('hidden');
       };
 
-      // Production Chart
+      // keep refs
+      const charts = {};
+
+      // Production
       showIfEmpty(prod, 'prodEmpty');
-      const prodCtx = document.getElementById('productionChart');
-      if (prodCtx) {
-        new Chart(prodCtx, {
-          type: 'bar',
-          data: { labels, datasets: [{ label: 'Units Produced', data: prod, backgroundColor: barFill, borderColor: barLine, borderWidth: 2 }] },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { labels: { color: tick } }, title: { display: true, text: 'Weekly Production', color: title } },
-            scales: { x: { ticks: { color: tick }, grid: { color: grid } }, y: { beginAtZero: true, ticks: { color: tick }, grid: { color: grid } } }
-          }
-        });
-      }
+      charts.production = new Chart(document.getElementById('productionChart'), {
+        type: 'bar',
+        data: { labels, datasets: [{
+          label: 'Units Produced', data: prod,
+          backgroundColor: barFill, borderColor: barLine, borderWidth: 2, borderRadius: barRadius,
+          topFaceColor:'rgba(120,220,140,0.45)', sideFaceColor:'rgba(40,120,50,0.35)'
+        }]},
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins: { legend:{ labels:{ color: tick } }, title:{ display:true, text:'Weekly Production', color: title },
+                     bar3d:{ enabled: true, depth: Number(depthRange.value), lift: Number(liftRange.value) } },
+          scales: { x:{ ticks:{ color: tick }, grid:{ color: grid } }, y:{ beginAtZero:true, ticks:{ color: tick }, grid:{ color: grid } } }
+        }
+      });
 
-      // Weekly Sales Chart (Qty + Revenue)
+      // Sales (Qty 3D + Revenue line)
       showIfEmpty([...(qty||[]), ...(rev||[])], 'salesEmpty');
-      const salesCtx = document.getElementById('salesChart');
-      if (salesCtx) {
-        new Chart(salesCtx, {
-          data: {
-            labels,
-            datasets: [
-              { type: 'bar',  label: 'Qty Sold', data: qty, backgroundColor: barFill, borderColor: barLine, borderWidth: 2, yAxisID: 'y'  },
-              { type: 'line', label: 'Revenue',   data: rev, borderColor: lineClr, borderWidth: 3, tension: 0.3, pointRadius: 3, yAxisID: 'y1' }
-            ]
-          },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: {
-              legend: { labels: { color: tick } },
-              title:  { display: true, text: 'Weekly Sales', color: title },
-              tooltip:{ callbacks:{ label: (ctx) => ctx.dataset.type === 'line'
-                ? `Revenue: ₱${Number(ctx.parsed.y).toLocaleString(undefined,{ minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                : `Qty: ${ctx.parsed.y}` } }
-            },
-            scales: {
-              x:  { ticks: { color: tick }, grid: { color: grid } },
-              y:  { position: 'left',  beginAtZero: true, ticks: { color: tick }, grid: { color: grid } },
-              y1: { position: 'right', beginAtZero: true, ticks: { color: tick }, grid: { drawOnChartArea: false } }
-            }
+      charts.sales = new Chart(document.getElementById('salesChart'), {
+        data: {
+          labels,
+          datasets: [
+            { type:'bar', label:'Qty Sold', data: qty, backgroundColor: barFill, borderColor: barLine, borderWidth:2, borderRadius: barRadius,
+              yAxisID:'y', topFaceColor:'rgba(120,220,140,0.45)', sideFaceColor:'rgba(40,120,50,0.35)'},
+            { type:'line', label:'Revenue', data: rev, borderColor: lineClr, borderWidth:3, tension:.3, pointRadius:3, yAxisID:'y1'}
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins: { legend:{ labels:{ color: tick } }, title:{ display:true, text:'Weekly Sales', color: title },
+            tooltip:{ callbacks:{ label:(ctx)=> ctx.dataset.type==='line'
+              ? `Revenue: ₱${Number(ctx.parsed.y).toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`
+              : `Qty: ${ctx.parsed.y}`} },
+            bar3d:{ enabled: true, depth: Number(depthRange.value), lift: Number(liftRange.value) } },
+          scales: {
+            x:{ ticks:{ color: tick }, grid:{ color: grid } },
+            y:{ position:'left', beginAtZero:true, ticks:{ color: tick }, grid:{ color: grid } },
+            y1:{ position:'right', beginAtZero:true, ticks:{ color: tick }, grid:{ drawOnChartArea:false } }
           }
-        });
-      }
+        }
+      });
 
-      // Sales Report Sparkline (uses weekly revenue)
-      const tinyCtx = document.getElementById('salesTrendsChart');
-      if (tinyCtx) {
-        new Chart(tinyCtx, {
-          type: 'line',
-          data: { labels, datasets: [{ label: 'Revenue', data: rev, borderColor: lineClr, borderWidth: 2, tension: .35, pointRadius: 0, fill: false }] },
-          options: {
-            responsive:true, maintainAspectRatio:false,
-            plugins:{ legend:{ display:false } },
-            scales:{ x:{ display:false }, y:{ display:false, beginAtZero:true } },
-            elements:{ line:{ capBezierPoints:true } }
-          }
-        });
-      }
+      // Sparkline
+      charts.spark = new Chart(document.getElementById('salesTrendsChart'), {
+        type:'line',
+        data:{ labels, datasets:[{ label:'Revenue', data: rev, borderColor: lineClr, borderWidth:2, tension:.35, pointRadius:0, fill:false }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{ display:false }, y:{ display:false, beginAtZero:true } } }
+      });
 
-      // Expiration Trend (yellow line)
-      showIfEmpty(exp, 'expEmpty');
-      const expCtx = document.getElementById('expiryChart');
-      if (expCtx) {
-        new Chart(expCtx, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [{
-              label: 'Expiring Items',
-              data: exp,
-              borderColor: yellow,
-              backgroundColor: 'rgba(237,209,0,0.15)',
-              borderWidth: 3,
-              tension: 0.35,
-              pointRadius: 3,
-              fill: false
-            }]
-          },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { labels: { color: tick } }, title: { display: true, text: 'Expirations This Week', color: title } },
-            scales: { x: { ticks: { color: tick }, grid: { color: grid } }, y: { beginAtZero: true, ticks: { color: tick }, grid: { color: grid } } }
-          }
+      // Expiration
+      showIfEmpty(exp,'expEmpty');
+      charts.expiry = new Chart(document.getElementById('expiryChart'), {
+        type:'bar',
+        data:{ labels, datasets:[{
+          label:'Expiring Items', data: exp, backgroundColor:'rgba(237,209,0,0.35)', borderColor: yellow, borderWidth:2, borderRadius: barRadius,
+          maxBarThickness: 32, categoryPercentage:.7, barPercentage:.8,
+          topFaceColor:'rgba(255,240,120,0.45)', sideFaceColor:'rgba(210,180,0,0.35)'
+        }]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ labels:{ color: tick } }, title:{ display:true, text:'Expirations This Week', color: title },
+                   tooltip:{ callbacks:{ label:(ctx)=> `Expiring: ${Number(ctx.parsed.y).toLocaleString()}` } },
+                   bar3d:{ enabled: true, depth: Number(depthRange.value), lift: Number(liftRange.value) } },
+          scales:{ x:{ ticks:{ color: tick }, grid:{ color: grid } }, y:{ beginAtZero:true, ticks:{ color: tick }, grid:{ color: grid } } }
+        }
+      });
+
+      // ===== Helper to propagate 3D options =====
+      const apply3D = () => {
+        const master = toggle3D.checked;
+        const depth = Number(depthRange.value);
+        const lift  = Number(liftRange.value);
+        depthVal.textContent = depth;
+        liftVal.textContent = lift;
+
+        const flags = {
+          production: master && toggleProduction.checked,
+          sales:      master && toggleSales.checked,
+          expiry:     master && toggleExpiry.checked
+        };
+
+        Object.entries(flags).forEach(([key, enabled]) => {
+          const c = charts[key]; if (!c) return;
+          c.options.plugins = c.options.plugins || {};
+          c.options.plugins.bar3d = c.options.plugins.bar3d || {};
+          c.options.plugins.bar3d.enabled = enabled;
+          c.options.plugins.bar3d.depth = depth;
+          c.options.plugins.bar3d.lift = lift;
+          c.update();
         });
-      }
+      };
+
+      // Wire events
+      [toggle3D, toggleProduction, toggleSales, toggleExpiry, depthRange, liftRange]
+        .forEach(el => el?.addEventListener('input', apply3D));
+
+      // initial
+      apply3D();
     });
   </script>
 </body>

@@ -1,6 +1,32 @@
 @extends('layout.mainlayout')
 @section('title', 'Meat Production Inventory')
 
+@section('styles')
+<style>
+  /* light polish on your existing tokens / utilities */
+  .page-wrap{max-width:1400px;margin-inline:auto}
+  .card{background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.02));
+        border:1px solid rgba(255,255,255,.08); box-shadow:0 8px 24px rgba(0,0,0,.25);
+        backdrop-filter: blur(6px)}
+  .neon-ring{box-shadow:0 0 0 1px rgba(130,255,130,.25),0 0 24px rgba(34,197,94,.12) inset}
+  .kpi{display:grid;grid-template-columns:auto 1fr;gap:.5rem;align-items:center}
+  .kpi .icon{width:36px;height:36px;border-radius:.875rem;border:1px solid rgba(255,255,255,.12);
+             display:grid;place-items:center}
+  .table-dark thead th{position:sticky;top:0;z-index:1;background:rgba(0,0,0,.35);backdrop-filter:blur(4px)}
+  .table-dark tbody tr:hover{background:rgba(255,255,255,.045)}
+  .pill{padding:.25rem .5rem;border-radius:.5rem;font-size:.75rem;font-weight:600;letter-spacing:.01em}
+  .pill-ok{background:rgba(16,185,129,.12);color:rgb(167,243,208)}
+  .pill-warn{background:rgba(245,158,11,.12);color:rgb(253,230,138)}
+  .pill-bad{background:rgba(239,68,68,.12);color:rgb(254,202,202)}
+  .list-divider li+li{border-top:1px dashed rgba(255,255,255,.08)}
+  .progress{height:6px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden}
+  .progress > i{display:block;height:100%}
+  @media (max-width: 1024px){
+    .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+</style>
+@endsection
+
 @section('actions')
   <div class="flex flex-wrap gap-2">
     <a href="{{ route('materials.index') }}" class="btn-armygreen">Raw Materials</a>
@@ -10,27 +36,30 @@
 @endsection
 
 @section('content')
-<div x-data="inventoryIndex()" class="space-y-6">
+<div x-data="inventoryIndex()" class="page-wrap space-y-6">
 
+  {{-- Production Alarms --}}
   @if(!empty($productionAlarms))
-    <div class="card rounded-2xl p-4 border-l-4 border-amber-400 bg-amber-900/20">
+    <div class="card rounded-2xl p-4 border-l-4 border-amber-400/80">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="font-semibold text-amber-300">⚠️ Production Alarms</h3>
-        <span class="text-xs bg-amber-800/50 px-2 py-1 rounded">{{ count($productionAlarms) }} active</span>
+        <h3 class="font-semibold text-amber-300 flex items-center gap-2">
+          ⚠️ Production Alarms
+        </h3>
+        <span class="text-xs bg-amber-900/50 px-2 py-1 rounded">{{ count($productionAlarms) }} active</span>
       </div>
-      <div class="space-y-2 max-h-32 overflow-y-auto">
+      <ul class="space-y-2 max-h-32 overflow-y-auto pr-1 list-divider">
         @foreach($productionAlarms as $alarm)
-          <div class="flex items-center gap-3 text-sm">
-            <div class="w-2 h-2 rounded-full
-              {{ $alarm['severity'] === 'critical' ? 'bg-red-400' : ($alarm['severity'] === 'warning' ? 'bg-amber-400' : 'bg-blue-400') }}">
-            </div>
+          <li class="flex items-start gap-3 text-sm py-1">
+            <span class="mt-1 w-2 h-2 rounded-full
+              {{ $alarm['severity'] === 'critical' ? 'bg-red-400' : ($alarm['severity'] === 'warning' ? 'bg-amber-400' : 'bg-blue-400') }}"></span>
             <span class="opacity-90">{{ $alarm['message'] }}</span>
-          </div>
+          </li>
         @endforeach
-      </div>
+      </ul>
     </div>
   @endif
 
+  {{-- Filters --}}
   <div class="card rounded-2xl p-4">
     <form method="GET" class="grid md:grid-cols-4 gap-3 items-end">
       <div>
@@ -52,38 +81,70 @@
       </div>
       <div class="flex gap-2">
         <button class="btn-armygreen flex-1">Apply</button>
-        <a href="{{ route('inventory.index') }}" class="px-4 py-2 rounded-xl bg-white/10">Reset</a>
+        <a href="{{ route('inventory.index') }}" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15">Reset</a>
       </div>
     </form>
   </div>
 
-  <div class="grid grid-cols-2 lg:grid-cols-6 gap-4">
-    <div class="card rounded-2xl p-4 neon">
-      <div class="text-xs opacity-70">Finished Cuts</div>
-      <div class="text-2xl font-semibold">{{ $totalProducts }}</div>
+  {{-- KPIs --}}
+  <div class="grid kpi-grid grid-cols-2 lg:grid-cols-6 gap-4">
+    <div class="card rounded-2xl p-4 neon-ring">
+      <div class="kpi">
+        <span class="icon">🥩</span>
+        <div>
+          <div class="text-xs opacity-70">Finished Cuts</div>
+          <div class="text-2xl font-semibold">{{ $totalProducts }}</div>
+        </div>
+      </div>
     </div>
     <div class="card rounded-2xl p-4">
-      <div class="text-xs opacity-70">Raw Materials (kg)</div>
-      <div class="text-2xl font-semibold">{{ number_format($totalMaterialsWeight,3) }}</div>
+      <div class="kpi">
+        <span class="icon">📦</span>
+        <div>
+          <div class="text-xs opacity-70">Raw Materials (kg)</div>
+          <div class="text-2xl font-semibold">{{ number_format($totalMaterialsWeight,3) }}</div>
+        </div>
+      </div>
     </div>
     <div class="card rounded-2xl p-4">
-      <div class="text-xs opacity-70">Batches (All)</div>
-      <div class="text-2xl font-semibold">{{ $batchesInProduction }}</div>
+      <div class="kpi">
+        <span class="icon">🏷️</span>
+        <div>
+          <div class="text-xs opacity-70">Batches (All)</div>
+          <div class="text-2xl font-semibold">{{ $batchesInProduction }}</div>
+        </div>
+      </div>
     </div>
     <div class="card rounded-2xl p-4">
-      <div class="text-xs opacity-70">With Stock</div>
-      <div class="text-2xl font-semibold">{{ $batchesReleased }}</div>
+      <div class="kpi">
+        <span class="icon">✅</span>
+        <div>
+          <div class="text-xs opacity-70">With Stock</div>
+          <div class="text-2xl font-semibold">{{ $batchesReleased }}</div>
+        </div>
+      </div>
     </div>
     <div class="card rounded-2xl p-4">
-      <div class="text-xs opacity-70">Expiring ≤7d</div>
-      <div class="text-2xl font-semibold text-amber-300">{{ $batchesExpiringSoon }}</div>
+      <div class="kpi">
+        <span class="icon">⏳</span>
+        <div>
+          <div class="text-xs opacity-70">Expiring ≤7d</div>
+          <div class="text-2xl font-semibold text-amber-300">{{ $batchesExpiringSoon }}</div>
+        </div>
+      </div>
     </div>
     <div class="card rounded-2xl p-4">
-      <div class="text-xs opacity-70">Revenue (₱)</div>
-      <div class="text-2xl font-semibold">{{ number_format($totalRevenue,2) }}</div>
+      <div class="kpi">
+        <span class="icon">💸</span>
+        <div>
+          <div class="text-xs opacity-70">Revenue (₱)</div>
+          <div class="text-2xl font-semibold">{{ number_format($totalRevenue,2) }}</div>
+        </div>
+      </div>
     </div>
   </div>
 
+  {{-- Finished Cuts + Expiry Risk --}}
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     <div class="lg:col-span-2 card rounded-2xl p-4">
       <div class="flex items-center justify-between mb-3">
@@ -91,11 +152,11 @@
         <a href="{{ route('products.index') }}" class="text-xs opacity-70 hover:opacity-100">Manage Cuts →</a>
       </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-sm table-dark border-collapse">
+        <table class="w-full text-sm table-dark border-collapse min-w-[880px]">
           <thead>
-          <tr>
-            <th class="p-2 text-left">Cut</th>
-            <th class="p-2">Category</th>
+          <tr class="text-left">
+            <th class="p-2">Cut</th>
+            <th class="p-2 text-center">Category</th>
             <th class="p-2 text-right">Available (kg)</th>
             <th class="p-2 text-right">Forecast (kg)</th>
             <th class="p-2 text-right">Days to Stockout</th>
@@ -111,12 +172,12 @@
               $days = $forecastItem['days_until_stockout'] ?? null;
               $status = $forecastItem['forecast_status'] ?? 'normal';
             @endphp
-            <tr class="hover:bg-white/5">
+            <tr>
               <td class="p-2">
                 <div class="flex items-center gap-3">
                   <img src="{{ $p->image_url ?? asset('images/default-product.png') }}" class="w-10 h-10 rounded-lg object-cover border border-white/10">
-                  <div>
-                    <div class="font-medium">{{ $p->product_name }}</div>
+                  <div class="min-w-0">
+                    <div class="font-medium truncate max-w-[180px]">{{ $p->product_name }}</div>
                     <div class="text-xs opacity-60">Last prod: {{ optional($p->production_date)->format('Y-m-d') ?: '—' }}</div>
                   </div>
                 </div>
@@ -125,9 +186,8 @@
               <td class="p-2 text-right">{{ number_format((float)($p->available_stock_kg ?? 0),3) }}</td>
               <td class="p-2 text-right">{{ number_format((float)($p->forecasted_demand ?? 0),3) }}</td>
               <td class="p-2 text-right">
-                <span class="px-2 py-1 rounded text-xs
-                  {{ $status === 'critical' ? 'bg-red-800/50 text-red-200' :
-                     ($status === 'warning' ? 'bg-amber-800/50 text-amber-200' : 'bg-emerald-800/50 text-emerald-200') }}">
+                <span class="pill
+                  {{ $status === 'critical' ? 'pill-bad' : ($status === 'warning' ? 'pill-warn' : 'pill-ok') }}">
                   {{ $days !== null ? number_format($days,1) : '∞' }}
                 </span>
               </td>
@@ -135,8 +195,8 @@
               <td class="p-2 text-right">₱{{ number_format((float)($p->unit_cost ?? 0),2) }}</td>
               <td class="p-2 text-right">
                 <div class="flex gap-2 justify-end">
-                  <a href="{{ route('products.show',$p->id) }}" class="px-3 py-1 rounded-lg bg-white/10 text-xs">View</a>
-                  <button class="px-3 py-1 rounded-lg bg-emerald-800/50 text-xs"
+                  <a href="{{ route('products.show',$p->id) }}" class="px-3 py-1 rounded-lg bg-white/10 text-xs hover:bg-white/15">View</a>
+                  <button class="px-3 py-1 rounded-lg bg-emerald-800/50 text-xs hover:bg-emerald-800/60"
                           @click="openAdjustProduct({ id: {{ $p->id }}, name: @js($p->product_name), price: {{ (float)($p->default_price ?? 0) }}, forecast: {{ (float)($p->forecasted_demand ?? 0) }}, cost: {{ (float)($p->unit_cost ?? 0) }} })">
                     Quick Edit
                   </button>
@@ -157,17 +217,25 @@
         <h3 class="font-semibold">🚨 Expiry Risk (≤ 7 days)</h3>
         <a href="{{ route('production.index') }}" class="text-xs opacity-70 hover:opacity-100">Manage Batches →</a>
       </div>
-      <ul class="text-sm space-y-2 max-h-[480px] overflow-y-auto pr-1">
+      <ul class="text-sm space-y-2 max-h-[520px] overflow-y-auto pr-1 list-divider">
         @forelse($expiringSoon as $b)
-          <li class="flex items-center justify-between hover:bg-white/5 rounded-lg p-2 border-l-2 {{ $b->days_to_expiry <= 3 ? 'border-red-400' : 'border-amber-400' }}">
-            <div class="min-w-0">
-              <div class="truncate">{{ $b->product?->product_name }} <span class="opacity-60">({{ $b->batch_number }})</span></div>
-              <div class="text-xs opacity-60">Exp: {{ optional($b->expiration_date)->format('Y-m-d') ?? '—' }}</div>
+          @php
+            $ratio = max(0,min(100, 100-($b->days_to_expiry ?? 0)*100/7));
+            $bar = $b->days_to_expiry <= 3 ? 'background:rgba(239,68,68,.8)'
+                 : ($b->days_to_expiry <= 7 ? 'background:rgba(245,158,11,.8)' : 'background:rgba(16,185,129,.8)');
+          @endphp
+          <li class="p-2 rounded-lg">
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="truncate font-medium">{{ $b->product?->product_name }} <span class="opacity-60 font-normal">({{ $b->batch_number }})</span></div>
+                <div class="text-xs opacity-60">Exp: {{ optional($b->expiration_date)->format('Y-m-d') ?? '—' }}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-amber-300 text-xs font-medium">{{ $b->days_to_expiry }} days</div>
+                <div class="text-xs opacity-70">{{ number_format((float)$b->current_inventory,3) }} kg</div>
+              </div>
             </div>
-            <div class="text-right">
-              <div class="text-amber-300 text-xs font-medium">{{ $b->days_to_expiry }} days</div>
-              <div class="text-xs opacity-70">{{ number_format((float)$b->current_inventory,3) }} kg</div>
-            </div>
+            <div class="progress mt-2"><i style="{{ $bar }};width:{{ $ratio }}%"></i></div>
           </li>
         @empty
           <li class="opacity-60">No cuts expiring soon.</li>
@@ -176,13 +244,14 @@
     </div>
   </div>
 
+  {{-- Batch Traceability --}}
   <div class="card rounded-2xl p-4">
     <div class="flex items-center justify-between mb-4">
       <h3 class="font-semibold">🔍 Batch Traceability</h3>
       <a href="{{ route('production.index') }}" class="text-xs opacity-70 hover:opacity-100">View All Batches →</a>
     </div>
     <div class="overflow-x-auto">
-      <table class="w-full text-sm table-dark border-collapse">
+      <table class="w-full text-sm table-dark border-collapse min-w-[960px]">
         <thead>
         <tr>
           <th class="p-2 text-left">Batch Code</th>
@@ -197,7 +266,7 @@
         </thead>
         <tbody>
         @forelse($recentBatches as $batch)
-          <tr class="hover:bg-white/5">
+          <tr>
             <td class="p-2 font-mono text-xs">{{ $batch->batch_code }}</td>
             <td class="p-2">{{ $batch->product?->product_name }}</td>
             <td class="p-2 text-center">{{ optional($batch->produced_at)->format('Y-m-d') }}</td>
@@ -205,18 +274,15 @@
             <td class="p-2 text-right">{{ number_format($batch->qty_total,3) }}</td>
             <td class="p-2 text-right">{{ number_format($batch->qty_available,3) }}</td>
             <td class="p-2 text-center">
-              <span class="px-2 py-1 rounded text-xs
-                {{ $batch->status === 'RELEASED' ? 'bg-emerald-800/50 text-emerald-200' :
-                   ($batch->status === 'CREATED' ? 'bg-blue-800/50 text-blue-200' :
-                   ($batch->status === 'QA_HOLD' ? 'bg-amber-800/50 text-amber-200' : 'bg-gray-800/50 text-gray-200')) }}">
-                {{ $batch->status }}
-              </span>
+              @php
+                $status = $batch->status;
+                $cls = $status === 'RELEASED' ? 'pill-ok' : ($status === 'QA_HOLD' ? 'pill-warn' : ($status === 'CREATED' ? 'pill' : 'pill'));
+              @endphp
+              <span class="pill {{ $cls }}">{{ $status }}</span>
             </td>
             <td class="p-2 text-center">
               @if($batch->days_to_expiry !== null)
-                <span class="px-2 py-1 rounded text-xs
-                  {{ $batch->days_to_expiry <= 3 ? 'bg-red-800/50 text-red-200' :
-                     ($batch->days_to_expiry <= 7 ? 'bg-amber-800/50 text-amber-200' : 'bg-emerald-800/50 text-emerald-200') }}">
+                <span class="pill {{ $batch->days_to_expiry <= 3 ? 'pill-bad' : ($batch->days_to_expiry <= 7 ? 'pill-warn' : 'pill-ok') }}">
                   {{ $batch->days_to_expiry }}
                 </span>
               @else
@@ -232,6 +298,7 @@
     </div>
   </div>
 
+  {{-- Materials + Usage --}}
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
     <div class="lg:col-span-2 card rounded-2xl p-4">
       <div class="flex items-center justify-between mb-3">
@@ -239,7 +306,7 @@
         <a href="{{ route('materials.index') }}" class="text-xs opacity-70 hover:opacity-100">Manage Materials →</a>
       </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-sm table-dark border-collapse">
+        <table class="w-full text-sm table-dark border-collapse min-w-[720px]">
           <thead>
           <tr>
             <th class="p-2 text-left">Material</th>
@@ -252,18 +319,18 @@
           <tbody>
           @forelse($materials as $m)
             @php $low = (float)$m->quantity_kg <= $lowThresh; @endphp
-            <tr class="hover:bg-white/5">
+            <tr>
               <td class="p-2">
                 <div class="flex items-center gap-2">
-                  <div class="w-2 h-2 rounded-full {{ $low ? 'bg-amber-400' : 'bg-emerald-400' }}"></div>
-                  <div class="font-medium">{{ $m->material_name ?? $m->name }}</div>
+                  <span class="w-2 h-2 rounded-full {{ $low ? 'bg-amber-400' : 'bg-emerald-400' }}"></span>
+                  <span class="font-medium">{{ $m->material_name ?? $m->name }}</span>
                 </div>
               </td>
               <td class="p-2 text-center">{{ $m->unit ?? 'kg' }}</td>
               <td class="p-2 text-right {{ $low ? 'text-amber-300' : '' }}">{{ number_format((float)$m->quantity_kg,3) }}</td>
               <td class="p-2 text-right">₱{{ number_format((float)($m->unit_price ?? 0),2) }}</td>
               <td class="p-2 text-right">
-                <button class="px-3 py-1 rounded-lg bg-emerald-800/50 text-xs"
+                <button class="px-3 py-1 rounded-lg bg-emerald-800/50 text-xs hover:bg-emerald-800/60"
                         @click="openAdjustMaterial({ id: {{ $m->id }}, name: @js($m->material_name ?? $m->name) })">
                   Adjust
                 </button>
@@ -285,7 +352,7 @@
         <div>Total Cost: ₱{{ number_format($materialsUsageTotals['cost'],2) }}</div>
       </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-sm table-dark border-collapse">
+        <table class="w-full text-sm table-dark border-collapse min-w-[520px]">
           <thead>
           <tr>
             <th class="p-2 text-left">Material</th>
@@ -295,7 +362,7 @@
           </thead>
           <tbody>
           @forelse($materialsUsage as $u)
-            <tr class="hover:bg-white/5">
+            <tr>
               <td class="p-2">{{ $u->material_name }}</td>
               <td class="p-2 text-right">{{ number_format((float)$u->qty_used,3) }}</td>
               <td class="p-2 text-right">₱{{ number_format((float)$u->cost_used,2) }}</td>
@@ -313,7 +380,7 @@
 @endsection
 
 @section('modals')
-  {{-- Modals (unchanged from your draft) --}}
+  {{-- Adjust Material --}}
   <div x-data="adjustMaterial()" x-show="open" x-cloak class="fixed inset-0 modal flex items-end md:items-center justify-center p-4">
     <div @click.outside="close()" class="card rounded-2xl w-full max-w-md p-4">
       <h3 class="text-lg font-semibold mb-2">Adjust Raw Material</h3>
@@ -327,13 +394,14 @@
           <input type="number" step="0.001" name="delta_kg" class="w-full input-dark rounded-xl px-3 py-2" required>
         </div>
         <div class="flex justify-end gap-2">
-          <button type="button" class="px-4 py-2 rounded-xl bg-white/10" @click="close()">Cancel</button>
+          <button type="button" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15" @click="close()">Cancel</button>
           <button class="btn-armygreen">Apply</button>
         </div>
       </form>
     </div>
   </div>
 
+  {{-- Quick Edit Product --}}
   <div x-data="adjustProduct()" x-show="open" x-cloak class="fixed inset-0 modal flex items-end md:items-center justify-center p-4">
     <div @click.outside="close()" class="card rounded-2xl w-full max-w-md p-4">
       <h3 class="text-lg font-semibold mb-2">Quick Edit Meat Cut</h3>
@@ -357,13 +425,14 @@
           <input type="number" step="0.01" min="0" name="set_unit_cost" :value="cost" class="w-full input-dark rounded-xl px-3 py-2">
         </div>
         <div class="flex justify-end gap-2">
-          <button type="button" class="px-4 py-2 rounded-xl bg-white/10" @click="close()">Cancel</button>
+          <button type="button" class="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15" @click="close()">Cancel</button>
           <button class="btn-armygreen">Save</button>
         </div>
       </form>
     </div>
   </div>
 
+  {{-- Alpine helpers (unchanged logic) --}}
   <script>
     function inventoryIndex(){ return {} }
     function adjustMaterial(){
