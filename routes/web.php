@@ -38,36 +38,22 @@ Route::middleware('auth')->group(function () {
 
     /* ===== Products ===== */
     Route::resource('products', ProductController::class);
-
-    Route::post('products/quick-store', [ProductController::class, 'quickStore'])
-        ->name('products.quick-store');
-
-    Route::post('products/{product}/image', [ProductController::class, 'updateImage'])
-        ->whereNumber('product')
-        ->name('products.image.update');
-
-    Route::post('products/{id}/archive', [ProductController::class, 'archive'])
-        ->whereNumber('id')
-        ->name('products.archive');
+    Route::post('products/quick-store', [ProductController::class, 'quickStore'])->name('products.quick-store');
+    Route::post('products/{product}/image', [ProductController::class, 'updateImage'])->whereNumber('product')->name('products.image.update');
+    Route::post('products/{id}/archive', [ProductController::class, 'archive'])->whereNumber('id')->name('products.archive');
 
     /* ----- Product ↔ Materials (Recipes / BOM) ----- */
     Route::prefix('products/{product}')
         ->whereNumber('product')
         ->group(function () {
-            Route::get('/materials', [ProductController::class, 'materialsIndex'])
-                ->name('products.materials.index');
-            Route::get('/materials/defaults', [ProductController::class, 'materialsDefaults'])
-                ->name('products.materials.defaults');
-            Route::post('/recipe', [ProductController::class, 'recipeStore'])
-                ->name('products.recipe.store');
-            Route::delete('/recipe/{line}', [ProductController::class, 'recipeDestroy'])
-                ->whereNumber('line')
-                ->name('products.recipe.destroy');
+            Route::get('/materials', [ProductController::class, 'materialsIndex'])->name('products.materials.index');
+            Route::get('/materials/defaults', [ProductController::class, 'materialsDefaults'])->name('products.materials.defaults');
+            Route::post('/recipe', [ProductController::class, 'recipeStore'])->name('products.recipe.store');
+            Route::delete('/recipe/{line}', [ProductController::class, 'recipeDestroy'])->whereNumber('line')->name('products.recipe.destroy');
         });
 
     /* ===== Production / Batches ===== */
     Route::prefix('production')->name('production.')->controller(ProductionController::class)->group(function () {
-        // List + Filter
         Route::get('/',        'index')->name('index');
         Route::get('/filter',  'filter')->name('filter');
 
@@ -79,7 +65,7 @@ Route::middleware('auth')->group(function () {
         // Orders (per product)
         Route::get('/orders/{id}', 'showOrders')->whereNumber('id')->name('orders');
 
-        // Create production order (dashboard / orders page)
+        // Create production order
         Route::post('/orders',        'storeOrder')->name('orders.store');
         Route::post('/orders/legacy', 'storeOrder')->name('storeOrder'); // legacy alias
 
@@ -92,33 +78,30 @@ Route::middleware('auth')->group(function () {
         Route::delete('/{production}', 'destroy')->whereNumber('production')->name('destroy');
 
         // Delete latest batch for a product (AJAX-safe)
-        Route::delete('/batch/latest/{product}', 'destroyLatest')
-            ->whereNumber('product')
-            ->name('batch.destroyLatest');
+        Route::delete('/batch/latest/{product}', 'destroyLatest')->whereNumber('product')->name('batch.destroyLatest');
 
-        // Quick Add payload (used by JS: route('production.quickAdd', id))
-        Route::get('/quick-add/{product}', 'quickAddPayload')
-            ->whereNumber('product')
-            ->name('quickAdd');
+        // Quick Add payload
+        Route::get('/quick-add/{product}', 'quickAddPayload')->whereNumber('product')->name('quickAdd');
 
-        // Product detail (keep last to avoid conflicts)
+        // Product detail
         Route::get('/{id}', 'show')->whereNumber('id')->name('show');
     });
 
     /* >>> Alias so route('production') resolves to Production index <<< */
-    Route::get('/production-alias', fn () => redirect()->route('production.index'))
-        ->name('production');
+    Route::get('/production-alias', fn () => redirect()->route('production.index'))->name('production');
 
     /* ===== Sales ===== */
     Route::resource('sales', SalesController::class)->except(['create','show']);
 
-    // Availability check for sales
-    Route::post('/inventory/available', [SalesController::class, 'available'])
-        ->name('sales.available');
+    // Availability check (used by Add Sale & Edit page)
+    Route::post('/inventory/available', [SalesController::class, 'available'])->name('sales.available');
 
-    // One-click Quick Add sale (AJAX) — keep OUTSIDE the production prefix
-    Route::post('/sales/quick-store', [SalesController::class, 'quickStore'])
-        ->name('sales.quickStore');
+    // One-click Quick Add sale (AJAX)
+    Route::post('/sales/quick-store', [SalesController::class, 'quickStore'])->name('sales.quickStore');
+
+    // Receipt & PDF
+    Route::get('/sales/{sale}/receipt',  [SalesController::class, 'receipt'])->whereNumber('sale')->name('sales.receipt');
+    Route::get('/sales/{sale}/download', [SalesController::class, 'download'])->whereNumber('sale')->name('sales.download');
 
     // Handy alias
     Route::get('/sales-alias', fn () => redirect()->route('sales.index'))->name('sales');
@@ -132,7 +115,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/by-item/{item}',            [BatchAllocationController::class, 'byItem'])->whereNumber('item')->name('byItem');
     });
 
-    /* ===== Materials (master list & CRUD) ===== */
+    /* ===== Materials ===== */
     Route::prefix('materials')->group(function () {
         Route::get('/',           [MaterialController::class, 'index'])->name('materials.index');
         Route::post('/',          [MaterialController::class, 'store'])->name('materials.store');

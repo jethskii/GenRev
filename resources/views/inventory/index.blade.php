@@ -1,4 +1,3 @@
-// resources/views/inventory/index.blade.php
 @extends('layout.mainlayout')
 @section('title', 'Meat Production Inventory')
 

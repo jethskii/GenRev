@@ -6,29 +6,26 @@ use App\Models\Product;
 use App\Models\Production;
 use App\Models\Sale;
 use Carbon\Carbon;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;   // column checks
 use Illuminate\Support\Facades\View;     // render card html
-use Illuminate\View\View as ViewReturn;  // avoid name clash with Facade
 
 class SalesController extends Controller
 {
     /** List sales + feed Add-Sale modal */
-    public function index(): ViewReturn
+    public function index()
     {
         $sales = Sale::with([
-                'productRef:id,product_name',
-                'production:id,product_id,batch_number,quantity,current_inventory'
+                'productRef:id,product_name,shelf_life_days',
+                'production:id,product_id,batch_number,quantity,current_inventory,production_date,expiration_date'
             ])
             ->orderByDesc(DB::raw('COALESCE(order_date, date)'))
             ->orderByDesc('id')
             ->get();
 
-        $products = Product::select('id','product_name','unit_cost')
+        $products = Product::select('id','product_name','unit_cost','shelf_life_days')
             ->orderBy('product_name')
             ->get()
             ->map(function ($p) {
@@ -45,7 +42,7 @@ class SalesController extends Controller
 
     /* ---------------- Invoice number helpers (atomic + fallback) ---------------- */
 
-    protected function nextInvoiceNumber(): string
+    protected function nextInvoiceNumber()
     {
         $todayDate = now()->toDateString();
         $ymd       = now()->format('Ymd');
@@ -81,14 +78,14 @@ class SalesController extends Controller
         }
     }
 
-    protected function peekNextInvoiceNumber(): string
+    protected function peekNextInvoiceNumber()
     {
         $todayDate = now()->toDateString();
         $ymd       = now()->format('Ymd');
 
         try {
             $row  = DB::table('invoice_sequences')->where('date_key', $todayDate)->first();
-            $next = ($row?->last_seq ?? 0) + 1;
+            $next = ($row ? (int)$row->last_seq : 0) + 1;
 
             if (!$row) {
                 $prefix = 'INV-' . $ymd . '-';
@@ -107,6 +104,7 @@ class SalesController extends Controller
 
     /* --------------------------------- CRUD --------------------------------- */
 
+    /** Create a sale (links to nearest batch if production_id missing) */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -120,48 +118,75 @@ class SalesController extends Controller
             'production_date' => ['nullable','date'],
             'expiration_date' => ['nullable','date','after_or_equal:production_date'],
             'notes'           => ['nullable','string','max:2000'],
+            'customer_name'   => ['nullable','string','max:255'],
         ]);
 
-        if (!empty($validated['production_id'])) {
-            $batch = Production::select('id','product_id')->findOrFail($validated['production_id']);
+        $resolvedProductionId = isset($validated['production_id']) ? $validated['production_id'] : null;
+        if (!empty($resolvedProductionId)) {
+            $batch = Production::select('id','product_id')->findOrFail($resolvedProductionId);
             if ((int)$batch->product_id !== (int)$validated['product_id']) {
                 return $this->respondValidationError($request, ['production_id' => 'Selected batch does not belong to the chosen product.']);
             }
         }
 
-        $product     = Product::select('id','product_name')->findOrFail($validated['product_id']);
-        $displayName = $validated['product'] ?? $product->product_name;
-        $invoice     = $this->nextInvoiceNumber(); // atomic
-        $total       = round(((float)$validated['quantity']) * ((float)$validated['price']), 2);
-        $status      = $validated['status'] ?? 'Completed';
+        $product     = Product::select('id','product_name','shelf_life_days')->findOrFail($validated['product_id']);
+        $displayName = isset($validated['product']) && $validated['product'] !== null ? $validated['product'] : $product->product_name;
+        $invoice     = $this->nextInvoiceNumber();
+        $qty         = (float) $validated['quantity'];
+        $unit        = (float) $validated['price'];
+        $total       = round($qty * $unit, 2);
+        $status      = isset($validated['status']) && $validated['status'] ? $validated['status'] : 'Completed';
+
+        $hasNew = Schema::hasColumn('sales','order_date')
+                && Schema::hasColumn('sales','quantity_kg')
+                && Schema::hasColumn('sales','unit_price')
+                && Schema::hasColumn('sales','total_price');
+
+        // Auto-resolve batch if none provided
+        $orderDateStr = $validated['date'];
+        if (empty($resolvedProductionId)) {
+            $resolved = $this->resolveProductionByProductAndDate((int)$product->id, $orderDateStr);
+            $resolvedProductionId = $resolved ? $resolved->id : null;
+        }
 
         try {
-            DB::transaction(function () use ($validated, $displayName, $invoice, $total, $status, $product) {
+            DB::transaction(function () use ($validated, $displayName, $invoice, $qty, $unit, $total, $status, $product, $hasNew, $resolvedProductionId) {
                 $payload = [
-                    'invoice_number' => $invoice,
-                    'product_id'     => (int) $validated['product_id'],
-                    'production_id'  => $validated['production_id'] ?? null,
-                    'product'        => $displayName,
-                    'date'           => $validated['date'],
-                    'quantity'       => (float) $validated['quantity'],
-                    'price'          => (float) $validated['price'],
-                    'total'          => $total,
-                    'status'         => $status,
+                    'product_id'    => (int) $validated['product_id'],
+                    'production_id' => $resolvedProductionId,
+                    'status'        => $status,
                 ];
 
-                if (Schema::hasColumn('sales','production_date') && !empty($validated['production_date'])) {
-                    $payload['production_date'] = $validated['production_date'];
+                if (Schema::hasColumn('sales','customer_name'))   $payload['customer_name'] = isset($validated['customer_name']) ? $validated['customer_name'] : null;
+                if (Schema::hasColumn('sales','notes'))            $payload['notes'] = isset($validated['notes']) ? $validated['notes'] : null;
+                if (Schema::hasColumn('sales','production_date'))  $payload['production_date'] = isset($validated['production_date']) ? $validated['production_date'] : null;
+                if (Schema::hasColumn('sales','expiration_date'))  $payload['expiration_date'] = isset($validated['expiration_date']) ? $validated['expiration_date'] : null;
+
+                if ($hasNew) {
+                    if (Schema::hasColumn('sales','order_number')) $payload['order_number'] = $invoice;
+                    $payload += [
+                        'order_date'   => $validated['date'],
+                        'quantity_kg'  => $qty,
+                        'unit_price'   => $unit,
+                        'total_price'  => $total,
+                    ];
+                } else {
+                    $payload += [
+                        'invoice_number' => $invoice,
+                        'product'        => $displayName,
+                        'date'           => $validated['date'],
+                        'quantity'       => $qty,
+                        'price'          => $unit,
+                        'total'          => $total,
+                    ];
                 }
-                if (Schema::hasColumn('sales','expiration_date') && !empty($validated['expiration_date'])) {
-                    $payload['expiration_date'] = $validated['expiration_date'];
-                }
-                if (Schema::hasColumn('sales','notes') && !empty($validated['notes'])) {
-                    $payload['notes'] = trim($validated['notes']);
+
+                foreach (array_keys($payload) as $k) {
+                    if (!Schema::hasColumn('sales',$k)) unset($payload[$k]);
                 }
 
                 Sale::create($payload);
 
-                // Recompute product balance after sale
                 $this->recomputeProductBalance((int)$product->id);
             });
 
@@ -178,13 +203,38 @@ class SalesController extends Controller
         }
     }
 
-    public function edit(Sale $sale): JsonResponse
+    /** Edit page (Blade) — shows batch, production & expiration info */
+    public function edit(Sale $sale)
     {
-        $sale->load(['productRef:id,product_name','production:id,batch_number,product_id,quantity,current_inventory']);
-        return response()->json($sale);
+        $sale->load([
+            'productRef:id,product_name,shelf_life_days,unit_cost',
+            'production:id,product_id,batch_number,production_date,expiration_date',
+        ]);
+
+        $products = Product::orderBy('product_name')->get(['id','product_name','unit_cost','shelf_life_days']);
+
+        $batches = Production::where('product_id', $sale->product_id)
+            ->orderByDesc('production_date')->orderByDesc('id')
+            ->get(['id','batch_number','production_date','expiration_date']);
+
+        $productionDate = $sale->production_date ?: ($sale->production ? $sale->production->production_date : null);
+        $expirationDate = $sale->expiration_date ?: ($sale->production ? $sale->production->expiration_date : null);
+
+        if (!$expirationDate && $productionDate && $sale->productRef && (int)$sale->productRef->shelf_life_days > 0) {
+            $expirationDate = Carbon::parse($productionDate)
+                ->addDays((int)$sale->productRef->shelf_life_days)
+                ->toDateString();
+        }
+
+        $statusOptions = ['Pending','Completed','Cancelled','Paid'];
+
+        return view('sales.edit', compact(
+            'sale','products','batches','productionDate','expirationDate','statusOptions'
+        ));
     }
 
-    public function update(Request $request, Sale $sale): RedirectResponse|JsonResponse
+    /** Update a sale (auto-links batch if missing) */
+    public function update(Request $request, Sale $sale)
     {
         $validated = $request->validate([
             'product_id'      => ['required','integer','exists:products,id'],
@@ -197,42 +247,68 @@ class SalesController extends Controller
             'production_date' => ['nullable','date'],
             'expiration_date' => ['nullable','date','after_or_equal:production_date'],
             'notes'           => ['nullable','string','max:2000'],
+            'customer_name'   => ['nullable','string','max:255'],
         ]);
 
-        if (!empty($validated['production_id'])) {
-            $batch = Production::select('id','product_id')->findOrFail($validated['production_id']);
+        $resolvedProductionId = isset($validated['production_id']) ? $validated['production_id'] : null;
+        if (!empty($resolvedProductionId)) {
+            $batch = Production::select('id','product_id')->findOrFail($resolvedProductionId);
             if ((int)$batch->product_id !== (int)$validated['product_id']) {
                 return $this->respondValidationError($request, ['production_id' => 'Selected batch does not belong to the chosen product.']);
             }
         }
 
         $oldProductId = (int)$sale->product_id;
-        $product     = Product::select('id','product_name')->findOrFail($validated['product_id']);
-        $displayName = $validated['product'] ?? $product->product_name;
-        $total       = round(((float)$validated['quantity']) * ((float)$validated['price']), 2);
-        $status      = $validated['status'] ?? $sale->status ?? 'Completed';
+        $product     = Product::select('id','product_name','shelf_life_days')->findOrFail($validated['product_id']);
+        $displayName = isset($validated['product']) && $validated['product'] !== null ? $validated['product'] : $product->product_name;
+        $qty         = (float) $validated['quantity'];
+        $unit        = (float) $validated['price'];
+        $total       = round($qty * $unit, 2);
+        $status      = isset($validated['status']) && $validated['status'] ? $validated['status'] : ($sale->status ?: 'Completed');
+
+        $hasNew = Schema::hasColumn('sales','order_date')
+                && Schema::hasColumn('sales','quantity_kg')
+                && Schema::hasColumn('sales','unit_price')
+                && Schema::hasColumn('sales','total_price');
+
+        $orderDateStr = $validated['date'];
+        if (empty($resolvedProductionId)) {
+            $resolved = $this->resolveProductionByProductAndDate((int)$product->id, $orderDateStr);
+            $resolvedProductionId = $resolved ? $resolved->id : null;
+        }
 
         try {
-            DB::transaction(function () use ($sale, $validated, $displayName, $total, $status) {
+            DB::transaction(function () use ($sale, $validated, $displayName, $qty, $unit, $total, $status, $hasNew, $resolvedProductionId) {
                 $payload = [
                     'product_id'    => (int) $validated['product_id'],
-                    'production_id' => $validated['production_id'] ?? null,
-                    'product'       => $displayName,
-                    'date'          => $validated['date'],
-                    'quantity'      => (float) $validated['quantity'],
-                    'price'         => (float) $validated['price'],
-                    'total'         => $total,
+                    'production_id' => $resolvedProductionId,
                     'status'        => $status,
                 ];
 
-                if (Schema::hasColumn('sales','production_date')) {
-                    $payload['production_date'] = $validated['production_date'] ?? null;
+                if (Schema::hasColumn('sales','customer_name'))   $payload['customer_name'] = isset($validated['customer_name']) ? $validated['customer_name'] : null;
+                if (Schema::hasColumn('sales','notes'))            $payload['notes'] = isset($validated['notes']) ? $validated['notes'] : null;
+                if (Schema::hasColumn('sales','production_date'))  $payload['production_date'] = isset($validated['production_date']) ? $validated['production_date'] : null;
+                if (Schema::hasColumn('sales','expiration_date'))  $payload['expiration_date'] = isset($validated['expiration_date']) ? $validated['expiration_date'] : null;
+
+                if ($hasNew) {
+                    $payload += [
+                        'order_date'   => $validated['date'],
+                        'quantity_kg'  => $qty,
+                        'unit_price'   => $unit,
+                        'total_price'  => $total,
+                    ];
+                } else {
+                    $payload += [
+                        'product'  => $displayName,
+                        'date'     => $validated['date'],
+                        'quantity' => $qty,
+                        'price'    => $unit,
+                        'total'    => $total,
+                    ];
                 }
-                if (Schema::hasColumn('sales','expiration_date')) {
-                    $payload['expiration_date'] = $validated['expiration_date'] ?? null;
-                }
-                if (Schema::hasColumn('sales','notes')) {
-                    $payload['notes'] = $validated['notes'] ?? null;
+
+                foreach (array_keys($payload) as $k) {
+                    if (!Schema::hasColumn('sales',$k)) unset($payload[$k]);
                 }
 
                 $sale->update($payload);
@@ -254,7 +330,8 @@ class SalesController extends Controller
         }
     }
 
-    public function destroy(Sale $sale): RedirectResponse
+    /** Soft-delete a sale and refresh product balance */
+    public function destroy(Sale $sale)
     {
         $productId = (int)$sale->product_id;
         $sale->delete();
@@ -262,7 +339,8 @@ class SalesController extends Controller
         return redirect()->route('sales')->with('success', 'Sale deleted.');
     }
 
-    public function available(Request $request): JsonResponse
+    /** Availability + default price for a product (used by Add Sale modal / edit page) */
+    public function available(Request $request)
     {
         $validated = $request->validate([
             'product_id' => ['required','integer','exists:products,id'],
@@ -276,8 +354,8 @@ class SalesController extends Controller
         ]);
     }
 
-    /** -------------------- NEW: One-click Quick Add (AJAX) -------------------- */
-    public function quickStore(Request $request): JsonResponse
+    /** One-click Quick Add (AJAX) — also schema-aware */
+    public function quickStore(Request $request)
     {
         $validated = $request->validate([
             'product_id'    => ['required','integer','exists:products,id'],
@@ -292,7 +370,6 @@ class SalesController extends Controller
         $price     = (float)($validated['price'] ?? ($product->price ?? $product->default_price ?? $product->unit_cost ?? 0));
         $date      = !empty($validated['date']) ? Carbon::parse($validated['date'])->toDateString() : now()->toDateString();
 
-        // Ensure production_id belongs to product or pick latest batch
         $batch = null;
         if (!empty($validated['production_id'])) {
             $b = Production::select('id','product_id')->findOrFail($validated['production_id']);
@@ -304,28 +381,50 @@ class SalesController extends Controller
         }
 
         $invoice = $this->nextInvoiceNumber();
+        $hasNew  = Schema::hasColumn('sales','order_date')
+                && Schema::hasColumn('sales','quantity_kg')
+                && Schema::hasColumn('sales','unit_price')
+                && Schema::hasColumn('sales','total_price');
 
-        DB::transaction(function () use ($product, $quantity, $price, $date, $batch, $invoice) {
-            Sale::create([
-                'invoice_number' => $invoice,
-                'product_id'     => $product->id,
-                'production_id'  => $batch?->id,
-                'product'        => $product->product_name,
-                'date'           => $date,
-                'quantity'       => $quantity,
-                'price'          => $price,
-                'total'          => round($quantity * $price, 2),
-                'status'         => 'Completed',
-            ]);
+        DB::transaction(function () use ($product, $quantity, $price, $date, $batch, $invoice, $hasNew) {
+            $payload = [
+                'product_id'    => $product->id,
+                'production_id' => $batch ? $batch->id : null,
+                'status'        => 'Completed',
+            ];
 
-            // recompute balance (produced - sold)
+            if (Schema::hasColumn('sales','production_date')) $payload['production_date'] = $date;
+
+            if ($hasNew) {
+                if (Schema::hasColumn('sales','order_number')) $payload['order_number'] = $invoice;
+                $payload += [
+                    'order_date'   => $date,
+                    'quantity_kg'  => $quantity,
+                    'unit_price'   => $price,
+                    'total_price'  => round($quantity * $price, 2),
+                ];
+            } else {
+                $payload += [
+                    'invoice_number' => $invoice,
+                    'product'        => $product->product_name,
+                    'date'           => $date,
+                    'quantity'       => $quantity,
+                    'price'          => $price,
+                    'total'          => round($quantity * $price, 2),
+                ];
+            }
+
+            foreach (array_keys($payload) as $k) {
+                if (!Schema::hasColumn('sales',$k)) unset($payload[$k]);
+            }
+
+            Sale::create($payload);
+
             $this->recomputeProductBalance($product->id);
         });
 
-        // Build refreshed card html for UI swap
         [$cardHtml, $pid] = $this->buildProductCardHtml($product->id);
 
-        // Dashboard totals
         $all = Product::all();
         $forecastedDemand      = (float) $all->sum('forecasted_demand');
         $actualInventory       = (float) $all->sum('quantity');
@@ -346,6 +445,49 @@ class SalesController extends Controller
         ]);
     }
 
+    /* ----------------------------- Receipt + PDF ----------------------------- */
+
+    /** Printable receipt view (schema-aware, shows production & expiration) */
+    public function receipt(Sale $sale)
+    {
+        $sale->load([
+            'productRef:id,product_name,shelf_life_days',
+            'production:id,product_id,batch_number,production_date,expiration_date',
+        ]);
+
+        $production = $this->resolveProductionFor($sale);
+        $meta = $this->buildReceiptMeta($sale, $production);
+
+        return view('sales.receipt', [
+            'sale' => $sale,
+            'meta' => $meta,
+        ]);
+    }
+
+    /** Download receipt as PDF if dompdf exists; otherwise show printable page */
+    public function download(Sale $sale)
+    {
+        $sale->load([
+            'productRef:id,product_name,shelf_life_days',
+            'production:id,product_id,batch_number,production_date,expiration_date',
+        ]);
+
+        $production = $this->resolveProductionFor($sale);
+        $meta = $this->buildReceiptMeta($sale, $production);
+
+        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('sales.receipt', [
+                'sale'  => $sale,
+                'meta'  => $meta,
+                'isPdf' => true,
+            ]);
+            $file = ($sale->invoice_number ?? $sale->order_number ?? 'receipt') . '.pdf';
+            return $pdf->download($file);
+        }
+
+        return redirect()->route('sales.receipt', $sale)->with('info', 'PDF package not installed; opened printable receipt instead.');
+    }
+
     /* ----------------------------- Helpers ----------------------------- */
 
     protected function respondValidationError(Request $request, array $errors)
@@ -356,12 +498,15 @@ class SalesController extends Controller
         return back()->withErrors($errors)->withInput();
     }
 
-    protected function recomputeProductBalance(int $productId): void
+    protected function recomputeProductBalance($productId)
     {
         $produced = (float) Production::where('product_id', $productId)->sum('quantity');
-        $sold     = (float) Sale::where('product_id', $productId)->sum('quantity');
-        $balance  = max(0.0, $produced - $sold);
 
+        $sold = (float) Sale::where('product_id', $productId)
+            ->selectRaw('SUM(COALESCE(quantity_kg, quantity, 0)) as total_sold')
+            ->value('total_sold');
+
+        $balance  = max(0.0, $produced - $sold);
         $latestProdDate = Production::where('product_id', $productId)->max('production_date');
 
         Product::where('id', $productId)->update([
@@ -371,15 +516,11 @@ class SalesController extends Controller
         ]);
     }
 
-    /**
-     * Build single product card HTML consistent with ProductionController rendering.
-     */
-    protected function buildProductCardHtml(int $productId): array
+    protected function buildProductCardHtml($productId)
     {
         $fresh = Product::find($productId);
         if (!$fresh) return [null, $productId];
 
-        // Mirror ProductionController@attachCardMedia minimal behavior
         $orig = $fresh->image_url ?? asset('images/default-product.png');
         $fresh->card_image_url     = $orig;
         $fresh->image_thumb_url    = null;
@@ -392,5 +533,86 @@ class SalesController extends Controller
             : view('production.partials.product-cards', ['products' => collect([$fresh])])->render();
 
         return [$cardHtml, $fresh->id];
+    }
+
+    /** Resolve best production batch for a sale */
+    protected function resolveProductionFor(Sale $sale)
+    {
+        if ($sale->relationLoaded('production') && $sale->production) {
+            return $sale->production;
+        }
+        $productId = (int) ($sale->product_id ?: 0);
+        if (!$productId) return null;
+
+        $orderDate = $sale->order_date ?: ($sale->date ?: null);
+
+        return $this->resolveProductionByProductAndDate($productId, $orderDate);
+    }
+
+    /** Pick batch by product + (optional) order date: on/before date, else latest */
+    protected function resolveProductionByProductAndDate($productId, $orderDate)
+    {
+        $query = Production::where('product_id', (int)$productId);
+
+        if ($orderDate) {
+            $nearest = (clone $query)
+                ->whereDate('production_date', '<=', Carbon::parse($orderDate)->toDateString())
+                ->orderByDesc('production_date')
+                ->orderByDesc('id')
+                ->first();
+            if ($nearest) return $nearest;
+        }
+
+        return (clone $query)->orderByDesc('production_date')->orderByDesc('id')->first();
+    }
+
+    /** Build receipt meta (batch, production_date, expiration, etc.) */
+    protected function buildReceiptMeta(Sale $sale, $production = null)
+    {
+        $invoiceNo = $sale->invoice_number ?? $sale->order_number ?? null;
+
+        $orderDate = $sale->order_date ?? $sale->date ?? null;
+        $qty       = (float) ($sale->quantity_kg ?? $sale->quantity ?? 0);
+        $unit      = (float) ($sale->unit_price ?? $sale->price ?? 0);
+        $total     = (float) ($sale->total_price ?? $sale->total ?? ($qty * $unit));
+
+        $productionDate = $sale->production_date
+            ?? ($production ? $production->production_date : null);
+
+        $explicitExpiry = $sale->expiration_date
+            ?? ($production ? $production->expiration_date : null);
+
+        $shelfLifeDays  = (int) (optional($sale->productRef)->shelf_life_days ?? 0);
+        $expiry = $explicitExpiry ?: $this->computeExpirationDate($productionDate, $shelfLifeDays);
+
+        $daysLeft = null;
+        if ($expiry) {
+            $daysLeft = Carbon::parse($expiry)->diffInDays(now(), false) * -1;
+        }
+
+        return [
+            'invoice'         => $invoiceNo,
+            'display_product' => $sale->display_product
+                ?? ($sale->product ?? optional($sale->productRef)->product_name ?? 'N/A'),
+            'order_date'      => $orderDate,
+            'quantity'        => $qty,
+            'unit_price'      => $unit,
+            'total'           => $total,
+            'status'          => $sale->status ?? 'Completed',
+            'customer_name'   => $sale->customer_name ?? null,
+
+            'batch_number'    => $production ? $production->batch_number : null,
+            'production_date' => $productionDate,
+            'expiration_date' => $expiry,
+            'days_left'       => $daysLeft,
+        ];
+    }
+
+    protected function computeExpirationDate($productionDate, $shelfLifeDays)
+    {
+        if (!$productionDate) return null;
+        $shelfLifeDays = (int)$shelfLifeDays;
+        if ($shelfLifeDays <= 0) return null;
+        return Carbon::parse($productionDate)->addDays($shelfLifeDays)->toDateString();
     }
 }

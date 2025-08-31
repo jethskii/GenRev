@@ -126,6 +126,10 @@ class Sale extends Model
             $this->attributes['total_price'] = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
         }
     }
+    public function audits()
+    {
+    return $this->hasMany(\App\Models\SaleAudit::class);
+    }
 
     public function setUnitPriceAttribute($value): void
     {

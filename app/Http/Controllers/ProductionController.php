@@ -282,7 +282,6 @@ class ProductionController extends Controller
             'quantity' => (float)$validated['current_inventory']
         ]));
 
-        // model event also recomputes, but safe to call if you keep controller in sync
         $this->recomputeProductBalance($production->product_id);
 
         return redirect()->route('production.index')->with('success', 'Production record updated.');
@@ -345,9 +344,8 @@ class ProductionController extends Controller
             return response()->json(['ok' => false, 'message' => 'Cannot delete; batch has linked sales.'], 409);
         }
 
-        $latest->delete(); // Soft delete; model events will sync product balances.
+        $latest->delete();
 
-        // Build refreshed card HTML for this product
         $freshProduct = Product::find($product->id);
         $this->attachCardMedia($freshProduct);
 
