@@ -5,8 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Material;
 use App\Models\ProductRecipe;
+use App\Models\Production;
+use App\Models\Sale;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -114,14 +117,73 @@ class ProductController extends Controller
             ->with('success', 'Product updated.');
     }
 
-    public function destroy(Product $product)
+    /**
+     * PERMANENTLY delete a product and all related data (productions, sales, recipes).
+     * Returns JSON for AJAX calls (used by the 3D Delete Product button).
+     */
+    public function destroy(Request $request, Product $product)
     {
-        if (!empty($product->image)) {
-            Storage::disk('public')->delete($product->image);
-        }
-        $product->delete();
+        try {
+            DB::transaction(function () use ($product) {
+                // 1) Delete dependent rows (respect FK order)
+                Sale::where('product_id', $product->id)->delete();
+                Production::where('product_id', $product->id)->delete();
 
-        return redirect()->route('products.index')->with('success', 'Product deleted.');
+                if (method_exists($product, 'recipes')) {
+                    $product->recipes()->delete();
+                }
+
+                // 2) Delete product image file if present
+                if (!empty($product->image)) {
+                    try { Storage::disk('public')->delete($product->image); }
+                    catch (\Throwable $e) {
+                        Log::warning('Failed to delete product image from storage', [
+                            'product_id' => $product->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+
+                // 3) Delete product row (force if soft-deleted model)
+                if (in_array('Illuminate\\Database\\Eloquent\\SoftDeletes', class_uses_recursive($product))) {
+                    $product->forceDelete();
+                } else {
+                    $product->delete();
+                }
+            });
+
+            // KPI snapshot (optional for your dashboard badges)
+            [$forecastedDemand, $actualInventory, $shortfall, $recommendedProduction] = $this->totalsSnapshot();
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'ok'         => true,
+                    'message'    => 'Product permanently deleted.',
+                    'product_id' => (int) $product->id,
+                    'totals'     => [
+                        'forecastedDemand'      => (float)$forecastedDemand,
+                        'actualInventory'       => (float)$actualInventory,
+                        'shortfall'             => (float)$shortfall,
+                        'recommendedProduction' => (float)$recommendedProduction,
+                    ],
+                ]);
+            }
+
+            return redirect()->route('products.index')->with('success', 'Product permanently deleted.');
+        } catch (\Throwable $e) {
+            Log::error('Failed to permanently delete product', [
+                'product_id' => $product->id ?? null,
+                'error'      => $e->getMessage(),
+                'trace'      => $e->getTraceAsString(),
+            ]);
+
+            $msg = config('app.debug') ? 'Delete failed: '.$e->getMessage() : 'Server error while deleting product.';
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['ok' => false, 'message' => $msg], 500);
+            }
+            return redirect()->back()->with('error', $msg);
+        }
     }
 
     /**
@@ -132,9 +194,9 @@ class ProductController extends Controller
     {
         $incomingName = $request->input('product_name') ?? $request->input('name');
 
-        $validated = $request->validate([
-            // validate the field that actually came in
-            $incomingName === null ? 'product_name' : 'tmp' => ['nullable'], // no-op when name provided
+        $request->validate([
+            // no-op validator to keep the pipeline happy; actual field validated below
+            $incomingName === null ? 'product_name' : 'tmp' => ['nullable'],
         ]);
 
         $name = trim((string) $incomingName);
@@ -144,7 +206,6 @@ class ProductController extends Controller
                 : back()->withErrors(['name' => 'Product name is required'])->withInput();
         }
 
-        // Uniqueness check against product_name
         if (Product::where('product_name', $name)->exists()) {
             $msg = 'Product name already exists.';
             return $request->wantsJson()
@@ -213,12 +274,11 @@ class ProductController extends Controller
                 ProductRecipe::updateOrCreate(
                     [
                         'product_id'    => (int) $product->id,
-                        'ingredient_id' => $matId,          // legacy column in DB
+                        'ingredient_id' => $matId, // legacy column in DB
                     ],
                     [
                         'qty'                 => (float) $row['qty'],
                         'unit_price_snapshot' => (float) $row['unit_price'],
-                        // If your table also has material_id, the model mutator will mirror it.
                     ]
                 );
             }
@@ -307,5 +367,22 @@ class ProductController extends Controller
             'line_constraints'    => ['nullable'], // array or JSON string; Product mutator normalizes
             'image'               => ['nullable', 'image', 'max:4096'],
         ]);
+    }
+
+    /* ============================== HELPERS ============================== */
+
+    /**
+     * Small KPI snapshot for dashboard counters after deletes.
+     * Mirrors ProductionController::totalsSnapshot().
+     */
+    private function totalsSnapshot(): array
+    {
+        $products = Product::all();
+        $forecastedDemand      = (float) $products->sum('forecasted_demand');
+        $actualInventory       = (float) $products->sum('quantity');
+        $shortfall             = max($forecastedDemand - $actualInventory, 0.0);
+        $recommendedProduction = $shortfall;
+
+        return [$forecastedDemand, $actualInventory, $shortfall, $recommendedProduction];
     }
 }

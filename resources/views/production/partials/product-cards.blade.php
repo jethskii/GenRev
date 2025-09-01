@@ -16,6 +16,63 @@ use Illuminate\Support\Str;
   .prod-card:hover .prod-card-img{ filter: brightness(1.02); }
   .prod-card { pointer-events: auto; }
   .btn-busy { opacity: .7; pointer-events: none; }
+
+  /* ===== 3D Buttons ===== */
+  .btn-3d{
+    position: relative;
+    border-radius: 14px;
+    font-weight: 700;
+    padding: .55rem .9rem;
+    border: 1px solid rgba(255,255,255,.12);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, background .12s ease;
+    box-shadow:
+      0 10px 18px rgba(0,0,0,.35),
+      0 2px 0 rgba(255,255,255,.06) inset,
+      0 -2px 0 rgba(0,0,0,.25) inset;
+    backdrop-filter: blur(3px);
+    line-height: 1;
+  }
+  .btn-3d:hover{ transform: translateY(-1px); filter: brightness(1.03); }
+  .btn-3d:active{
+    transform: translateY(0px);
+    box-shadow:
+      0 3px 10px rgba(0,0,0,.35),
+      0 -2px 0 rgba(255,255,255,.03) inset,
+      0 2px 0 rgba(0,0,0,.35) inset;
+  }
+
+  .btn-3d-danger{
+    color:#fff;
+    background: linear-gradient(180deg, #ff5353 0%, #c51e1e 100%);
+    border-color: rgba(255,83,83,.3);
+    text-shadow: 0 1px 0 rgba(0,0,0,.35);
+  }
+  .btn-3d-danger:hover{ background: linear-gradient(180deg, #ff5f5f 0%, #d22020 100%); }
+
+  .btn-3d-neutral{
+    color:#eaeaea;
+    background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
+    border-color: rgba(255,255,255,.15);
+  }
+
+  /* ===== Modal (Glass + 3D confirm) ===== */
+  .modal-overlay{
+    position: fixed; inset: 0; z-index: 60;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.55);
+  }
+  .modal-overlay.show{ display:flex; }
+  .modal-card{
+    width: 100%; max-width: 460px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 20px 48px rgba(0,0,0,.45);
+    color: #fff;
+  }
+  .modal-header{ padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
+  .modal-body{ padding: 16px; color: #eaeaea; }
+  .modal-actions{ padding: 14px 16px; display:flex; gap:.5rem; justify-content:flex-end; border-top: 1px solid rgba(255,255,255,.08); }
 </style>
 @endonce
 
@@ -104,41 +161,66 @@ use Illuminate\Support\Str;
     </div>
 
     {{-- Actions --}}
-    <div class="flex items-center justify-end gap-2 pt-2">
-      @if (Route::has('production.show'))
-        <a href="{{ route('production.show', $p->id) }}"
-           class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/90 hover:bg-white/10">
-          Manage Orders
-        </a>
-      @endif
+    <div class="flex items-center justify-between gap-2 pt-2">
+      <div class="flex items-center gap-2">
+        @if (Route::has('production.show'))
+          <a href="{{ route('production.show', $p->id) }}"
+             class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/90 hover:bg-white/10">
+            Manage Orders
+          </a>
+        @endif
+      </div>
 
-      {{-- NEW: Delete latest batch (AJAX) --}}
-      <button
-        type="button"
-        class="js-delete-latest px-3 py-2 rounded-xl bg-rose-600/90 text-white hover:bg-rose-600"
-        data-product-id="{{ (int)$p->id }}"
-        title="Delete the latest batch for this product"
-      >
-        Delete Latest Batch
-      </button>
+      <div class="flex items-center gap-2">
+        {{-- Delete Product (3D) --}}
+        <button
+          type="button"
+          class="js-open-delete-product btn-3d btn-3d-danger text-sm"
+          data-product-id="{{ (int)$p->id }}"
+          data-product-name="{{ e($p->product_name) }}"
+          aria-haspopup="dialog"
+          title="Permanently delete this product and all related data"
+        >
+          Delete Product
+        </button>
 
-      {{-- Quick Add to Sales --}}
-      <button
-        type="button"
-        class="js-quick-add px-3 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold hover:opacity-90"
-        data-id="{{ (int)$p->id }}"
-        data-name="{{ e($p->product_name) }}"
-        data-price="{{ $defaultPrice }}"
-      >
-        + Quick Add
-      </button>
+        {{-- Quick Add to Sales --}}
+        <button
+          type="button"
+          class="js-quick-add px-3 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold hover:opacity-90"
+          data-id="{{ (int)$p->id }}"
+          data-name="{{ e($p->product_name) }}"
+          data-price="{{ $defaultPrice }}"
+        >
+          + Quick Add
+        </button>
+      </div>
     </div>
   </div>
 @empty
   <div class="col-span-full text-center text-white/70 py-10">No products yet.</div>
 @endforelse
 
+{{-- ===== Global Delete Product Modal (single reusable instance) ===== --}}
 @once
+<div id="confirmDeleteProductModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="delTitle" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="delTitle" class="text-lg font-semibold">Delete Product?</h3>
+    </div>
+    <div class="modal-body">
+      <p class="text-sm leading-relaxed">
+        This action will permanently remove <span id="delProductName" class="font-semibold text-white"></span> and
+        all related data. Are you sure you want to continue?
+      </p>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-3d btn-3d-neutral js-cancel-del">Cancel</button>
+      <button type="button" class="btn-3d btn-3d-danger js-confirm-del">Confirm Delete</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   if (window.__prodCardsBound) return;
@@ -203,7 +285,6 @@ use Illuminate\Support\Str;
 
         const modal = document.getElementById('saleModal');
         if (modal) {
-          try { modal.showModal && modal.showModal(); } catch(_) {}
           modal.classList.remove('hidden'); modal.removeAttribute('aria-hidden');
         } else {
           toast('Sales modal not found.', 'error');
@@ -222,56 +303,83 @@ use Illuminate\Support\Str;
     }
   }
 
-  async function handleDeleteLatest(btn) {
-    const productId = Number(btn.dataset.productId || 0);
-    if (!productId) return;
+  /* ===== Delete Product (modal flow) ===== */
+  const delModal   = document.getElementById('confirmDeleteProductModal');
+  const delNameEl  = document.getElementById('delProductName');
+  const btnCancel  = delModal?.querySelector('.js-cancel-del');
+  const btnConfirm = delModal?.querySelector('.js-confirm-del');
+  let activeProductId = null;
 
-    if (!confirm('Delete the latest batch for this product? This will adjust inventory accordingly.')) return;
+  function openDelModal(id, name){
+    activeProductId = id;
+    if (delNameEl) delNameEl.textContent = name || 'this product';
+    delModal?.classList.add('show');
+    delModal?.setAttribute('aria-hidden', 'false');
+  }
+  function closeDelModal(){
+    delModal?.classList.remove('show');
+    delModal?.setAttribute('aria-hidden', 'true');
+    activeProductId = null;
+  }
 
-    btn.classList.add('btn-busy');
-    const original = btn.textContent;
-    btn.textContent = 'Deleting…';
-    btn.disabled = true;
+  async function confirmDeleteProduct(){
+    if (!activeProductId) return;
+    btnConfirm?.classList.add('btn-busy');
 
     try {
-      const res = await fetch('{{ route('production.batch.destroyLatest', 0) }}'.replace('/0', '/' + productId), {
+      // RESTful route: products.destroy
+      const url = '{{ route('products.destroy', 0) }}'.replace('/0', '/' + activeProductId);
+
+      const res = await fetch(url, {
         method: 'DELETE',
         headers: {
           'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': '{{ csrf_token() }}'
+          'X-CSRF-TOKEN': '{{ csrf_token() }}',
+          'Accept': 'application/json'
         }
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.message || 'Failed to delete.');
-
-      // Replace the card with updated HTML
-      const card = document.getElementById(`product-card-${productId}`);
-      if (card && data.card_html) {
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = data.card_html.trim();
-        const newCard = wrapper.querySelector(`#product-card-${productId}`) || wrapper.firstElementChild;
-        if (newCard) card.replaceWith(newCard);
+      if (!res.ok) {
+        let msg = 'Failed to delete product.';
+        try {
+          const data = await res.json();
+          if (data?.message) msg = data.message;
+        } catch(_) {}
+        throw new Error(msg);
       }
 
-      toast('Latest batch deleted.', 'success');
+      // remove card from UI
+      const card = document.getElementById(`product-card-${activeProductId}`);
+      if (card) card.remove();
+      toast('Product permanently deleted.', 'success');
+      closeDelModal();
     } catch (err) {
-      toast(err.message || 'Could not delete batch.', 'error');
+      toast(err.message || 'Could not delete product.', 'error');
     } finally {
-      btn.classList.remove('btn-busy');
-      btn.textContent = original;
-      btn.disabled = false;
+      btnConfirm?.classList.remove('btn-busy');
     }
   }
 
-  // Event delegation for dynamic cards
   document.addEventListener('click', (e) => {
     const quick = e.target.closest('.js-quick-add');
     if (quick) { handleQuickAdd(quick); return; }
 
-    const del = e.target.closest('.js-delete-latest');
-    if (del) { handleDeleteLatest(del); return; }
+    const delProd = e.target.closest('.js-open-delete-product');
+    if (delProd) {
+      const id   = Number(delProd.dataset.productId || 0);
+      const name = delProd.dataset.productName || '';
+      openDelModal(id, name);
+      return;
+    }
+
+    if (e.target === delModal) closeDelModal(); // click backdrop to close
   }, true);
+
+  btnCancel?.addEventListener('click', closeDelModal);
+  btnConfirm?.addEventListener('click', confirmDeleteProduct);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && delModal?.classList.contains('show')) closeDelModal();
+  });
 })();
 </script>
 @endonce

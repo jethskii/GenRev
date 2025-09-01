@@ -24,7 +24,7 @@ class ProductionController extends Controller
 
         $products = Product::query()
             ->when($request->filled('search'), function ($q) use ($request) {
-                $s = trim($request->get('search'));
+                $s = trim((string)$request->get('search'));
                 $q->where('product_name', 'like', "%{$s}%");
             })
             ->when($selectedCategory, fn ($q) => $q->where('category', $selectedCategory))
@@ -92,7 +92,9 @@ class ProductionController extends Controller
             // Resolve or create product
             if (empty($validated['product_id'])) {
                 $name = isset($validated['product_name']) ? ucfirst(strtolower(trim($validated['product_name']))) : null;
-                if (!$name) return $this->respondError($request, ['product_name' => 'Please select a product or enter a new name.']);
+                if (!$name) {
+                    return $this->respondError($request, ['product_name' => 'Please select a product or enter a new name.']);
+                }
 
                 $attrs = $this->filterProductColumns([
                     'forecasted_demand' => (float)($validated['forecasted_demand'] ?? 0),
@@ -226,6 +228,9 @@ class ProductionController extends Controller
                 ]);
             });
 
+            // recompute after transaction
+            $this->recomputeProductBalance($product->id);
+
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => true, 'message' => 'Order added.']);
             }
@@ -282,13 +287,14 @@ class ProductionController extends Controller
             'quantity' => (float)$validated['current_inventory']
         ]));
 
-        $this->recomputeProductBalance($production->product_id);
+        $this->recomputeProductBalance((int)$production->product_id);
 
         return redirect()->route('production.index')->with('success', 'Production record updated.');
     }
 
     public function destroy(Production $production)
     {
+        // protect against deleting batches that have linked sales
         if (Sale::where('production_id', $production->id)->exists()) {
             if (request()->ajax() || request()->wantsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Cannot delete this batch; it has linked sales.'], 409);
@@ -298,6 +304,9 @@ class ProductionController extends Controller
 
         $productId = (int)$production->product_id;
         $production->delete();
+
+        // recompute product stock after deletion
+        $this->recomputeProductBalance($productId);
 
         if (request()->ajax() || request()->wantsJson()) {
             $product = Product::find($productId);
@@ -328,7 +337,7 @@ class ProductionController extends Controller
         return redirect()->route('production.index')->with('success', 'Production deleted.');
     }
 
-    /** NEW: Delete the latest batch for a product (no linked sales allowed) */
+    /** NOTE: Kept for API compatibility; your UI no longer exposes this action. */
     public function destroyLatest(Product $product)
     {
         $latest = Production::where('product_id', $product->id)
@@ -345,6 +354,9 @@ class ProductionController extends Controller
         }
 
         $latest->delete();
+
+        // recompute after deletion
+        $this->recomputeProductBalance((int)$product->id);
 
         $freshProduct = Product::find($product->id);
         $this->attachCardMedia($freshProduct);
@@ -393,9 +405,10 @@ class ProductionController extends Controller
         return response()->json($batches);
     }
 
+    /** Route name in your blade: production.quickAdd => this method */
     public function quickAddPayload(Product $product): JsonResponse
     {
-        $price = (float)($product->price ?? 0);
+        $price = (float)($product->price ?? $product->default_price ?? 0);
 
         $latestBatch = Production::where('product_id', $product->id)
             ->orderByDesc('production_date')->orderByDesc('id')->first();
@@ -454,7 +467,7 @@ class ProductionController extends Controller
         $prefix = $product->product_code ? strtoupper($product->product_code) : 'B';
         $last   = Production::where('product_id', $product->id)->orderByDesc('id')->value('batch_number');
         $n = 0;
-        if ($last && preg_match('/(\d+)\s*$/', $last, $m)) $n = (int)$m[1];
+        if ($last && preg_match('/(\d+)\s*$/', (string)$last, $m)) $n = (int)$m[1];
         return $prefix . '-' . str_pad((string)($n + 1), 4, '0', STR_PAD_LEFT);
     }
 
@@ -562,7 +575,7 @@ class ProductionController extends Controller
             'expiration_date'   => $expiry->toDateString(),
         ]);
 
-        $this->recomputeProductBalance($product->id);
+        $this->recomputeProductBalance((int)$product->id);
     }
 
     private function enrichProductsForCards($products)
