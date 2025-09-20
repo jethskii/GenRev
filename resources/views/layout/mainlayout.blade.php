@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GenRev Admin Dashboard</title>
+  <meta name="csrf-token" content="{{ csrf_token() }}"> {{-- helpful for AJAX --}}
 
   <!-- Tailwind -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -168,7 +169,6 @@
           Settings
         </a>
 
-        {{-- When editing a product's Materials, show quick breadcrumb --}}
         @if(request()->routeIs('products.materials.*'))
           <div class="px-6 pt-2">
             <a href="{{ route('products.index') }}" class="text-xs text-[#C3E956] hover:underline">← Back to Products</a>
@@ -230,7 +230,8 @@
     </div>
   </div>
 
-  @yield('scripts')
+  {{-- IMPORTANT: use @stack so @push('scripts') runs (charts, etc.) --}}
+  @stack('scripts')
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
