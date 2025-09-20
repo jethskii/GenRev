@@ -1,130 +1,117 @@
-{{-- resources/views/partials/sidebar.blade.php --}}
-<aside
-  class="bg-[#1b241b] text-white w-64 min-w-64 h-screen sticky top-0 flex flex-col border-r border-dark-line"
-  x-data="{ open: true }"
->
-    {{-- Brand / User --}}
-    <div class="px-5 py-4 flex items-center justify-between border-b border-dark-line">
-        <div class="flex items-center gap-3">
-            <div class="h-9 w-9 rounded-full bg-armygreen/90 text-black font-bold grid place-items-center">
-                G
-            </div>
-            <div>
-                <div class="font-semibold leading-tight">GenRev Production</div>
-                <div class="text-xs text-gray-400">Admin</div>
-            </div>
-        </div>
-        {{-- optional collapse (requires AlpineJS if you want to use it) --}}
-        {{-- <button class="text-gray-400 hover:text-white" @click="open=!open">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-            </svg>
-        </button> --}}
-    </div>
+{{-- resources/views/partials/sidebar.blade.php — 3D Neon Glass Sidebar --}}
+{{-- Requirements: Tailwind loaded; optional custom vars: --}}
+{{-- :root { --surface:#0B0F10; --card:#11161A; --line:rgba(255,255,255,.08); } --}}
 
-    {{-- Nav --}}
-    <nav class="flex-1 overflow-y-auto py-3">
-        @php
-            $item = function ($label, $route, $iconPath, $isActive = false) {
-                $classes = $isActive
-                    ? 'bg-armygreen/20 text-white border-l-4 border-armygreen'
-                    : 'text-gray-300 hover:text-white hover:bg-white/5';
-                return <<<HTML
-                    <a href="{$route}" class="group flex items-center gap-3 px-5 py-2.5 transition {$classes}">
-                        <svg class="h-5 w-5 opacity-80 group-hover:opacity-100" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            {$iconPath}
-                        </svg>
-                        <span class="text-sm">{$label}</span>
-                    </a>
-                HTML;
-            };
-        @endphp
+<aside x-data="sidebar()" class="group fixed inset-y-0 left-0 z-40 w-64 lg:w-72 p-3">
+  <div class="relative h-full">
+    <!-- 3D rail -->
+    <div class="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/8 via-white/5 to-white/3 backdrop-blur-xl border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,.45),inset_0_1px_0_rgba(255,255,255,.08)] [perspective:1000px]"></div>
+
+    <!-- Glow edges -->
+    <div class="pointer-events-none absolute -inset-0.5 rounded-3xl opacity-40 blur-2xl bg-[radial-gradient(80%_80%_at_20%_10%,#34f3d4,transparent),radial-gradient(80%_80%_at_80%_90%,#7cfc9f,transparent)]"></div>
+
+    <nav class="relative h-full overflow-y-auto rounded-3xl p-4">
+      <div class="mb-4 flex items-center gap-3">
+        <div class="h-10 w-10 rounded-2xl bg-gradient-to-br from-emerald-400/90 to-cyan-400/90 shadow-[0_10px_25px_rgba(56,255,203,.35)]"></div>
+        <div>
+          <div class="text-white font-semibold leading-5">GenRev Admin</div>
+          <div class="text-[11px] text-white/60">Production Dashboard</div>
+        </div>
+      </div>
+
+      <ul class="space-y-1 text-sm">
+        @php $link = fn($r) => request()->routeIs($r) ? 'active' : ''; @endphp
 
         {{-- Dashboard --}}
-        {!! $item(
-            'Dashboard',
-            route('dashboard'),
-            '<path d="M3 12a9 9 0 1118 0 9 9 0 01-18 0zm9-7v7l5 3"/>',
-            request()->routeIs('dashboard')
-        ) !!}
+        <li>
+          <a href="{{ route('dashboard') }}" class="sb-link {{ $link('dashboard') }}">
+            @svg('heroicon-o-home', 'h-5 w-5')
+            <span>Dashboard</span>
+          </a>
+        </li>
+
+        {{-- Materials Group --}}
+        <li>
+          <button @click="toggle('materials')" class="sb-link justify-between">
+            <span class="inline-flex items-center gap-3">
+              @svg('heroicon-o-squares-2x2', 'h-5 w-5')
+              <span>Materials</span>
+            </span>
+            <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180' : open['materials'] }" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.108l3.71-3.878a.75.75 0 011.08 1.04l-4.24 4.43a.75.75 0 01-1.08 0l-4.24-4.43a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+          </button>
+          <div x-show="open['materials']" x-collapse class="ml-2 mt-1 space-y-1 pl-4 border-l border-white/10">
+            <a href="{{ route('materials.index') }}" class="sb-sublink {{ $link('materials.index') }}">List</a>
+            <a href="{{ route('materials.create') }}" class="sb-sublink {{ $link('materials.create') }}">Add Material</a>
+            <a href="{{ route('recipes.index') }}" class="sb-sublink {{ $link('recipes.*') }}">Recipes</a>
+          </div>
+        </li>
 
         {{-- Production --}}
-        {!! $item(
-            'Production',
-            route('production.index'),
-            '<path d="M3 7h18M3 12h18M3 17h18" />',
-            request()->routeIs('production.*')
-        ) !!}
+        <li>
+          <a href="{{ route('production.index') }}" class="sb-link {{ $link('production.*') }}">
+            @svg('heroicon-o-cog-6-tooth', 'h-5 w-5')
+            <span>Production</span>
+          </a>
+        </li>
 
         {{-- Sales --}}
-        {!! $item(
-            'Sales',
-            route('sales.index'),
-            '<path d="M3 4h18v6H3zM3 14h18v6H3z" />',
-            request()->routeIs('sales.*')
-        ) !!}
+        <li>
+          <a href="{{ route('sales.index') }}" class="sb-link {{ $link('sales.*') }}">
+            @svg('heroicon-o-banknotes', 'h-5 w-5')
+            <span>Sales</span>
+          </a>
+        </li>
 
         {{-- Inventory --}}
-        {!! $item(
-            'Inventory',
-            route('inventory.index'),
-            '<path d="M4 6h16l-2 12H6L4 6zm3-3h10v3H7V3z" />',
-            request()->routeIs('inventory.*')
-        ) !!}
+        <li>
+          <a href="{{ route('inventory.index') }}" class="sb-link {{ $link('inventory.*') }}">
+            @svg('heroicon-o-archive-box', 'h-5 w-5')
+            <span>Inventory</span>
+          </a>
+        </li>
 
-        {{-- Products (NEW) --}}
-        {!! $item(
-            'Products',
-            route('products.index'),
-            '<path d="M4 7l8-4 8 4-8 4-8-4zm0 5l8 4 8-4M4 17l8 4 8-4" />',
-            request()->routeIs('products.*')
-        ) !!}
-
-        {{-- Materials (Global stock list) --}}
-        {!! $item(
-            'Materials',
-            route('materials.index'),
-            '<path d="M4 6h16v12H4zM8 10h8M8 14h5" />',
-            request()->routeIs('materials.*') && !request()->routeIs('products.materials.*')
-        ) !!}
-
-        {{-- Employee --}}
-        {!! $item(
-            'Employee',
-            route('employee.index'),
-            '<path d="M16 14a4 4 0 10-8 0v4h8v-4zM12 4a3 3 0 110 6 3 3 0 010-6z" />',
-            request()->routeIs('employee.*')
-        ) !!}
+        {{-- Reports --}}
+        <li>
+          <a href="{{ route('reports.index') }}" class="sb-link {{ $link('reports.*') }}">
+            @svg('heroicon-o-chart-bar', 'h-5 w-5')
+            <span>Reports</span>
+          </a>
+        </li>
 
         {{-- Settings --}}
-        {!! $item(
-            'Settings',
-            route('settings.index'),
-            '<path d="M12 8a4 4 0 100 8 4 4 0 000-8zm8.94 4a7.94 7.94 0 00-.34-2l2-1.5-2-3.46-2.36.5a8.09 8.09 0 00-1.72-1L14 1h-4l-.52 3.04a8.09 8.09 0 00-1.72 1l-2.36-.5-2 3.46 2 1.5c-.16.64-.28 1.31-.34 2 .06.69.18 1.36.34 2l-2 1.5 2 3.46 2.36-.5c.53.38 1.11.71 1.72 1L10 23h4l.52-3.04c.61-.29 1.19-.62 1.72-1l2.36.5 2-3.46-2-1.5c.16-.64.28-1.31.34-2z" />',
-            request()->routeIs('settings.*')
-        ) !!}
+        <li class="pt-2 mt-4 border-t border-white/10">
+          <a href="{{ route('settings.index') }}" class="sb-link {{ $link('settings.*') }}">
+            @svg('heroicon-o-cog-8-tooth', 'h-5 w-5')
+            <span>Settings</span>
+          </a>
+        </li>
+      </ul>
 
-        {{-- When inside a product’s Materials (recipe) page, show a subtle breadcrumb link back to Products --}}
-        @if(request()->routeIs('products.materials.*'))
-            <div class="px-5 pt-2">
-                <a href="{{ route('products.index') }}" class="text-xs text-armygreen hover:underline">
-                    ← Back to Products
-                </a>
-            </div>
-        @endif
+      <!-- floating highlight -->
+      <div class="pointer-events-none absolute inset-x-6 bottom-6 rounded-2xl h-14 bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-transparent blur-2xl"></div>
     </nav>
+  </div>
 
-    {{-- Footer / Logout --}}
-    <div class="px-5 py-4 border-t border-dark-line">
-        <form action="{{ route('logout') }}" method="POST">
-            @csrf
-            <button
-                type="submit"
-                class="w-full text-left text-sm px-4 py-2 rounded bg-white/5 hover:bg-white/10 text-gray-200 transition"
-            >
-                Log out
-            </button>
-        </form>
-        <div class="text-[11px] text-gray-500 mt-3">© {{ now()->year }} GenRev</div>
-    </div>
+  <!-- neon rim -->
+  <div class="absolute inset-0 rounded-3xl ring-1 ring-white/15 group-hover:ring-white/25 transition"></div>
 </aside>
+
+{{-- Styles --}}
+<style>
+  .sb-link{ @apply relative flex items-center gap-3 px-3 py-2 rounded-xl text-white/85 hover:text-white bg-white/0 hover:bg-white/5 border border-transparent hover:border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,.06),0_8px_20px_rgba(0,0,0,.25)] transition; }
+  .sb-link.active{ @apply text-white bg-gradient-to-br from-emerald-400/15 to-cyan-400/10 border-white/15 shadow-[0_10px_30px_rgba(56,255,203,.12),inset_0_1px_0_rgba(255,255,255,.08)]; }
+  .sb-sublink{ @apply block px-3 py-1.5 rounded-lg text-white/75 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition; }
+  .sb-sublink.active{ @apply text-white bg-white/5 border-white/10; }
+</style>
+
+{{-- Alpine tiny controller (persist open state) --}}
+<script>
+  function sidebar(){
+    const key='sidebar-open';
+    const state = JSON.parse(localStorage.getItem(key) || '{}');
+    return {
+      open: { materials: !!state.materials },
+      toggle(section){ this.open[section] = !this.open[section]; localStorage.setItem(key, JSON.stringify(this.open)); }
+    }
+  }
+</script>
