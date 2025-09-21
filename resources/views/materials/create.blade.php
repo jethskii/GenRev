@@ -13,6 +13,7 @@
     'kg'=>'Kilograms','g'=>'Grams','lbs'=>'Pounds','pcs'=>'Pieces','pkg'=>'Package',
     'box'=>'Box','bag'=>'Bag','roll'=>'Roll','tray'=>'Tray','lt'=>'Liters','ml'=>'Milliliters','m3'=>'Cubic Meter',
   ];
+  $oldUnit = old('unit', 'kg'); // default to kg
 @endphp
 
 {{-- Invisible SVG filter for gooey effect --}}
@@ -20,7 +21,11 @@
   <filter id="gooey"><feGaussianBlur in="SourceGraphic" stdDeviation="7" result="blur"/><feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10" result="goo"/><feBlend in="SourceGraphic" in2="goo"/></filter>
 </defs></svg>
 
-<div x-data="materialModal()" x-id="['modal-title']" class="bg-dark-bg text-white border border-dark-line p-6 rounded-2xl shadow-md">
+<div
+  x-data="materialModal({ visibleInitially: {{ $errors->any() ? 'true' : 'false' }} })"
+  x-id="['modal-title']"
+  class="bg-dark-bg text-white border border-dark-line p-6 rounded-2xl shadow-md"
+>
   <div class="flex items-center justify-between mb-6">
     <div>
       <h2 class="text-2xl font-bold tracking-tight">Raw Materials</h2>
@@ -114,21 +119,22 @@
               <label class="label-dark">Unit of Measure</label>
               <select name="unit" class="input-dark w-full" required>
                 @foreach($unitOptions as $v => $label)
-                  <option value="{{ $v }}" @selected(old('unit') === $v)>{{ $label }}</option>
+                  <option value="{{ $v }}" @selected($oldUnit === $v)>{{ $label }}</option>
                 @endforeach
               </select>
             </div>
 
+            {{-- ✅ FIX: send the correct name "unit_price" (controller expects this) --}}
             <div>
-              <label class="label-dark">Default Unit Price (₱)</label>
-              <input name="default_unit_price" type="number" min="0" step="0.01"
-                     class="input-dark w-full" value="{{ old('default_unit_price', 0) }}" />
+              <label class="label-dark">Unit Price (₱)</label>
+              <input name="unit_price" type="number" min="0" step="0.01"
+                     class="input-dark w-full" value="{{ old('unit_price', 0) }}" required />
             </div>
 
             <div>
               <label class="label-dark">Quantity (kg)</label>
               <input name="quantity_kg" type="number" min="0" step="0.001"
-                     class="input-dark w-full" value="{{ old('quantity_kg', 0) }}" />
+                     class="input-dark w-full" value="{{ old('quantity_kg', 0) }}" required />
             </div>
 
             <div>
@@ -174,7 +180,7 @@
   }
   .input-dark{
     background: rgba(18,30,18,.75);
-    border-color: rgba(74,222,128,.18); /* green-400/18 */
+    border-color: rgba(74,222,128,.18);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
     transition: box-shadow .2s ease, border-color .2s ease, transform .12s ease;
   }
@@ -214,11 +220,10 @@
 @section('scripts')
 <script>
   // Alpine controller for modal
-  function materialModal(){
+  function materialModal({ visibleInitially = false } = {}){
     return {
-      visible: false,
+      visible: visibleInitially,
       open(){ this.visible = true; this.$nextTick(() => {
-        // focus the first input for fast entry
         const el = document.querySelector('input[name="material_name"]');
         el && el.focus();
       });},
@@ -231,6 +236,7 @@
     const btn = e.target.closest('[data-chip-category]');
     if(!btn) return;
     const sel = document.querySelector('select[name="category"]');
+    if (!sel) return;
     sel.value = btn.dataset.chipCategory;
     sel.dispatchEvent(new Event('change'));
   });
@@ -244,7 +250,7 @@
     const selCat  = document.querySelector('select[name="category"]');
     const skuInp  = document.getElementById('skuInput');
     const base = slugify(nameInp?.value || '');
-    if(!base) return;
+    if(!base || !skuInp) return;
     let prefix = 'RM';
     const map = {
       'Primary Raw Materials':'PRM','Meat Cuts & Trimmings':'CUT','Fats / Skins':'FAT','Salt':'SALT',

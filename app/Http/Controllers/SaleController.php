@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema; // ✅ add this
 use Illuminate\View\View;
 
 class SalesController extends Controller
@@ -21,7 +22,7 @@ class SalesController extends Controller
                 'productRef:id,product_name',
                 'production:id,product_id,batch_number,quantity,current_inventory'
             ])
-            ->orderByDesc(DB::raw('COALESCE(order_date, date)'))
+            ->orderByDesc(DB::raw('COALESCE(order_date, `date`)'))
             ->orderByDesc('id')
             ->get();
 
@@ -111,15 +112,13 @@ class SalesController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'product_id'     => ['required','integer','exists:products,id'],
-            'production_id'  => ['nullable','integer','exists:productions,id'],
-            'date'           => ['required','date'],
-            'quantity'       => ['required','numeric','min:0.001'],
-            'price'          => ['required','numeric','min:0'],
-            // status now optional; default applied below
-            'status'         => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
-            'product'        => ['sometimes','nullable','string','max:150'],
-            // Optional extra fields (if you store them; otherwise ignore)
+            'product_id'      => ['required','integer','exists:products,id'],
+            'production_id'   => ['nullable','integer','exists:productions,id'],
+            'date'            => ['required','date'],
+            'quantity'        => ['required','numeric','min:0.001'],
+            'price'           => ['required','numeric','min:0'],
+            'status'          => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
+            'product'         => ['sometimes','nullable','string','max:150'],
             'production_date' => ['nullable','date'],
             'expiration_date' => ['nullable','date','after_or_equal:production_date'],
             'notes'           => ['nullable','string','max:2000'],
@@ -136,7 +135,7 @@ class SalesController extends Controller
         $displayName = $validated['product'] ?? $product->product_name;
         $invoice     = $this->nextInvoiceNumber(); // atomic
         $total       = round(((float)$validated['quantity']) * ((float)$validated['price']), 2);
-        $status      = $validated['status'] ?? 'Completed'; // ✅ default to Completed
+        $status      = $validated['status'] ?? 'Completed';
 
         try {
             DB::transaction(function () use ($validated, $displayName, $invoice, $total, $status, $product) {
@@ -152,14 +151,14 @@ class SalesController extends Controller
                     'status'         => $status,
                 ];
 
-                // Store optional fields only if columns exist
-                if (Schema()->hasColumn('sales','production_date') && !empty($validated['production_date'])) {
+                // Optional fields: only set if column exists
+                if (Schema::hasColumn('sales','production_date') && !empty($validated['production_date'])) {
                     $payload['production_date'] = $validated['production_date'];
                 }
-                if (Schema()->hasColumn('sales','expiration_date') && !empty($validated['expiration_date'])) {
+                if (Schema::hasColumn('sales','expiration_date') && !empty($validated['expiration_date'])) {
                     $payload['expiration_date'] = $validated['expiration_date'];
                 }
-                if (Schema()->hasColumn('sales','notes') && !empty($validated['notes'])) {
+                if (Schema::hasColumn('sales','notes') && !empty($validated['notes'])) {
                     $payload['notes'] = trim($validated['notes']);
                 }
 
@@ -191,13 +190,13 @@ class SalesController extends Controller
     public function update(Request $request, Sale $sale): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
-            'product_id'     => ['required','integer','exists:products,id'],
-            'production_id'  => ['nullable','integer','exists:productions,id'],
-            'date'           => ['required','date'],
-            'quantity'       => ['required','numeric','min:0.001'],
-            'price'          => ['required','numeric','min:0'],
-            'status'         => ['nullable','string','in:Pending,Completed,Cancelled,Paid'], // now optional
-            'product'        => ['sometimes','nullable','string','max:150'],
+            'product_id'      => ['required','integer','exists:products,id'],
+            'production_id'   => ['nullable','integer','exists:productions,id'],
+            'date'            => ['required','date'],
+            'quantity'        => ['required','numeric','min:0.001'],
+            'price'           => ['required','numeric','min:0'],
+            'status'          => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
+            'product'         => ['sometimes','nullable','string','max:150'],
             'production_date' => ['nullable','date'],
             'expiration_date' => ['nullable','date','after_or_equal:production_date'],
             'notes'           => ['nullable','string','max:2000'],
@@ -230,13 +229,13 @@ class SalesController extends Controller
                     'status'        => $status,
                 ];
 
-                if (Schema()->hasColumn('sales','production_date')) {
+                if (Schema::hasColumn('sales','production_date')) {
                     $payload['production_date'] = $validated['production_date'] ?? null;
                 }
-                if (Schema()->hasColumn('sales','expiration_date')) {
+                if (Schema::hasColumn('sales','expiration_date')) {
                     $payload['expiration_date'] = $validated['expiration_date'] ?? null;
                 }
-                if (Schema()->hasColumn('sales','notes')) {
+                if (Schema::hasColumn('sales','notes')) {
                     $payload['notes'] = $validated['notes'] ?? null;
                 }
 

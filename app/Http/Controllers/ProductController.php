@@ -49,14 +49,21 @@ class ProductController extends Controller
      */
     public function show(Product $product)
     {
+        // Eager-load recipe + material, aliasing materials.unit_price as default_unit_price
         $product->load([
             'productions' => fn ($q) => $q->orderByDesc('production_date')->orderByDesc('id'),
-            'recipes.material:id,material_name,unit,default_unit_price',
+            'recipes.material' => function ($q) {
+                $q->select('id', 'material_name', 'unit')
+                  ->addSelect(DB::raw('unit_price as default_unit_price'));
+            },
         ]);
 
+        // Materials list for “Add line” dropdown (also alias the price)
         $materials = Material::query()
+            ->select('id', 'material_name', 'unit')
+            ->addSelect(DB::raw('unit_price as default_unit_price'))
             ->orderBy('material_name')
-            ->get(['id', 'material_name', 'unit', 'default_unit_price']);
+            ->get();
 
         $recipe = $product->recipes;
 
@@ -195,7 +202,6 @@ class ProductController extends Controller
         $incomingName = $request->input('product_name') ?? $request->input('name');
 
         $request->validate([
-            // no-op validator to keep the pipeline happy; actual field validated below
             $incomingName === null ? 'product_name' : 'tmp' => ['nullable'],
         ]);
 
@@ -235,9 +241,12 @@ class ProductController extends Controller
     {
         $product->load('recipes.material');
 
+        // Materials for dropdown (alias price)
         $materials = Material::query()
+            ->select('id', 'material_name', 'unit')
+            ->addSelect(DB::raw('unit_price as default_unit_price'))
             ->orderBy('material_name')
-            ->get(['id', 'material_name', 'unit', 'default_unit_price']);
+            ->get();
 
         $recipe = $product->recipes;
 
@@ -250,9 +259,6 @@ class ProductController extends Controller
      *  - ingredient_id (int, materials.id)
      *  - qty (number)
      *  - unit_price (number)  // snapshot
-     *
-     * Upserts submitted rows, then removes any that were not submitted.
-     * Prevents duplicates and keeps historical snapshot pricing.
      */
     public function recipeStore(Request $request, Product $product)
     {
@@ -270,11 +276,10 @@ class ProductController extends Controller
                 $matId = (int) $row['ingredient_id'];
                 $keepIds[] = $matId;
 
-                // Upsert on (product_id, ingredient_id) to avoid duplicate lines
                 ProductRecipe::updateOrCreate(
                     [
                         'product_id'    => (int) $product->id,
-                        'ingredient_id' => $matId, // legacy column in DB
+                        'ingredient_id' => $matId,
                     ],
                     [
                         'qty'                 => (float) $row['qty'],
@@ -283,7 +288,6 @@ class ProductController extends Controller
                 );
             }
 
-            // Delete lines not in current submission (sync behavior)
             ProductRecipe::where('product_id', $product->id)
                 ->whereNotIn('ingredient_id', $keepIds)
                 ->delete();
@@ -307,18 +311,21 @@ class ProductController extends Controller
 
     /**
      * Provide default recipe rows as JSON to "Load Defaults" button.
-     * Default behavior: return current recipe lines; else return [].
      */
     public function materialsDefaults(Product $product)
     {
         $rows = $product->recipes()
-            ->with('material:id,unit')
+            ->with(['material' => function ($q) {
+                $q->select('id', 'unit')
+                  ->addSelect(DB::raw('unit_price as default_unit_price'));
+            }])
             ->get()
             ->map(fn ($r) => [
                 'ingredient_id' => (int) ($r->material_id ?? $r->ingredient_id),
                 'unit'          => (string) ($r->material->unit ?? ''),
                 'qty'           => (float) ($r->qty ?? 0),
-                'unit_price'    => (float) ($r->unit_price_snapshot ?? 0),
+                // Prefer the historical snapshot if present; else use current material price alias.
+                'unit_price'    => (float) ($r->unit_price_snapshot ?? ($r->material->default_unit_price ?? 0)),
             ])->values();
 
         return response()->json($rows);
@@ -341,10 +348,6 @@ class ProductController extends Controller
 
     /* ============================== VALIDATION ============================== */
 
-    /**
-     * Centralized validator: keep create/update identical.
-     * Columns align with Product::$fillable and your forms.
-     */
     protected function validateProduct(Request $request, ?int $productId = null): array
     {
         return $request->validate([
@@ -364,17 +367,13 @@ class ProductController extends Controller
             'unit_cost'           => ['nullable', 'numeric', 'min:0'],
             'last_cost_date'      => ['nullable', 'date'],
             'temp_requirements'   => ['nullable', 'string', 'max:2000'],
-            'line_constraints'    => ['nullable'], // array or JSON string; Product mutator normalizes
+            'line_constraints'    => ['nullable'],
             'image'               => ['nullable', 'image', 'max:4096'],
         ]);
     }
 
     /* ============================== HELPERS ============================== */
 
-    /**
-     * Small KPI snapshot for dashboard counters after deletes.
-     * Mirrors ProductionController::totalsSnapshot().
-     */
     private function totalsSnapshot(): array
     {
         $products = Product::all();

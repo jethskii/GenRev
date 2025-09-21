@@ -14,7 +14,7 @@ class Product extends Model
 
     protected $table = 'products';
 
-    /** Mass assignable columns (aligned with controller + forms) */
+    /** Mass assignable columns (must match real DB columns) */
     protected $fillable = [
         // Identity
         'product_code',
@@ -45,8 +45,8 @@ class Product extends Model
         'max_run_qty',
         'line_constraints',   // JSON
 
-        // Media
-        'image',              // storage path
+        // Media (real column)
+        'image_path',
 
         // Legacy/optional
         'production_date',
@@ -93,12 +93,7 @@ class Product extends Model
      * ---------------------------------------------------------------------*/
     public function productions() { return $this->hasMany(Production::class); }
     public function sales()       { return $this->hasMany(Sale::class); }
-
-    /** Recipe/BOM rows with unit price snapshots */
-    public function recipes()
-    {
-        return $this->hasMany(ProductRecipe::class);
-    }
+    public function recipes()     { return $this->hasMany(ProductRecipe::class); }
 
     /* ----------------------------------------------------------------------
      | Accessors / Mutators (null-safe, view-friendly)
@@ -131,11 +126,31 @@ class Product extends Model
         );
     }
 
-    /** Image URL for <img> tags */
+    /**
+     * LEGACY BRIDGE:
+     * Some old code may still read/write $product->image (nonexistent column).
+     * These accessors/mutators transparently map it to image_path.
+     */
+    protected function image(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->image_path,                      // reading "image" returns image_path
+            set: fn ($value) => ['image_path' => $value],         // writing "image" stores into image_path
+        );
+    }
+
+    /** Public URL for <img> tags */
     public function getImageUrlAttribute(): string
     {
-        if (!empty($this->image)) {
-            return asset('storage/' . ltrim($this->image, '/'));
+        $path = $this->image_path ?: null;
+        if ($path) {
+            $disk = config('filesystems.default', 'public');
+            try {
+                return Storage::disk($disk)->url(ltrim($path, '/'));
+            } catch (\Throwable $e) {
+                // Fallback if the disk isn't configured for URLs
+                return asset('storage/' . ltrim($path, '/'));
+            }
         }
         return asset('images/default-product.png');
     }
@@ -151,10 +166,7 @@ class Product extends Model
         return round((float)$sum, 2);
     }
 
-    /**
-     * Effective unit cost: prefer declared unit_cost; else fallback to BOM cost.
-     * Keeps costing stable even if BOM is missing for legacy items.
-     */
+    /** Effective unit cost: prefer declared unit_cost; else fallback to BOM cost. */
     public function getEffectiveUnitCostAttribute(): float
     {
         $declared = $this->unit_cost !== null ? (float)$this->unit_cost : null;
@@ -164,7 +176,6 @@ class Product extends Model
     /** Preferred selling price for UI/Quick Sale */
     public function getPriceAttribute(): float
     {
-        // Prefer explicit default_price; fallback to selling_price; then effective cost
         $price = $this->default_price ?? $this->selling_price ?? null;
         return (float) ($price !== null ? $price : $this->effective_unit_cost);
     }
@@ -186,6 +197,7 @@ class Product extends Model
 
     public function getSoldQtyKgAttribute(): float
     {
+        // If your sales table has quantity_kg, consider COALESCE at query time.
         return (float) ($this->sales()->sum('quantity') ?? 0);
     }
 
@@ -198,25 +210,24 @@ class Product extends Model
     /** Convenience: compute an expiry date from a given production date */
     public function computeExpiryFrom(\DateTimeInterface|string|null $productionDate): ?string
     {
-    if (!$productionDate || !$this->shelf_life_days) return null;
-    $c = \Carbon\Carbon::make($productionDate) ?? \Carbon\Carbon::parse($productionDate);
-    return $c->addDays((int)$this->shelf_life_days)->toDateString();
+        if (!$productionDate || !$this->shelf_life_days) return null;
+        $c = \Carbon\Carbon::make($productionDate) ?? \Carbon\Carbon::parse($productionDate);
+        return $c->addDays((int)$this->shelf_life_days)->toDateString();
     }
-
 
     /* ----------------------------------------------------------------------
      | Upload helpers (safe image replacement)
      * ---------------------------------------------------------------------*/
     public function setImageFromUpload(UploadedFile $file): void
     {
-        $path = $file->store('products', 'public');
+        $path = $file->store('products', 'public'); // returns "products/xyz.jpg"
         $this->replaceImagePath($path);
     }
 
     public function replaceImagePath(?string $newPath): void
     {
-        $old = $this->getOriginal('image');
-        $this->image = $newPath;
+        $old = $this->getOriginal('image_path');
+        $this->image_path = $newPath;
 
         if ($old && $old !== $newPath && Storage::disk('public')->exists($old)) {
             Storage::disk('public')->delete($old);
@@ -229,8 +240,8 @@ class Product extends Model
     protected static function booted()
     {
         static::updating(function (self $model) {
-            if ($model->isDirty('image')) {
-                $old = $model->getOriginal('image');
+            if ($model->isDirty('image_path')) {
+                $old = $model->getOriginal('image_path');
                 if ($old && Storage::disk('public')->exists($old)) {
                     Storage::disk('public')->delete($old);
                 }
@@ -238,8 +249,8 @@ class Product extends Model
         });
 
         static::forceDeleted(function (self $model) {
-            if ($model->image && Storage::disk('public')->exists($model->image)) {
-                Storage::disk('public')->delete($model->image);
+            if ($model->image_path && Storage::disk('public')->exists($model->image_path)) {
+                Storage::disk('public')->delete($model->image_path);
             }
         });
     }

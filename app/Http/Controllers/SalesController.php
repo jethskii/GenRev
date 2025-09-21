@@ -21,7 +21,7 @@ class SalesController extends Controller
                 'productRef:id,product_name,shelf_life_days',
                 'production:id,product_id,batch_number,quantity,current_inventory,production_date,expiration_date'
             ])
-            ->orderByDesc(DB::raw('COALESCE(order_date, date)'))
+            ->orderByDesc(DB::raw('COALESCE(order_date, `date`)'))
             ->orderByDesc('id')
             ->get();
 
@@ -510,6 +510,7 @@ class SalesController extends Controller
 
     /* ----------------------------- Dashboard helpers ----------------------------- */
 
+    /** Return [labels(M), totals] for last N months; auto-detects columns. */
     protected function getMonthlyRevenueSeries(int $n = 12): array
     {
         $n = max(1, $n);
@@ -524,7 +525,7 @@ class SalesController extends Controller
         }
 
         [$dateExpr, $ymExpr] = $this->dateExpressions();
-        $sumExpr = "SUM(COALESCE(total_price, (COALESCE(quantity_kg, quantity, 0) * COALESCE(unit_price, price, 0)), 0))";
+        $sumExpr = $this->buildRevenueSumExpr();  // <-- dynamic sum
 
         $rows = Sale::query()
             ->selectRaw("$ymExpr AS ym, $sumExpr AS total")
@@ -544,10 +545,11 @@ class SalesController extends Controller
         return [$labels, $totals];
     }
 
+    /** Sum revenue in range; auto-detects columns. */
     protected function sumRevenueBetween(string $from, string $to): float
     {
         [$dateExpr] = [$this->dateExpressions()[0]];
-        $sumExpr = "SUM(COALESCE(total_price, (COALESCE(quantity_kg, quantity, 0) * COALESCE(unit_price, price, 0)), 0))";
+        $sumExpr = $this->buildRevenueSumExpr();
 
         return (float) (Sale::query()
             ->whereRaw("$dateExpr BETWEEN ? AND ?", [$from, $to])
@@ -555,23 +557,36 @@ class SalesController extends Controller
             ->value('total') ?? 0);
     }
 
+    /** Top product revenue; auto-detects columns and only selects what exists. */
     protected function getTopProductsRevenue(int $days = 90): array
     {
         $cutoff = Carbon::now()->subDays(max(1, $days))->startOfDay();
         [$dateExpr] = [$this->dateExpressions()[0]];
 
+        // Build select list based on real columns
+        $selects = ['id','product_id','product'];
+        foreach (['quantity_kg','quantity','unit_price','price','total_price','total','order_date','date'] as $col) {
+            if (Schema::hasColumn('sales', $col)) $selects[] = $col;
+        }
+
         $recent = Sale::with('productRef:id,product_name')
             ->whereRaw("$dateExpr >= ?", [$cutoff->toDateString()])
-            ->get(['id','product_id','product','quantity','quantity_kg','unit_price','price','total_price','order_date','date']);
+            ->get($selects);
+
+        // Resolve numeric columns
+        $cols   = $this->salesNumericColumns();
+        $qtyCol = $cols['qty'];
+        $unitCol= $cols['unit'];
+        $totCol = $cols['total'];
 
         $bucket = [];
         foreach ($recent as $s) {
             $name = $s->display_product
                 ?? ($s->product ?: optional($s->productRef)->product_name ?: 'Unknown');
 
-            $qty  = (float) ($s->quantity_kg ?? $s->quantity ?? 0);
-            $unit = (float) ($s->unit_price ?? $s->price ?? 0);
-            $tot  = (float) ($s->total_price ?? $s->total ?? ($qty * $unit));
+            $qty  = $qtyCol  ? (float) ($s->{$qtyCol}  ?? 0) : 0.0;
+            $unit = $unitCol ? (float) ($s->{$unitCol} ?? 0) : 0.0;
+            $tot  = $totCol  ? (float) ($s->{$totCol}  ?? ($qty * $unit)) : ($qty * $unit);
 
             $bucket[$name] = ($bucket[$name] ?? 0) + $tot;
         }
@@ -584,17 +599,55 @@ class SalesController extends Controller
         return [array_keys($top), array_map('floatval', array_values($top))];
     }
 
+    /** Driver-safe date expressions */
     protected function dateExpressions(): array
     {
         $driver = DB::getDriverName();
         if ($driver === 'sqlite') {
-            $dateExpr = "DATE(COALESCE(order_date, date))";
-            $ymExpr   = "strftime('%Y-%m', COALESCE(order_date, date))";
+            $dateExpr = "DATE(COALESCE(order_date, `date`))";
+            $ymExpr   = "strftime('%Y-%m', COALESCE(order_date, `date`))";
         } else {
-            $dateExpr = "DATE(COALESCE(order_date, date))";
-            $ymExpr   = "DATE_FORMAT(COALESCE(order_date, date), '%Y-%m')";
+            $dateExpr = "DATE(COALESCE(order_date, `date`))";
+            $ymExpr   = "DATE_FORMAT(COALESCE(order_date, `date`), '%Y-%m')";
         }
         return [$dateExpr, $ymExpr];
+    }
+
+    /** Build a SUM(...) expression that matches existing sales columns. */
+    protected function buildRevenueSumExpr(): string
+    {
+        $cols   = $this->salesNumericColumns();
+        $qtyCol = $cols['qty'];   // quantity_kg OR quantity OR null
+        $unitCol= $cols['unit'];  // unit_price OR price OR null
+        $totCol = $cols['total']; // total_price OR total OR null
+
+        // If a total column exists, prefer it; else compute qty*unit if both exist; else 0.
+        if ($totCol) {
+            $qtyPart  = $qtyCol  ? "COALESCE($qtyCol,0)"  : "0";
+            $unitPart = $unitCol ? "COALESCE($unitCol,0)" : "0";
+            return "SUM(COALESCE($totCol, ($qtyPart * $unitPart), 0))";
+        }
+
+        if ($qtyCol && $unitCol) {
+            return "SUM(COALESCE(COALESCE($qtyCol,0) * COALESCE($unitCol,0), 0))";
+        }
+
+        return "SUM(0)"; // ultra-safe fallback
+    }
+
+    /** Figure out which numeric columns exist in sales table. */
+    protected function salesNumericColumns(): array
+    {
+        $total = Schema::hasColumn('sales','total_price') ? 'total_price'
+               : (Schema::hasColumn('sales','total') ? 'total' : null);
+
+        $qty   = Schema::hasColumn('sales','quantity_kg') ? 'quantity_kg'
+               : (Schema::hasColumn('sales','quantity') ? 'quantity' : null);
+
+        $unit  = Schema::hasColumn('sales','unit_price') ? 'unit_price'
+               : (Schema::hasColumn('sales','price') ? 'price' : null);
+
+        return ['total' => $total, 'qty' => $qty, 'unit' => $unit];
     }
 
     /* ----------------------------- Misc helpers ----------------------------- */
@@ -611,9 +664,17 @@ class SalesController extends Controller
     {
         $produced = (float) Production::where('product_id', $productId)->sum('quantity');
 
-        $sold = (float) Sale::where('product_id', $productId)
-            ->selectRaw('SUM(COALESCE(quantity_kg, quantity, 0)) as total_sold')
-            ->value('total_sold');
+        // dynamic qty column
+        $qtyCol = Schema::hasColumn('sales','quantity_kg') ? 'quantity_kg'
+               : (Schema::hasColumn('sales','quantity') ? 'quantity' : null);
+
+        if ($qtyCol) {
+            $sold = (float) Sale::where('product_id', $productId)
+                ->selectRaw("SUM(COALESCE($qtyCol,0)) as total_sold")
+                ->value('total_sold');
+        } else {
+            $sold = 0.0;
+        }
 
         $balance  = max(0.0, $produced - $sold);
         $latestProdDate = Production::where('product_id', $productId)->max('production_date');
@@ -678,9 +739,15 @@ class SalesController extends Controller
         $invoiceNo = $sale->invoice_number ?? $sale->order_number ?? null;
 
         $orderDate = $sale->order_date ?? $sale->date ?? null;
-        $qty       = (float) ($sale->quantity_kg ?? $sale->quantity ?? 0);
-        $unit      = (float) ($sale->unit_price ?? $sale->price ?? 0);
-        $total     = (float) ($sale->total_price ?? $sale->total ?? ($qty * $unit));
+
+        $cols   = $this->salesNumericColumns();
+        $qtyCol = $cols['qty'];
+        $unitCol= $cols['unit'];
+        $totCol = $cols['total'];
+
+        $qty   = $qtyCol  ? (float) ($sale->{$qtyCol}  ?? 0) : 0.0;
+        $unit  = $unitCol ? (float) ($sale->{$unitCol} ?? 0) : 0.0;
+        $total = $totCol  ? (float) ($sale->{$totCol}  ?? ($qty * $unit)) : ($qty * $unit);
 
         $productionDate = $sale->production_date
             ?? ($production->production_date ?? null);
