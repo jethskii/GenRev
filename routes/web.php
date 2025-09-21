@@ -135,14 +135,18 @@ Route::middleware('auth')->group(function () {
         Route::get('/by-item/{item}',            [BatchAllocationController::class, 'byItem'])->name('byItem');
     });
 
-    /* ===== Materials ===== */
+        /* ===== Materials ===== */
     Route::prefix('materials')->group(function () {
-        Route::get('/',         [MaterialController::class, 'index'])->name('materials.index');
-        Route::post('/',        [MaterialController::class, 'store'])->name('materials.store');
-        Route::get('{id}/edit', [MaterialController::class, 'edit'])->name('materials.edit');
-        Route::put('{id}',      [MaterialController::class, 'update'])->name('materials.update');
-        Route::delete('{id}',   [MaterialController::class, 'destroy'])->name('materials.destroy');
+        Route::get('/create',     [MaterialController::class, 'create'])->name('materials.create');
+        Route::get('/',           [MaterialController::class, 'index'])->name('materials.index');
+        Route::post('/',          [MaterialController::class, 'store'])->name('materials.store');
+        Route::post('/store',     [MaterialController::class, 'store'])->name('materials.store.alias');
+        Route::get('{id}/edit',   [MaterialController::class, 'edit'])->name('materials.edit');
+        Route::put('{id}',        [MaterialController::class, 'update'])->name('materials.update');
+        Route::delete('{id}',     [MaterialController::class, 'destroy'])->name('materials.destroy');
     });
+
+    /* 👇 bring back the alias so route('materials') works */
     Route::get('/materials-alias', fn () => redirect()->route('materials.index'))->name('materials');
 
     /* ===== Inventory ===== */

@@ -196,6 +196,25 @@
 {{-- 🔽 Include the Sales Quick-Add Modal (provides window.prefillSaleModal) --}}
 @includeIf('sales.partials.sale-modal')
 
+{{-- Modal readability styles --}}
+@once
+<style>
+  #addModal input, #addModal select, #addModal textarea{
+    background-color: rgba(16,24,16,.9) !important;
+    border: 1px solid rgba(255,255,255,.18) !important;
+    color: #fff !important; border-radius:.9rem !important;
+  }
+  #addModal input::placeholder{ color: rgba(255,255,255,.6)!important; }
+  #addModal input[type="date"]{ color-scheme: dark; }
+  #addModal input[type="date"]::-webkit-calendar-picker-indicator{ filter: invert(1) opacity(.9)!important; }
+  #addModal select option{ background:#0f160f!important; color:#fff!important; }
+  #addModal input[type="file"]{ color: rgba(255,255,255,.9)!important; }
+  #addModal input[type="file"]::file-selector-button{
+    background: rgba(255,255,255,.14)!important; color:#fff!important; border-radius:.6rem!important;
+  }
+</style>
+@endonce
+
 {{-- Scripts --}}
 <script>
 (function(){
@@ -341,17 +360,29 @@
         try {
             const res = await fetch(url, {
                 method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                headers: {
+                  'X-Requested-With': 'XMLHttpRequest',
+                  'Accept': 'application/json' // force JSON errors from Laravel
+                },
                 body: fd
             });
 
             if (!res.ok) {
                 if (res.status === 422) {
-                    const j = await res.json();
+                    const j = await res.json().catch(()=>({}));
                     const msg = j?.errors ? Object.values(j.errors).flat().join('\n') : 'Validation error';
                     toast(msg, 'error');
                 } else {
-                    toast('Failed to save production.', 'error');
+                    const txt = await res.text();
+                    const snippet = (txt||'').replace(/<[^>]*>/g,'').slice(0,200);
+                    const label =
+                      res.status === 419 ? 'CSRF/session expired' :
+                      res.status === 409 ? 'Business rule' :
+                      res.status === 413 ? 'Upload too large' :
+                      res.status === 500 ? 'Server error' :
+                      res.status === 302 ? 'Redirected (auth?)' :
+                      `HTTP ${res.status}`;
+                    toast(`${label}${snippet ? `\n${snippet}` : ''}`, 'error');
                 }
                 return;
             }

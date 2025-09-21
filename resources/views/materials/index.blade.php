@@ -45,7 +45,9 @@
       'Labels & Cartons'=>['label','carton','box','sticker'],
       'Cleaning & Sanitation (Non-food)'=>['sanitizer','detergent','glove','hairnet','apron'],
     ];
-    foreach($map as $cat => $needles){ foreach($needles as $n){ if(str_contains($name,$n)) return $cat; } }
+    foreach($map as $cat => $needles){
+      foreach($needles as $n){ if(str_contains($name,$n)) return $cat; }
+    }
     return 'Primary Raw Materials';
   }
 
@@ -64,16 +66,8 @@
 
 <style>
   :root{
-    --sun:#FFD122;         /* sunflower yellow */
-    --orange:#FF9E2C;      /* warm orange accent */
-    --leaf:#2F7A00;        /* deep leaf green */
-    --leaf-2:#3F8E08;
-    --cream:#F1E1C8;
-    --ink:#0B0F0B;
-
-    --panel:rgba(18,22,16,.94);
-    --panel-2:rgba(20,24,18,.84);
-    --line:rgba(255,255,255,.10);
+    --sun:#FFD122; --orange:#FF9E2C; --leaf:#2F7A00; --leaf-2:#3F8E08; --cream:#F1E1C8; --ink:#0B0F0B;
+    --panel:rgba(18,22,16,.94); --panel-2:rgba(20,24,18,.84); --line:rgba(255,255,255,.10);
   }
   .theme-wrap{
     background:
@@ -81,18 +75,17 @@
       radial-gradient(900px 700px at -10% 110%, rgba(47,122,0,.09), transparent 60%),
       linear-gradient(180deg, #0f130f, #0a0d0a);
   }
-  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:1.2rem; }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:1.2rem; position:relative; z-index:1; }
   .thead-grad{ background:linear-gradient(180deg,rgba(255,255,255,.08),rgba(255,255,255,.04)); }
 
   .input{
     width:100%; padding:.7rem .9rem; border-radius:1rem; color:#F7F7F5;
     background:rgba(255,255,255,.07); border:1px solid var(--line);
-    transition: box-shadow .16s, border-color .16s, transform .12s;
-    outline:none;
+    transition: box-shadow .16s, border-color .16s, transform .12s; outline:none;
   }
   .input:hover{ border-color:rgba(255,255,255,.16); }
   .input:focus{ box-shadow:0 0 0 4px rgba(47,122,0,.28); border-color:rgba(47,122,0,.7); transform:translateY(-1px); }
-  select.input, .input select{ color:#F7F7F5; background-color:rgba(24,28,22,.95); }
+  select.input{ color:#F7F7F5; background-color:rgba(24,28,22,.95); }
   select.input option{ color:#F7F7F5!important; background-color:#121812!important; }
   select.input option:checked{ background-color:rgba(47,122,0,.72)!important; color:#fff!important; }
 
@@ -104,8 +97,7 @@
   .btn:hover{ background:rgba(255,255,255,.12); }
   .btn-primary{
     background:linear-gradient(135deg, var(--sun), var(--orange));
-    color:#2b2b00; border-color:rgba(0,0,0,.08);
-    box-shadow:0 10px 28px rgba(255,170,46,.35);
+    color:#2b2b00; border-color:rgba(0,0,0,.08); box-shadow:0 10px 28px rgba(255,170,46,.35);
   }
   .btn-primary:hover{ transform:translateY(-1px); box-shadow:0 14px 36px rgba(255,170,46,.45); }
   .btn-danger{ background:rgba(255,60,60,.16); color:#ffd7d4; border-color:rgba(255,60,60,.35); }
@@ -120,8 +112,9 @@
   .b-spice,.b-fill{ background:rgba(255,170,46,.20); color:#312400; border-color:rgba(255,170,46,.45); }
   .b-default{ background:rgba(255,255,255,.12); color:#eee; border-color:rgba(255,255,255,.2); }
 
-  dialog.modal{ border:0; padding:0; background:transparent; }
+  dialog.modal{ border:0; padding:0; background:transparent; z-index:60; }
   dialog::backdrop{ background:rgba(0,0,0,.65); backdrop-filter:blur(3px); }
+  dialog[open]{ display:block; }
   .modal-box{ transform:translateY(8px) scale(.985); opacity:0; transition:.18s ease; }
   dialog[open] .modal-box{ transform:translateY(0) scale(1); opacity:1; }
 </style>
@@ -132,9 +125,11 @@
     <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
       <div>
         <h2 class="text-2xl font-bold">Raw Materials</h2>
-        <p class="text-sm text-white/60">Unit price is now recorded correctly and used in valuation.</p>
+        <p class="text-sm text-white/60">Unit price is recorded correctly and used in valuation.</p>
       </div>
-      <button id="btnAdd" type="button" class="btn btn-primary">
+
+      {{-- Global layout handles data-open="modalCreate" --}}
+      <button type="button" class="btn btn-primary" data-open="modalCreate" aria-haspopup="dialog" aria-controls="modalCreate" title="Add a new material">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/></svg>
         Add Material
       </button>
@@ -156,13 +151,13 @@
       </div>
     </div>
 
-    {{-- filters --}}
-    <form id="filterForm" action="{{ route('materials.index') }}" method="GET" class="mb-4">
+    {{-- Filters --}}
+    <form id="filterForm" action="{{ route('materials.index') }}" method="GET" class="mb-4" role="search">
       <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
         <div class="md:col-span-2">
-          <label class="text-xs text-white/60 mb-1 block">Search</label>
+          <label class="text-xs text-white/60 mb-1 block" for="searchBox">Search</label>
           <div class="flex gap-2">
-            <input type="text" name="search" value="{{ $search }}" placeholder="Search name or SKU…" class="input">
+            <input id="searchBox" type="text" name="search" value="{{ $search }}" placeholder="Search name or SKU…" class="input" />
             <button type="submit" class="btn">Go</button>
             <a href="{{ route('materials.index') }}" class="btn">Reset</a>
           </div>
@@ -207,7 +202,7 @@
       </div>
     </form>
 
-    {{-- table --}}
+    {{-- Table --}}
     <div class="overflow-x-auto rounded-xl border border-[color:var(--line)]">
       <table class="w-full text-sm text-left bg-[color:var(--panel-2)] rounded-xl border-collapse">
         <thead class="thead-grad sticky top-0 z-10 text-white/90 text-xs uppercase">
@@ -251,10 +246,11 @@
                 <div class="flex items-center justify-center gap-2">
                   <button type="button" class="btn text-[.8rem]"
                           data-fetch-url="{{ route('materials.edit',$m->id) }}"
-                          data-update-url="{{ route('materials.update',$m->id) }}">Edit</button>
+                          data-update-url="{{ route('materials.update',$m->id) }}"
+                          title="Edit {{ $m->material_name }}">Edit</button>
                   <form action="{{ route('materials.destroy',$m->id) }}" method="POST" onsubmit="return confirm('Delete this material?');">
                     @csrf @method('DELETE')
-                    <button type="submit" class="btn btn-danger">Delete</button>
+                    <button type="submit" class="btn btn-danger" title="Delete {{ $m->material_name }}">Delete</button>
                   </form>
                 </div>
               </td>
@@ -274,7 +270,7 @@
 </div>
 
 {{-- CREATE MODAL --}}
-<dialog id="modalCreate" class="modal">
+<dialog id="modalCreate" class="modal" aria-label="Add Material">
   <form method="POST" action="{{ route('materials.store') }}" class="modal-box panel w-full max-w-2xl">
     @csrf
     <h3 class="font-bold text-lg mb-4">Add Material</h3>
@@ -301,7 +297,7 @@
 </dialog>
 
 {{-- EDIT MODAL --}}
-<dialog id="modalEdit" class="modal">
+<dialog id="modalEdit" class="modal" aria-label="Edit Material">
   <form id="editForm" method="POST" class="modal-box panel w-full max-w-2xl">
     @csrf @method('PUT')
     <h3 class="font-bold text-lg mb-4">Edit Material</h3>
@@ -328,51 +324,51 @@
 </dialog>
 @endsection
 
-@section('scripts')
+@push('scripts')
 <script>
-  function openDialog(d){ try{ d.showModal?d.showModal():d.show(); }catch(_){ d.open=true; } }
-  function closeDialog(d){ try{ d.close?d.close():d.removeAttribute('open'); }catch(_){ d.open=false; } }
+document.addEventListener('DOMContentLoaded', () => {
+  const $ = (sel, root=document) => root.querySelector(sel);
+  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+  const byId = (id) => document.getElementById(id);
 
-  const modalCreate = document.getElementById('modalCreate');
-  const modalEdit   = document.getElementById('modalEdit');
+  // EDIT: fetch JSON & populate then open modal
+  $$('.btn[data-fetch-url]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const fetchUrl  = btn.dataset.fetchUrl;
+      const updateUrl = btn.dataset.updateUrl;
+      const form      = byId('editForm');
+      if (!fetchUrl || !updateUrl || !form) return;
 
-  document.getElementById('btnAdd')?.addEventListener('click',()=>openDialog(modalCreate));
-  [modalCreate,modalEdit].forEach(m=>{
-    m?.addEventListener('click',e=>{ if(e.target?.hasAttribute?.('data-close')) closeDialog(m); });
-  });
+      try {
+        const res = await fetch(fetchUrl, {
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          }
+        });
+        if (!res.ok) throw new Error('Load failed');
 
-  // Edit -> fetch JSON & populate
-  document.querySelectorAll('.btn[data-fetch-url]').forEach(btn=>{
-    btn.addEventListener('click',async()=>{
-      const fetchUrl=btn.dataset.fetchUrl, updateUrl=btn.dataset.updateUrl, form=document.getElementById('editForm');
-      if(!fetchUrl||!updateUrl||!form) return;
-      try{
-        const res=await fetch(fetchUrl,{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}});
-        if(!res.ok) throw new Error('Load failed');
-        const mat=await res.json();
-        form.setAttribute('action',updateUrl);
-        form.querySelector('[name="material_name"]').value=mat.material_name??'';
-        form.querySelector('[name="category"]').value=mat.category??'';
-        form.querySelector('[name="unit"]').value=mat.unit??'kg';
-        form.querySelector('[name="unit_price"]').value=(mat.unit_price??0);
-        form.querySelector('[name="quantity_kg"]').value=(mat.quantity_kg??0);
-        if(form.querySelector('[name="min_stock_kg"]')) form.querySelector('[name="min_stock_kg"]').value=(mat.min_stock_kg??'');
-        form.querySelector('[name="sku"]').value=mat.sku??'';
-        openDialog(modalEdit);
-      }catch(e){ alert('Could not load material details.'); console.warn(e); }
+        const mat = await res.json();
+        form.setAttribute('action', updateUrl);
+        form.querySelector('[name="material_name"]').value = mat.material_name ?? '';
+        form.querySelector('[name="category"]').value      = mat.category ?? '';
+        form.querySelector('[name="unit"]').value          = mat.unit ?? 'kg';
+        form.querySelector('[name="unit_price"]').value    = (mat.unit_price ?? 0);
+        form.querySelector('[name="quantity_kg"]').value   = (mat.quantity_kg ?? 0);
+        const minEl = form.querySelector('[name="min_stock_kg"]');
+        if (minEl) minEl.value = (mat.min_stock_kg ?? '');
+        form.querySelector('[name="sku"]').value = mat.sku ?? '';
+
+        // open modal via layout’s global dialog helper (data-open) compatibility
+        const modal = byId('modalEdit');
+        if (modal?.showModal) modal.showModal();
+        else modal?.setAttribute('open','open');
+      } catch (e) {
+        alert('Could not load material details.');
+        console.warn(e);
+      }
     });
   });
-
-  // ESC to close
-  document.addEventListener('keydown',e=>{
-    if(e.key==='Escape'){ if(modalEdit?.open) closeDialog(modalEdit); if(modalCreate?.open) closeDialog(modalCreate); }
-  });
-
-  // Ctrl/Cmd+Enter submit inside dialogs
-  [modalCreate,modalEdit].forEach(m=>{
-    m?.addEventListener('keydown',e=>{
-      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='enter'){ m.querySelector('form')?.submit(); }
-    });
-  });
+});
 </script>
-@endsection
+@endpush

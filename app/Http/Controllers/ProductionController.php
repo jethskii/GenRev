@@ -137,11 +137,23 @@ class ProductionController extends Controller
                 ? $validated['batch_number']
                 : $this->nextBatchNumber($product);
 
+            // === New: graceful handling of recipe/stock errors ===
             if (config('app.consume_materials', false)) {
-                DB::transaction(function () use ($product, $validated, $prodDate, $expiry, $batchNumber) {
-                    $this->consumeMaterials($product, (float)$validated['current_inventory']);
-                    $this->createBatchAndRecompute($product, $validated, $prodDate, $expiry, $batchNumber);
-                });
+                // Ensure recipe exists before we start a transaction
+                if (!$this->productHasRecipe($product)) {
+                    return $this->respondNeedsRecipe($request, $product);
+                }
+
+                try {
+                    DB::transaction(function () use ($product, $validated, $prodDate, $expiry, $batchNumber) {
+                        // This may throw on insufficient stock
+                        $this->consumeMaterials($product, (float)$validated['current_inventory']);
+                        $this->createBatchAndRecompute($product, $validated, $prodDate, $expiry, $batchNumber);
+                    });
+                } catch (\RuntimeException $re) {
+                    // Most likely insufficient stock — surface as validation-like error
+                    return $this->respondError($request, ['materials' => $re->getMessage()]);
+                }
             } else {
                 $this->createBatchAndRecompute($product, $validated, $prodDate, $expiry, $batchNumber);
             }
@@ -211,8 +223,12 @@ class ProductionController extends Controller
             : $this->nextBatchNumber($product);
 
         try {
-            DB::transaction(function () use ($product, $validated, $prodDate, $expiry, $batchNumber) {
+            DB::transaction(function () use ($product, $validated, $prodDate, $expiry, $batchNumber, $request) {
                 if (config('app.consume_materials', false)) {
+                    if (!$this->productHasRecipe($product)) {
+                        // Exit transaction early by throwing a custom exception we catch below
+                        throw new \LogicException('__NEEDS_RECIPE__');
+                    }
                     $this->consumeMaterials($product, (float)$validated['quantity']);
                 }
 
@@ -236,6 +252,14 @@ class ProductionController extends Controller
             }
 
             return redirect()->route('production.orders', $product->id)->with('success', 'Order added.');
+        } catch (\LogicException $lex) {
+            if ($lex->getMessage() === '__NEEDS_RECIPE__') {
+                return $this->respondNeedsRecipe($request, $product);
+            }
+            return $this->respondError($request, ['materials' => 'Recipe check failed.']);
+        } catch (\RuntimeException $re) {
+            // Insufficient stock most likely
+            return $this->respondError($request, ['materials' => $re->getMessage()]);
         } catch (\Throwable $e) {
             Log::error('Failed to save production order', ['error' => $e->getMessage()]);
             if ($request->ajax() || $request->wantsJson()) {
@@ -435,6 +459,25 @@ class ProductionController extends Controller
     }
 
     /* ================================= HELPERS ================================= */
+
+    /** Centralized “needs recipe” response */
+    private function respondNeedsRecipe(Request $request, Product $product)
+    {
+        $msg = "No recipe set for {$product->product_name}. Add materials first.";
+        $redirect = route('products.materials.index', $product->id);
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'ok'           => false,
+                'message'      => $msg,
+                'needs_recipe' => true,
+                'redirect'     => $redirect,
+            ], 422);
+        }
+
+        return redirect()->to($redirect)->with('error', $msg);
+    }
+
     private function sortProducts($products, string $sort)
     {
         switch ($sort) {
@@ -519,6 +562,10 @@ class ProductionController extends Controller
         return array_intersect_key($attrs, array_flip($columns));
     }
 
+    /**
+     * Consume recipe materials for a batch.
+     * Throws \RuntimeException on insufficient stock; caller converts that to 422/redirect.
+     */
     private function consumeMaterials(Product $product, float $batchUnits): void
     {
         if (!method_exists($product, 'recipes')) {
@@ -591,5 +638,12 @@ class ProductionController extends Controller
         $p->image_medium_url   = null;
         $p->image_original_url = $orig;
         $p->card_image_srcset  = null;
+    }
+
+    /** Tiny helper so we don’t duplicate the exists() check */
+    private function productHasRecipe(Product $product): bool
+    {
+        if (!method_exists($product, 'recipes')) return false;
+        return $product->recipes()->exists();
     }
 }

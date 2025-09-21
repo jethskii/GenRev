@@ -5,19 +5,99 @@ use Illuminate\Support\Str;
 
 @once
 <style>
-  .prod-card-img{
-    width: 100%;
-    height: 10rem;
-    object-fit: cover;
-    border-radius: 12px;
-    border: 1px solid rgba(255,255,255,.12);
-    background: linear-gradient(135deg, #657423 0%, #2a2a2a 100%);
-  }
-  .prod-card:hover .prod-card-img{ filter: brightness(1.02); }
+/* ===== Add Production modal: force dark inputs with bright text ===== */
+#addModal input,
+#addModal select,
+#addModal textarea{
+  background-color: rgba(16,24,16,.85) !important; /* deep green/black */
+  border: 1px solid rgba(255,255,255,.18) !important;
+  color: #fff !important;
+  border-radius: .9rem !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04) !important;
+}
+#addModal label{ color: rgba(255,255,255,.82) !important; }
+#addModal small, #addModal .hint{ color: rgba(255,255,255,.6) !important; }
 
-  /* Safety */
-  .prod-card { pointer-events: auto; }
-  .btn-busy { opacity: .7; pointer-events: none; }
+#addModal input::placeholder,
+#addModal textarea::placeholder{ color: rgba(255,255,255,.55) !important; }
+
+/* Focus ring matches your neon accent */
+#addModal input:focus,
+#addModal select:focus,
+#addModal textarea:focus{
+  outline: none !important;
+  border-color: #C3E956 !important;
+  box-shadow: 0 0 0 2px rgba(195,233,86,.38) !important;
+}
+
+/* Date inputs: make year/month/day segments & icon visible across engines */
+#addModal input[type="date"]{
+  color-scheme: dark;                            /* Firefox/Chromium dark picker */
+  caret-color: #fff !important;
+}
+#addModal input[type="date"]::-webkit-calendar-picker-indicator{
+  filter: invert(1) opacity(.9) !important;      /* Chrome/Safari icon */
+}
+#addModal input[type="date"]::-webkit-datetime-edit,
+#addModal input[type="date"]::-webkit-datetime-edit-year-field,
+#addModal input[type="date"]::-webkit-datetime-edit-month-field,
+#addModal input[type="date"]::-webkit-datetime-edit-day-field{
+  color: #fff !important;                        /* Chrome/Safari text */
+  background: transparent !important;
+}
+
+/* Number spinners visible on dark */
+#addModal input[type="number"]::-webkit-inner-spin-button,
+#addModal input[type="number"]::-webkit-outer-spin-button{
+  filter: invert(1) opacity(.8) !important;
+}
+
+/* Select: dark dropdown panel + white options; custom caret */
+#addModal select{
+  padding-right: 2.25rem !important;
+  -webkit-appearance: none; -moz-appearance: none; appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, #C3E956 50%),
+    linear-gradient(135deg, #C3E956 50%, transparent 50%),
+    linear-gradient(to right, transparent, transparent);
+  background-position:
+    calc(100% - 20px) calc(1em - 2px),
+    calc(100% - 15px) calc(1em - 2px),
+    calc(100% - 2.5rem) 0.5em;
+  background-size: 5px 5px, 5px 5px, 0 0;
+  background-repeat: no-repeat;
+}
+#addModal select option,
+#addModal select optgroup{
+  background: #0f160f !important;
+  color: #fff !important;
+}
+
+/* File input: readable button + filename */
+#addModal input[type="file"]{
+  color: rgba(255,255,255,.9) !important;
+}
+#addModal input[type="file"]::file-selector-button{
+  background: rgba(255,255,255,.14) !important;
+  border: 1px solid rgba(255,255,255,.26) !important;
+  color: #fff !important;
+  border-radius: .6rem !important;
+  padding: .4rem .8rem !important;
+  margin-right: .75rem !important;
+  cursor: pointer !important;
+}
+#addModal input[type="file"]::file-selector-button:hover{
+  background: rgba(255,255,255,.22) !important;
+}
+
+/* Chrome autofill on dark */
+#addModal input:-webkit-autofill,
+#addModal textarea:-webkit-autofill,
+#addModal select:-webkit-autofill{
+  -webkit-text-fill-color: #fff !important;
+  -webkit-box-shadow: 0 0 0px 1000px rgba(16,24,16,.85) inset !important;
+  transition: background-color 9999s ease-in-out 0s !important;
+}
 </style>
 @endonce
 
@@ -115,7 +195,7 @@ use Illuminate\Support\Str;
         </a>
       @endif
 
-      {{-- Dynamic Quick Add (no inline handlers) --}}
+      {{-- Dynamic Quick Add --}}
       <button
         type="button"
         class="js-quick-add px-3 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold hover:opacity-90 relative z-10"
@@ -139,8 +219,8 @@ use Illuminate\Support\Str;
   const openSalesModal = (payload) => {
     const { id, name, price } = payload || {};
     const saleModal      = document.querySelector('#saleModal');
-    const fldProductSel  = document.querySelector('#sale_product_id');   // <select>
-    const fldProductName = document.querySelector('#sale_product_name'); // optional text
+    const fldProductSel  = document.querySelector('#sale_product_id');
+    const fldProductName = document.querySelector('#sale_product_name');
     const fldPrice       = document.querySelector('#sale_price');
     const fldQty         = document.querySelector('#sale_quantity');
 
@@ -169,7 +249,6 @@ use Illuminate\Support\Str;
 
   const endpointFor = (id) => `/production/quick-add/${id}`;
 
-  // Delegate clicks so it works on dynamically injected cards
   document.addEventListener('click', async function(e) {
     const btn = e.target.closest('.js-quick-add');
     if (!btn) return;
@@ -182,7 +261,6 @@ use Illuminate\Support\Str;
     btn.innerHTML = 'Loading…';
 
     try {
-      // Fetch live quick-add payload (name + price). Keeps things dynamic.
       const res = await fetch(endpointFor(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -196,7 +274,6 @@ use Illuminate\Support\Str;
       openSalesModal(payload);
     } catch (err) {
       console.warn('Quick Add payload fetch failed, falling back.', err);
-      // Minimal fallback if endpoint isn’t available
       openSalesModal({ id, name: '', price: 0 });
     } finally {
       btn.classList.remove('btn-busy');
