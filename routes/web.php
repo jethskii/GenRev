@@ -12,6 +12,7 @@ use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\BatchAllocationController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ProductRecipeController; // ← add this
 
 /* ----------------------------------------------------------------------------
  | Global route param patterns (avoid accidental collisions)
@@ -54,12 +55,23 @@ Route::middleware('auth')->group(function () {
     Route::post('products/{id}/archive',       [ProductController::class, 'archive'])->whereNumber('id')->name('products.archive');
 
     /* ----- Product ↔ Materials (Recipes / BOM) ----- */
-    Route::prefix('products/{product}')->whereNumber('product')->group(function () {
-        Route::get('/materials',          [ProductController::class, 'materialsIndex'])->name('products.materials.index');
-        Route::get('/materials/defaults', [ProductController::class, 'materialsDefaults'])->name('products.materials.defaults');
-        Route::post('/recipe',            [ProductController::class, 'recipeStore'])->name('products.recipe.store');
-        Route::delete('/recipe/{line}',   [ProductController::class, 'recipeDestroy'])->whereNumber('line')->name('products.recipe.destroy');
-    });
+    Route::prefix('products/{product}')
+        ->whereNumber('product')
+        ->group(function () {
+            // Use ProductRecipeController for materials pages + saving
+            Route::get('/materials',                [ProductRecipeController::class, 'index'])->name('products.materials.index');
+            Route::get('/materials/defaults',       [ProductRecipeController::class, 'defaults'])->name('products.materials.defaults');
+            Route::post('/materials',               [ProductRecipeController::class, 'store'])->name('products.materials.store');
+
+            // Delete a single line — keep existing handler in ProductController (already implemented)
+            Route::delete('/materials/{line}',      [ProductController::class, 'recipeDestroy'])
+                ->whereNumber('line')->name('products.materials.destroy');
+
+            // Backward-compat aliases (older blades/controllers)
+            Route::post('/recipe',                  [ProductController::class, 'recipeStore'])->name('products.recipe.store');
+            Route::delete('/recipe/{line}',         [ProductController::class, 'recipeDestroy'])
+                ->whereNumber('line')->name('products.recipe.destroy');
+        });
 
     /* ===== Production / Batches ===== */
     Route::prefix('production')->name('production.')->controller(ProductionController::class)->group(function () {
@@ -88,11 +100,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/{id}',               'show')->whereNumber('id')->name('show');
     });
 
-    // ✅ Explicit quick-add route so route('production.quickAdd') is guaranteed
-    Route::get(
-        '/production/quick-add/{product}',
-        [ProductionController::class, 'quickAddPayload']
-    )->whereNumber('product')->name('production.quickAdd');
+    // Explicit quick-add payload
+    Route::get('/production/quick-add/{product}', [ProductionController::class, 'quickAddPayload'])
+        ->whereNumber('product')->name('production.quickAdd');
 
     // Alias so route('production') works
     Route::get('/production-alias', fn () => redirect()->route('production.index'))->name('production');

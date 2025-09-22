@@ -16,46 +16,58 @@ class ProductRecipeController extends Controller
      * Render the per-product BOM editor.
      */
     public function index(Product $product)
-{
-    $recipe = $product->recipes()->with('ingredient')->get();
+    {
+        // Load recipe lines + their material; include price alias for blades
+        $recipe = $product->recipes()
+            ->with(['material' => function ($q) {
+                $q->select('id', 'material_name', 'unit')
+                  ->addSelect(DB::raw('unit_price as default_unit_price'));
+            }])
+            ->get();
 
-    $materials = Material::orderBy('material_name')
-        ->get(['id', 'material_name', 'unit', 'default_unit_price']);
+        // Materials for the "Add line" dropdown (alias price)
+        $materials = Material::query()
+            ->select('id', 'material_name', 'unit')
+            ->addSelect(DB::raw('unit_price as default_unit_price'))
+            ->orderBy('material_name')
+            ->get();
 
-    // ✅ Point to the correct Blade
-    return view('products.materials.index', compact('product','recipe','materials'));
-}
-
+        return view('products.materials.index', compact('product', 'recipe', 'materials'));
+    }
 
     /**
      * GET /products/{product}/materials/defaults
-     * Returns JSON seed for "Load Defaults" (either current recipe, or heuristic defaults).
+     * Returns JSON seed for "Load Defaults".
      */
     public function defaults(Product $product)
     {
-        $existing = $product->recipes()->with('material')->get();
+        $existing = $product->recipes()
+            ->with(['material' => function ($q) {
+                $q->select('id', 'unit')
+                  ->addSelect(DB::raw('unit_price as default_unit_price'));
+            }])
+            ->get();
 
         if ($existing->isNotEmpty()) {
-            // Return the current recipe in the JSON shape your JS expects
             return response()->json(
                 $existing->map(fn ($r) => [
                     'ingredient_id' => (int) ($r->material_id ?? $r->ingredient_id),
                     'unit'          => (string) ($r->material->unit ?? ''),
                     'qty'           => (float)  ($r->qty ?? 0),
-                    'unit_price'    => (float)  ($r->unit_price_snapshot ?? 0),
+                    // Prefer stored snapshot; fallback to current material price
+                    'unit_price'    => (float)  ($r->unit_price_snapshot ?? ($r->material->default_unit_price ?? 0)),
                 ])->values()
             );
         }
 
-        // Otherwise propose defaults by matching names in materials table
-        // Tweak these names/quantities to fit your products
+        // Example heuristic defaults (adjust to your needs)
         $defaultNames = [
             ['name' => 'Ground Meat', 'qty' => 0.80],
             ['name' => 'Fat',         'qty' => 0.20],
             ['name' => 'Salt',        'qty' => 0.015],
             ['name' => 'Garlic',      'qty' => 0.010],
             ['name' => 'Paprika',     'qty' => 0.008],
-            ['name' => 'Casing',      'qty' => 30.00], // if pcs or g, make sure material.unit matches
+            ['name' => 'Casing',      'qty' => 30.00],
         ];
 
         $rows = [];
@@ -66,7 +78,7 @@ class ProductRecipeController extends Controller
                     'ingredient_id' => (int) $m->id,
                     'unit'          => (string) $m->unit,
                     'qty'           => (float)  $d['qty'],
-                    'unit_price'    => (float)  $m->default_unit_price,
+                    'unit_price'    => (float)  $m->unit_price, // current price
                 ];
             }
         }
@@ -82,11 +94,6 @@ class ProductRecipeController extends Controller
      *   ['ingredient_id' => int, 'qty' => number, 'unit_price' => number],
      *   ...
      * ]
-     *
-     * NOTE: Your materials Blade currently posts to route('products.recipe.store', $product)
-     * which points to ProductController@recipeStore. Keeping this here allows either route to be used:
-     * - POST /products/{product}/recipe        (ProductController@recipeStore)
-     * - POST /products/{product}/materials     (this method)
      */
     public function store(Request $request, Product $product)
     {
@@ -98,21 +105,24 @@ class ProductRecipeController extends Controller
         ]);
 
         DB::transaction(function () use ($product, $data) {
-            // Upsert each submitted line
             foreach ($data['rows'] as $row) {
+                $matId = (int) $row['ingredient_id'];
+
+                // Upsert on (product_id, ingredient_id). Also populate material_id
                 ProductRecipe::updateOrCreate(
                     [
                         'product_id'    => (int) $product->id,
-                        'ingredient_id' => (int) $row['ingredient_id'], // legacy column; model maps material_id too
+                        'ingredient_id' => $matId,
                     ],
                     [
+                        'material_id'         => $matId, // ✅ prevents 1364 error
                         'qty'                 => (float) $row['qty'],
                         'unit_price_snapshot' => (float) $row['unit_price'],
                     ]
                 );
             }
 
-            // Sync behavior: remove recipe lines that were not submitted
+            // Sync: delete lines not submitted
             $keep = collect($data['rows'])->pluck('ingredient_id')->map(fn ($v) => (int) $v)->all();
 
             ProductRecipe::where('product_id', $product->id)

@@ -62,6 +62,10 @@
 
       {{-- Quick actions --}}
       <div class="flex flex-wrap gap-2">
+        <a href="{{ route('products.materials.index', $product) }}"
+        class="px-3 py-2 rounded bg-emerald-500 hover:bg-emerald-600 text-black text-sm">
+        Edit Recipe / BOM
+        </a>
         <a href="{{ route('products.edit', $product) }}" class="btn-armygreen">Edit Product</a>
         <a href="{{ route('products.materials.index', $product) }}" class="px-3 py-2 rounded-xl border border-white/15 hover:bg-white/5">Manage Materials</a>
         <a href="{{ route('production.orders', $product->id) }}" class="px-3 py-2 rounded-xl border border-white/15 hover:bg-white/5">Go to Production</a>
