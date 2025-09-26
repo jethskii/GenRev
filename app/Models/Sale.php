@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Schema;
 use App\Services\InventoryService;
 
 class Sale extends Model
@@ -13,6 +14,11 @@ class Sale extends Model
 
     protected $table = 'sales';
 
+    /**
+     * While debugging you can swap to:
+     * protected $guarded = [];
+     * but keep $fillable in prod for safety.
+     */
     protected $fillable = [
         // New schema
         'product_id',
@@ -41,23 +47,26 @@ class Sale extends Model
 
     protected $casts = [
         // New
-        'order_date'     => 'date',
-        'quantity_kg'    => 'decimal:3',
-        'unit_price'     => 'decimal:2',
-        'total_price'    => 'decimal:2',
+        'order_date'      => 'date',
+        'quantity_kg'     => 'decimal:3',
+        'unit_price'      => 'decimal:2',
+        'total_price'     => 'decimal:2',
 
-        // Optional columns
-        'production_date'=> 'date',
-        'expiration_date'=> 'date',
+        // Optional
+        'production_date' => 'date',
+        'expiration_date' => 'date',
 
         // Legacy
-        'date'           => 'date',
-        'quantity'       => 'decimal:3',
-        'price'          => 'decimal:2',
-        'total'          => 'decimal:2',
+        'date'            => 'date',
+        'quantity'        => 'decimal:3',
+        'price'           => 'decimal:2',
+        'total'           => 'decimal:2',
     ];
 
-    /* ---------------- Relationships ---------------- */
+    // Make these derived fields visible in JSON (API responses)
+    protected $appends = ['display_product', 'sale_date'];
+
+    /* ----------------------------- Relationships ----------------------------- */
 
     // Avoid name clash with legacy string column "product"
     public function productRef()
@@ -72,10 +81,16 @@ class Sale extends Model
 
     public function allocations()
     {
-        return $this->hasMany(BatchAllocation::class);
+        // If you have a concrete BatchAllocation model, you can add a "use" at top.
+        return $this->hasMany(\App\Models\BatchAllocation::class);
     }
 
-    /* ---------------- Unified Accessors ---------------- */
+    public function audits()
+    {
+        return $this->hasMany(\App\Models\SaleAudit::class);
+    }
+
+    /* ---------------------------- Unified Accessors --------------------------- */
 
     /** Quantity (kg) regardless of schema */
     public function qtyKg(): float
@@ -92,21 +107,15 @@ class Sale extends Model
     /** Total value (computed if not stored) */
     public function totalValue(): float
     {
-        if (!is_null($this->total_price ?? null)) {
-            return (float) $this->total_price;
-        }
-        if (!is_null($this->total ?? null)) {
-            return (float) $this->total;
-        }
+        if (!is_null($this->total_price ?? null)) return (float) $this->total_price;
+        if (!is_null($this->total ?? null))       return (float) $this->total;
         return round($this->qtyKg() * $this->unitPriceValue(), 2);
     }
 
     /** Display product: prefer legacy string, fallback to relation */
     public function getDisplayProductAttribute(): string
     {
-        if (!empty($this->product)) {
-            return (string) $this->product;
-        }
+        if (!empty($this->product)) return (string) $this->product;
         return optional($this->productRef)->product_name ?? '';
     }
 
@@ -116,57 +125,85 @@ class Sale extends Model
         return $this->order_date ?? $this->date ?? null;
     }
 
-    /* ---------------- Mutators (normalize totals) ---------------- */
+    /* ------------------------------- Mutators -------------------------------- */
 
     public function setQuantityKgAttribute($value): void
     {
         $this->attributes['quantity_kg'] = is_null($value) ? null : (float) $value;
-        // Auto-sync total_price if using new schema
+
+        // Keep new total in sync if columns exist
         if (array_key_exists('unit_price', $this->attributes) && !is_null($this->attributes['unit_price'])) {
-            $this->attributes['total_price'] = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
+            $computed = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
+            if (Schema::hasColumn('sales', 'total_price')) {
+                $this->attributes['total_price'] = $computed;
+            }
         }
-    }
-    public function audits()
-    {
-    return $this->hasMany(\App\Models\SaleAudit::class);
+
+        // If legacy price is present, keep legacy total in sync too
+        if (array_key_exists('price', $this->attributes) && !is_null($this->attributes['price'])) {
+            $computedLegacy = round(($this->attributes['quantity_kg'] ?? $this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
+            if (Schema::hasColumn('sales', 'total')) {
+                $this->attributes['total'] = $computedLegacy;
+            }
+        }
     }
 
     public function setUnitPriceAttribute($value): void
     {
         $this->attributes['unit_price'] = is_null($value) ? null : (float) $value;
+
         if (array_key_exists('quantity_kg', $this->attributes) && !is_null($this->attributes['quantity_kg'])) {
-            $this->attributes['total_price'] = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
+            $computed = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
+            if (Schema::hasColumn('sales', 'total_price')) {
+                $this->attributes['total_price'] = $computed;
+            }
         }
     }
 
     public function setQuantityAttribute($value): void
     {
         $this->attributes['quantity'] = is_null($value) ? null : (float) $value;
+
         if (array_key_exists('price', $this->attributes) && !is_null($this->attributes['price'])) {
-            $this->attributes['total'] = round(($this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
+            $computed = round(($this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
+            if (Schema::hasColumn('sales', 'total')) {
+                $this->attributes['total'] = $computed;
+            }
+        }
+
+        // If only "quantity" was sent but you have quantity_kg column, mirror it
+        if (Schema::hasColumn('sales', 'quantity_kg') && !isset($this->attributes['quantity_kg'])) {
+            $this->attributes['quantity_kg'] = $this->attributes['quantity'];
         }
     }
 
     public function setPriceAttribute($value): void
     {
         $this->attributes['price'] = is_null($value) ? null : (float) $value;
+
         if (array_key_exists('quantity', $this->attributes) && !is_null($this->attributes['quantity'])) {
-            $this->attributes['total'] = round(($this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
+            $computed = round(($this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
+            if (Schema::hasColumn('sales', 'total')) {
+                $this->attributes['total'] = $computed;
+            }
         }
     }
 
-    /* ---------------- Inventory Side-Effects ---------------- */
+    /* ------------------------- Inventory Side-Effects ------------------------- */
 
     protected static function booted()
     {
-        // Before create: ensure a total exists (new or legacy)
+        // Before create: ensure a total exists (write to whichever columns are present)
         static::creating(function (self $m) {
-            if (is_null($m->total_price) && is_null($m->total)) {
-                $m->total_price = round(
-                    ($m->quantity_kg ?? $m->quantity ?? 0) * ($m->unit_price ?? $m->price ?? 0),
-                    2
-                );
-            }
+            $qty  = $m->quantity_kg ?? $m->quantity ?? 0;
+            $unit = $m->unit_price  ?? $m->price    ?? 0;
+            $computed = round((float)$qty * (float)$unit, 2);
+
+            $hasNewTotal    = Schema::hasColumn('sales', 'total_price');
+            $hasLegacyTotal = Schema::hasColumn('sales', 'total');
+
+            if ($hasNewTotal && is_null($m->total_price)) $m->total_price = $computed;
+            if ($hasLegacyTotal && is_null($m->total))     $m->total      = $computed;
         });
 
         // After created → apply sale impact

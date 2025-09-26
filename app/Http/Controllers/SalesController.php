@@ -11,17 +11,21 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;   // column checks
 use Illuminate\Support\Facades\View;     // render card html
+use Illuminate\Support\Str;              // debug UUIDs
 
 class SalesController extends Controller
 {
     /** List sales + feed Add-Sale modal + dashboard KPIs & charts */
     public function index()
     {
+        // Build a safe date expression that only references existing columns
+        [$dateExprForWhere, $ymExpr, $orderExpr] = $this->dateExpressions();
+
         $sales = Sale::with([
                 'productRef:id,product_name,shelf_life_days',
                 'production:id,product_id,batch_number,quantity,current_inventory,production_date,expiration_date'
             ])
-            ->orderByDesc(DB::raw('COALESCE(order_date, `date`)'))
+            ->orderByDesc(DB::raw($orderExpr))
             ->orderByDesc('id')
             ->get();
 
@@ -140,7 +144,9 @@ class SalesController extends Controller
         $validated = $request->validate([
             'product_id'      => ['required','integer','exists:products,id'],
             'production_id'   => ['nullable','integer','exists:productions,id'],
-            'date'            => ['required','date'],
+            // accept either 'date' or 'order_date'; we'll normalize below
+            'date'            => ['nullable','date'],
+            'order_date'      => ['nullable','date'],
             'quantity'        => ['required','numeric','min:0.001'],
             'price'           => ['required','numeric','min:0'],
             'status'          => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
@@ -150,6 +156,13 @@ class SalesController extends Controller
             'notes'           => ['nullable','string','max:2000'],
             'customer_name'   => ['nullable','string','max:255'],
         ]);
+
+        // Normalize the sale date
+        $inputDate = $validated['date'] ?? $validated['order_date'] ?? $request->input('order_date');
+        if (!$inputDate) {
+            return $this->respondValidationError($request, ['date' => 'Please provide a sale date.']);
+        }
+        $validated['date'] = Carbon::parse($inputDate)->toDateString();
 
         $resolvedProductionId = $validated['production_id'] ?? null;
         if (!empty($resolvedProductionId)) {
@@ -167,10 +180,8 @@ class SalesController extends Controller
         $total       = round($qty * $unit, 2);
         $status      = $validated['status'] ?? 'Completed';
 
-        $hasNew = Schema::hasColumn('sales','order_date')
-                && Schema::hasColumn('sales','quantity_kg')
-                && Schema::hasColumn('sales','unit_price')
-                && Schema::hasColumn('sales','total_price');
+        $debugUuid   = (string) Str::uuid();
+        Log::info("[sales.store] START {$debugUuid}", ['request' => $request->all()]);
 
         $orderDateStr = $validated['date'];
         if (empty($resolvedProductionId)) {
@@ -179,56 +190,73 @@ class SalesController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($validated, $displayName, $invoice, $qty, $unit, $total, $status, $product, $hasNew, $resolvedProductionId) {
+            DB::transaction(function () use ($validated, $displayName, $invoice, $qty, $unit, $total, $status, $product, $resolvedProductionId, $debugUuid) {
+                // Start with mandatory fields
                 $payload = [
                     'product_id'    => (int) $validated['product_id'],
                     'production_id' => $resolvedProductionId,
                     'status'        => $status,
                 ];
 
-                if (Schema::hasColumn('sales','customer_name'))   $payload['customer_name'] = $validated['customer_name'] ?? null;
-                if (Schema::hasColumn('sales','notes'))            $payload['notes'] = $validated['notes'] ?? null;
-                if (Schema::hasColumn('sales','production_date'))  $payload['production_date'] = $validated['production_date'] ?? null;
-                if (Schema::hasColumn('sales','expiration_date'))  $payload['expiration_date'] = $validated['expiration_date'] ?? null;
+                // Map all possible fields, keep only those that exist in the table
+                $map = [
+                    // identifiers
+                    'order_number'    => $invoice,
+                    'invoice_number'  => $invoice,
 
-                if ($hasNew) {
-                    if (Schema::hasColumn('sales','order_number')) $payload['order_number'] = $invoice;
-                    $payload += [
-                        'order_date'   => $validated['date'],
-                        'quantity_kg'  => $qty,
-                        'unit_price'   => $unit,
-                        'total_price'  => $total,
-                    ];
-                } else {
-                    $payload += [
-                        'invoice_number' => $invoice,
-                        'product'        => $displayName,
-                        'date'           => $validated['date'],
-                        'quantity'       => $qty,
-                        'price'          => $unit,
-                        'total'          => $total,
-                    ];
+                    // dates
+                    'order_date'      => $validated['date'],
+                    'date'            => $validated['date'],
+
+                    // name/desc
+                    'product'         => $displayName,
+
+                    // numbers (set both if they exist)
+                    'quantity_kg'     => $qty,
+                    'quantity'        => $qty,
+                    'unit_price'      => $unit,
+                    'price'           => $unit,
+                    'total_price'     => $total,
+                    'total'           => $total,
+
+                    // optional meta
+                    'customer_name'   => $validated['customer_name'] ?? null,
+                    'notes'           => $validated['notes'] ?? null,
+                    'production_date' => $validated['production_date'] ?? null,
+                    'expiration_date' => $validated['expiration_date'] ?? null,
+                ];
+
+                foreach ($map as $col => $val) {
+                    if (Schema::hasColumn('sales', $col)) {
+                        $payload[$col] = $val;
+                    }
                 }
 
-                foreach (array_keys($payload) as $k) {
-                    if (!Schema::hasColumn('sales',$k)) unset($payload[$k]);
-                }
+                Log::info("[sales.store] PAYLOAD {$debugUuid}", $payload);
 
-                Sale::create($payload);
+                $sale = Sale::create($payload);
+
+                Log::info("[sales.store] CREATED {$debugUuid}", ['id' => $sale->id]);
 
                 $this->recomputeProductBalance((int)$product->id);
             });
+
+            Log::info("[sales.store] COMMIT {$debugUuid}");
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => true, 'message' => 'Sale saved.']);
             }
             return redirect()->route('sales')->with('success', 'Sale recorded.');
         } catch (\Throwable $e) {
-            Log::error('Failed to save sale', ['error' => $e->getMessage()]);
+            Log::error("[sales.store] FAIL {$debugUuid}", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
             if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Server error while saving sale.'], 500);
+                return response()->json(['ok' => false, 'message' => $e->getMessage()], 500);
             }
-            return back()->with('error', 'Server error while saving sale.')->withInput();
+            return back()->with('error', $e->getMessage())->withInput();
         }
     }
 
@@ -266,7 +294,9 @@ class SalesController extends Controller
         $validated = $request->validate([
             'product_id'      => ['required','integer','exists:products,id'],
             'production_id'   => ['nullable','integer','exists:productions,id'],
-            'date'            => ['required','date'],
+            // accept either 'date' or 'order_date'; we'll normalize below
+            'date'            => ['nullable','date'],
+            'order_date'      => ['nullable','date'],
             'quantity'        => ['required','numeric','min:0.001'],
             'price'           => ['required','numeric','min:0'],
             'status'          => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
@@ -276,6 +306,13 @@ class SalesController extends Controller
             'notes'           => ['nullable','string','max:2000'],
             'customer_name'   => ['nullable','string','max:255'],
         ]);
+
+        // Normalize the sale date
+        $inputDate = $validated['date'] ?? $validated['order_date'] ?? $request->input('order_date');
+        if (!$inputDate) {
+            return $this->respondValidationError($request, ['date' => 'Please provide a sale date.']);
+        }
+        $validated['date'] = Carbon::parse($inputDate)->toDateString();
 
         $resolvedProductionId = $validated['production_id'] ?? null;
         if (!empty($resolvedProductionId)) {
@@ -293,10 +330,8 @@ class SalesController extends Controller
         $total       = round($qty * $unit, 2);
         $status      = $validated['status'] ?? ($sale->status ?: 'Completed');
 
-        $hasNew = Schema::hasColumn('sales','order_date')
-                && Schema::hasColumn('sales','quantity_kg')
-                && Schema::hasColumn('sales','unit_price')
-                && Schema::hasColumn('sales','total_price');
+        $debugUuid   = (string) Str::uuid();
+        Log::info("[sales.update] START {$debugUuid}", ['request' => $request->all(), 'sale_id' => $sale->id]);
 
         $orderDateStr = $validated['date'];
         if (empty($resolvedProductionId)) {
@@ -305,38 +340,36 @@ class SalesController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($sale, $validated, $displayName, $qty, $unit, $total, $status, $hasNew, $resolvedProductionId) {
+            DB::transaction(function () use ($sale, $validated, $displayName, $qty, $unit, $total, $status, $resolvedProductionId, $debugUuid) {
                 $payload = [
                     'product_id'    => (int) $validated['product_id'],
                     'production_id' => $resolvedProductionId,
                     'status'        => $status,
                 ];
 
-                if (Schema::hasColumn('sales','customer_name'))   $payload['customer_name'] = $validated['customer_name'] ?? null;
-                if (Schema::hasColumn('sales','notes'))            $payload['notes'] = $validated['notes'] ?? null;
-                if (Schema::hasColumn('sales','production_date'))  $payload['production_date'] = $validated['production_date'] ?? null;
-                if (Schema::hasColumn('sales','expiration_date'))  $payload['expiration_date'] = $validated['expiration_date'] ?? null;
+                $map = [
+                    'order_date'      => $validated['date'],
+                    'date'            => $validated['date'],
+                    'product'         => $displayName,
+                    'quantity_kg'     => $qty,
+                    'quantity'        => $qty,
+                    'unit_price'      => $unit,
+                    'price'           => $unit,
+                    'total_price'     => $total,
+                    'total'           => $total,
+                    'customer_name'   => $validated['customer_name'] ?? null,
+                    'notes'           => $validated['notes'] ?? null,
+                    'production_date' => $validated['production_date'] ?? null,
+                    'expiration_date' => $validated['expiration_date'] ?? null,
+                ];
 
-                if ($hasNew) {
-                    $payload += [
-                        'order_date'   => $validated['date'],
-                        'quantity_kg'  => $qty,
-                        'unit_price'   => $unit,
-                        'total_price'  => $total,
-                    ];
-                } else {
-                    $payload += [
-                        'product'  => $displayName,
-                        'date'     => $validated['date'],
-                        'quantity' => $qty,
-                        'price'    => $unit,
-                        'total'    => $total,
-                    ];
+                foreach ($map as $col => $val) {
+                    if (Schema::hasColumn('sales', $col)) {
+                        $payload[$col] = $val;
+                    }
                 }
 
-                foreach (array_keys($payload) as $k) {
-                    if (!Schema::hasColumn('sales',$k)) unset($payload[$k]);
-                }
+                Log::info("[sales.update] PAYLOAD {$debugUuid}", $payload);
 
                 $sale->update($payload);
             });
@@ -344,16 +377,21 @@ class SalesController extends Controller
             $this->recomputeProductBalance($oldProductId);
             $this->recomputeProductBalance((int)$product->id);
 
+            Log::info("[sales.update] COMMIT {$debugUuid}");
+
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => true, 'message' => 'Sale updated.']);
             }
             return redirect()->route('sales')->with('success', 'Sale updated.');
         } catch (\Throwable $e) {
-            Log::error('Failed to update sale', ['error' => $e->getMessage()]);
+            Log::error("[sales.update] FAIL {$debugUuid}", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Server error while updating sale.'], 500);
+                return response()->json(['ok' => false, 'message' => $e->getMessage()], 500);
             }
-            return back()->with('error', 'Server error while updating sale.')->withInput();
+            return back()->with('error', $e->getMessage())->withInput();
         }
     }
 
@@ -387,12 +425,14 @@ class SalesController extends Controller
             'price'         => ['nullable','numeric','min:0'],
             'production_id' => ['nullable','integer','exists:productions,id'],
             'date'          => ['nullable','date'],
+            'order_date'    => ['nullable','date'],
         ]);
 
         $product   = Product::findOrFail((int)$validated['product_id']);
         $quantity  = (float)($validated['quantity'] ?? 1);
         $price     = (float)($validated['price'] ?? ($product->price ?? $product->default_price ?? $product->unit_cost ?? 0));
-        $date      = !empty($validated['date']) ? Carbon::parse($validated['date'])->toDateString() : now()->toDateString();
+        $dateInput = $validated['date'] ?? $validated['order_date'] ?? now()->toDateString();
+        $date      = Carbon::parse($dateInput)->toDateString();
 
         $batch = null;
         if (!empty($validated['production_id'])) {
@@ -404,48 +444,48 @@ class SalesController extends Controller
                 ->orderByDesc('production_date')->orderByDesc('id')->first();
         }
 
-        $invoice = $this->nextInvoiceNumber();
-        $hasNew  = Schema::hasColumn('sales','order_date')
-                && Schema::hasColumn('sales','quantity_kg')
-                && Schema::hasColumn('sales','unit_price')
-                && Schema::hasColumn('sales','total_price');
+        $invoice   = $this->nextInvoiceNumber();
+        $debugUuid = (string) Str::uuid();
+        Log::info("[sales.quickStore] START {$debugUuid}", ['request' => $request->all()]);
 
-        DB::transaction(function () use ($product, $quantity, $price, $date, $batch, $invoice, $hasNew) {
+        DB::transaction(function () use ($product, $quantity, $price, $date, $batch, $invoice, $debugUuid) {
             $payload = [
                 'product_id'    => $product->id,
                 'production_id' => $batch ? $batch->id : null,
                 'status'        => 'Completed',
             ];
 
-            if (Schema::hasColumn('sales','production_date')) $payload['production_date'] = $date;
+            $map = [
+                'order_number'    => $invoice,
+                'invoice_number'  => $invoice,
+                'order_date'      => $date,
+                'date'            => $date,
+                'product'         => $product->product_name,
+                'quantity_kg'     => $quantity,
+                'quantity'        => $quantity,
+                'unit_price'      => $price,
+                'price'           => $price,
+                'total_price'     => round($quantity * $price, 2),
+                'total'           => round($quantity * $price, 2),
+                'production_date' => $date,
+            ];
 
-            if ($hasNew) {
-                if (Schema::hasColumn('sales','order_number')) $payload['order_number'] = $invoice;
-                $payload += [
-                    'order_date'   => $date,
-                    'quantity_kg'  => $quantity,
-                    'unit_price'   => $price,
-                    'total_price'  => round($quantity * $price, 2),
-                ];
-            } else {
-                $payload += [
-                    'invoice_number' => $invoice,
-                    'product'        => $product->product_name,
-                    'date'           => $date,
-                    'quantity'       => $quantity,
-                    'price'          => $price,
-                    'total'          => round($quantity * $price, 2),
-                ];
+            foreach ($map as $col => $val) {
+                if (Schema::hasColumn('sales', $col)) {
+                    $payload[$col] = $val;
+                }
             }
 
-            foreach (array_keys($payload) as $k) {
-                if (!Schema::hasColumn('sales',$k)) unset($payload[$k]);
-            }
+            Log::info("[sales.quickStore] PAYLOAD {$debugUuid}", $payload);
 
-            Sale::create($payload);
+            $sale = Sale::create($payload);
+
+            Log::info("[sales.quickStore] CREATED {$debugUuid}", ['id' => $sale->id]);
 
             $this->recomputeProductBalance($product->id);
         });
+
+        Log::info("[sales.quickStore] COMMIT {$debugUuid}");
 
         [$cardHtml, $pid] = $this->buildProductCardHtml($product->id);
 
@@ -599,18 +639,36 @@ class SalesController extends Controller
         return [array_keys($top), array_map('floatval', array_values($top))];
     }
 
-    /** Driver-safe date expressions */
+    /** Driver-safe & column-safe date expressions */
     protected function dateExpressions(): array
     {
+        $hasOrder = Schema::hasColumn('sales','order_date');
+        $hasDate  = Schema::hasColumn('sales','date');
+
+        if ($hasOrder && $hasDate) {
+            $coalesce = "COALESCE(order_date, `date`)";
+        } elseif ($hasOrder) {
+            $coalesce = "order_date";
+        } elseif ($hasDate) {
+            $coalesce = "`date`";
+        } else {
+            // absolute fallback to created_at if neither exists
+            $coalesce = "created_at";
+        }
+
         $driver = DB::getDriverName();
         if ($driver === 'sqlite') {
-            $dateExpr = "DATE(COALESCE(order_date, `date`))";
-            $ymExpr   = "strftime('%Y-%m', COALESCE(order_date, `date`))";
+            $dateExpr = "DATE($coalesce)";
+            $ymExpr   = "strftime('%Y-%m', $coalesce)";
         } else {
-            $dateExpr = "DATE(COALESCE(order_date, `date`))";
-            $ymExpr   = "DATE_FORMAT(COALESCE(order_date, `date`), '%Y-%m')";
+            $dateExpr = "DATE($coalesce)";
+            $ymExpr   = "DATE_FORMAT($coalesce, '%Y-%m')";
         }
-        return [$dateExpr, $ymExpr];
+
+        // For ORDER BY in index()
+        $orderExpr = $coalesce;
+
+        return [$dateExpr, $ymExpr, $orderExpr];
     }
 
     /** Build a SUM(...) expression that matches existing sales columns. */

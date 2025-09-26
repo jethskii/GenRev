@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -14,7 +13,7 @@ use Illuminate\Support\Str;
 class AuthController extends Controller
 {
     /* =========================
-     |  Auth views (GET)
+     |  Auth Views (GET)
      * ========================*/
 
     /** Show login form */
@@ -40,9 +39,7 @@ class AuthController extends Controller
      * ========================*/
 
     /**
-     * Handle login
-     * Accepts either an email (case-insensitive) OR an employee username.
-     * Your login form can keep the input name "email" — we’ll detect if it’s actually a username.
+     * Handle login (email or employee username)
      */
     public function login(Request $request)
     {
@@ -52,54 +49,43 @@ class AuthController extends Controller
             'remember' => ['sometimes', 'boolean'],
         ]);
 
-        // Basic rate limiting by IP + identifier
-        $identifier = Str::lower(trim($data['email']));
-        $throttleKey = Str::lower($request->ip() . '|' . $identifier);
+        $identifier  = Str::lower(trim($data['email']));
+        $throttleKey = $request->ip() . '|auth|' . $identifier;
 
         if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             $seconds = RateLimiter::availableIn($throttleKey);
             return back()
                 ->withInput($request->only('email', 'remember'))
-                ->withErrors([
-                    'email' => "Too many attempts. Try again in {$seconds} seconds.",
-                ]);
+                ->withErrors(['email' => "Too many attempts. Try again in {$seconds} seconds."]);
         }
 
-        $remember = (bool)($data['remember'] ?? false);
-        $raw = trim($data['email']);
+        $remember = (bool) ($data['remember'] ?? false);
+        $raw      = trim($data['email']);
+        $creds    = null;
 
-        // 1) If it looks like an email, normalize and try direct login
+        // Login by email
         if (str_contains($raw, '@')) {
-            $email = Str::lower($raw);
-
-            if (Auth::attempt(['email' => $email, 'password' => $data['password']], $remember)) {
-                RateLimiter::clear($throttleKey);
-                $request->session()->regenerate();
-                return redirect()->intended(route('dashboard'));
-            }
+            $creds = ['email' => Str::lower($raw), 'password' => $data['password']];
         } else {
-            // 2) Otherwise treat as username: resolve to a user via employees.username
+            // Login by username via Employee → User
             $employee = Employee::query()
                 ->whereRaw('LOWER(username) = ?', [Str::lower($raw)])
                 ->first();
 
-            if ($employee && $employee->user_id) {
+            if ($employee?->user_id) {
                 $user = User::find($employee->user_id);
                 if ($user) {
-                    // attempt using the resolved email
-                    if (Auth::attempt(
-                        ['email' => Str::lower($user->email), 'password' => $data['password']],
-                        $remember
-                    )) {
-                        RateLimiter::clear($throttleKey);
-                        $request->session()->regenerate();
-                        return redirect()->intended(route('dashboard'));
-                    }
+                    $creds = ['email' => Str::lower($user->email), 'password' => $data['password']];
                 }
             }
         }
 
-        // Increment attempts on failure
+        if ($creds && Auth::attempt($creds, $remember)) {
+            RateLimiter::clear($throttleKey);
+            $request->session()->regenerate();
+            return redirect()->intended(route('dashboard'));
+        }
+
         RateLimiter::hit($throttleKey, 60); // decay in 60s
 
         return back()
@@ -108,12 +94,11 @@ class AuthController extends Controller
     }
 
     /**
-     * Handle registration (also creates/links Employee)
-     * Assumes employees.username is unique and users.email is unique.
+     * Register a user and link/create Employee
      */
     public function register(Request $request)
     {
-        // Allow a single "name" and split if needed
+        // Allow single "name" to auto-split
         $fullName = (string) $request->input('name', '');
         $request->merge([
             'first_name' => $request->input('first_name') ?: ($fullName ? explode(' ', $fullName, 2)[0] : null),
@@ -133,28 +118,24 @@ class AuthController extends Controller
         ]);
 
         DB::transaction(function () use ($validated) {
-            $email = Str::lower($validated['email']);
+            $email    = Str::lower($validated['email']);
             $username = Str::lower($validated['username']);
 
-            // 1) Create auth user
+            // Create auth user (password hashed by model cast)
             $user = User::create([
                 'name'     => trim(($validated['first_name'] ?? '').' '.($validated['last_name'] ?? '')),
                 'email'    => $email,
-                'password' => Hash::make($validated['password']),
+                'password' => $validated['password'], // 'hashed' cast will hash
                 'role'     => Str::lower($validated['role']),
             ]);
 
-            // 2) Link to existing employee (by email) or create new
+            // Link to existing employee by email or create
             $existing = Employee::whereRaw('LOWER(email) = ?', [$email])->first();
 
             if ($existing) {
-                if (!$existing->user_id) {
-                    $existing->user_id = $user->id;
-                }
-                if (!$existing->username) {
-                    $existing->username = $username;
-                }
-                $existing->status = $existing->status ?: 'active';
+                $existing->user_id  = $existing->user_id ?: $user->id;
+                $existing->username = $existing->username ?: $username;
+                $existing->status   = $existing->status ?: 'active';
                 $existing->save();
             } else {
                 Employee::create([
@@ -178,6 +159,7 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
         return redirect()->route('login')->with('success', 'You have been logged out.');
     }
 }

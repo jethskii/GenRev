@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\QueryException;
 use Carbon\Carbon;
 use App\Models\Product;
 use App\Models\Production;
@@ -133,25 +134,23 @@ class ProductionController extends Controller
                 ? Carbon::parse($validated['expiration_date'])
                 : $prodDate->copy()->addDays((int)($product->shelf_life_days ?? 7));
 
+            // Robust unique batch number (honor user input but suffix if needed)
             $batchNumber = !empty($validated['batch_number'])
-                ? $validated['batch_number']
-                : $this->nextBatchNumber($product);
+                ? $this->uniqueBatchNumber($product, $validated['batch_number'])
+                : $this->uniqueBatchNumber($product);
 
-            // === New: graceful handling of recipe/stock errors ===
+            // === Optional BOM consumption ===
             if (config('app.consume_materials', false)) {
-                // Ensure recipe exists before we start a transaction
                 if (!$this->productHasRecipe($product)) {
                     return $this->respondNeedsRecipe($request, $product);
                 }
 
                 try {
-                    DB::transaction(function () use ($product, $validated, $prodDate, $expiry, $batchNumber) {
-                        // This may throw on insufficient stock
+                    DB::transaction(function () use ($product, $validated, $prodDate, $expiry, &$batchNumber) {
                         $this->consumeMaterials($product, (float)$validated['current_inventory']);
                         $this->createBatchAndRecompute($product, $validated, $prodDate, $expiry, $batchNumber);
                     });
                 } catch (\RuntimeException $re) {
-                    // Most likely insufficient stock — surface as validation-like error
                     return $this->respondError($request, ['materials' => $re->getMessage()]);
                 }
             } else {
@@ -186,7 +185,6 @@ class ProductionController extends Controller
         } catch (\Throwable $e) {
             Log::error('Failed to save production', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
             ]);
 
             $msg = config('app.debug')
@@ -219,32 +217,42 @@ class ProductionController extends Controller
             : $prodDate->copy()->addDays((int)($product->shelf_life_days ?? 7));
 
         $batchNumber = !empty($validated['batch_number'])
-            ? $validated['batch_number']
-            : $this->nextBatchNumber($product);
+            ? $this->uniqueBatchNumber($product, $validated['batch_number'])
+            : $this->uniqueBatchNumber($product);
 
         try {
-            DB::transaction(function () use ($product, $validated, $prodDate, $expiry, $batchNumber, $request) {
+            DB::transaction(function () use ($product, $validated, $prodDate, $expiry, &$batchNumber, $request) {
                 if (config('app.consume_materials', false)) {
                     if (!$this->productHasRecipe($product)) {
-                        // Exit transaction early by throwing a custom exception we catch below
                         throw new \LogicException('__NEEDS_RECIPE__');
                     }
                     $this->consumeMaterials($product, (float)$validated['quantity']);
                 }
 
-                Production::create([
-                    'product_id'        => $product->id,
-                    'batch_number'      => $batchNumber,
-                    'forecasted_demand' => (float)($product->forecasted_demand ?? 0),
-                    'current_inventory' => (float)$validated['quantity'],
-                    'quantity'          => (float)$validated['quantity'],
-                    'unit_cost'         => (float)($validated['unit_cost'] ?? ($product->unit_cost ?? 0)),
-                    'production_date'   => $prodDate->toDateString(),
-                    'expiration_date'   => $expiry->toDateString(),
-                ]);
+                // Retry once on dup key (race with unique index)
+                for ($attempt = 1; $attempt <= 2; $attempt++) {
+                    try {
+                        Production::create([
+                            'product_id'        => $product->id,
+                            'batch_number'      => $batchNumber,
+                            'forecasted_demand' => (float)($product->forecasted_demand ?? 0),
+                            'current_inventory' => (float)$validated['quantity'],
+                            'quantity'          => (float)$validated['quantity'],
+                            'unit_cost'         => (float)($validated['unit_cost'] ?? ($product->unit_cost ?? 0)),
+                            'production_date'   => $prodDate->toDateString(),
+                            'expiration_date'   => $expiry->toDateString(),
+                        ]);
+                        break;
+                    } catch (QueryException $e) {
+                        if ($e->getCode() === '23000' && $attempt < 2) {
+                            $batchNumber = $this->uniqueBatchNumber($product);
+                            continue;
+                        }
+                        throw $e;
+                    }
+                }
             });
 
-            // recompute after transaction
             $this->recomputeProductBalance($product->id);
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -258,7 +266,6 @@ class ProductionController extends Controller
             }
             return $this->respondError($request, ['materials' => 'Recipe check failed.']);
         } catch (\RuntimeException $re) {
-            // Insufficient stock most likely
             return $this->respondError($request, ['materials' => $re->getMessage()]);
         } catch (\Throwable $e) {
             Log::error('Failed to save production order', ['error' => $e->getMessage()]);
@@ -275,7 +282,8 @@ class ProductionController extends Controller
         $product = Product::findOrFail($id);
         $orders  = Production::where('product_id', $id)->orderByDesc('production_date')->orderByDesc('id')->get();
 
-        $nextBatchNumber  = $this->nextBatchNumber($product);
+        // Show a robust next default in the UI
+        $nextBatchNumber  = $this->uniqueBatchNumber($product);
         $defaultProdDate  = now()->toDateString();
         $defaultExpiry    = Carbon::parse($defaultProdDate)->addDays((int)($product->shelf_life_days ?? 7))->toDateString();
         $defaultUnitPrice = $this->defaultUnitPriceFromSales($product);
@@ -318,7 +326,6 @@ class ProductionController extends Controller
 
     public function destroy(Production $production)
     {
-        // protect against deleting batches that have linked sales
         if (Sale::where('production_id', $production->id)->exists()) {
             if (request()->ajax() || request()->wantsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Cannot delete this batch; it has linked sales.'], 409);
@@ -329,7 +336,6 @@ class ProductionController extends Controller
         $productId = (int)$production->product_id;
         $production->delete();
 
-        // recompute product stock after deletion
         $this->recomputeProductBalance($productId);
 
         if (request()->ajax() || request()->wantsJson()) {
@@ -379,7 +385,6 @@ class ProductionController extends Controller
 
         $latest->delete();
 
-        // recompute after deletion
         $this->recomputeProductBalance((int)$product->id);
 
         $freshProduct = Product::find($product->id);
@@ -460,7 +465,7 @@ class ProductionController extends Controller
 
     /* ================================= HELPERS ================================= */
 
-    /** Centralized “needs recipe” response */
+    /* ============================ Feedback / Routing ============================ */
     private function respondNeedsRecipe(Request $request, Product $product)
     {
         $msg = "No recipe set for {$product->product_name}. Add materials first.";
@@ -478,6 +483,7 @@ class ProductionController extends Controller
         return redirect()->to($redirect)->with('error', $msg);
     }
 
+    /* ================================ Sorting ================================ */
     private function sortProducts($products, string $sort)
     {
         switch ($sort) {
@@ -505,15 +511,65 @@ class ProductionController extends Controller
         }
     }
 
-    private function nextBatchNumber(Product $product): string
+    /* ============================== Batch Numbers ============================== */
+    /**
+     * Return a unique batch number for a product.
+     * If $preferred is provided and already taken, we append -01, -02, ... until free.
+     * If not provided, we generate PREFIX-YYYYMMDD-#### (#### increments per day).
+     */
+    private function uniqueBatchNumber(Product $product, ?string $preferred = null): string
     {
-        $prefix = $product->product_code ? strtoupper($product->product_code) : 'B';
-        $last   = Production::where('product_id', $product->id)->orderByDesc('id')->value('batch_number');
+        $normalize = fn(string $v) => mb_strtoupper(preg_replace('/\s+/', ' ', trim($v)));
+
+        if ($preferred && ($preferred = trim($preferred)) !== '') {
+            $candidate = $normalize($preferred);
+            if (! $this->batchExists($product->id, $candidate)) {
+                return $candidate;
+            }
+            $stem = $candidate;
+            $i = 0;
+            do {
+                $i++;
+                $candidate = sprintf('%s-%02d', $stem, $i);
+            } while ($this->batchExists($product->id, $candidate));
+            return $candidate;
+        }
+
+        $prefix = $product->product_code
+            ? strtoupper(preg_replace('/[^A-Z0-9]/i', '', (string)$product->product_code))
+            : (strlen((string)$product->product_name)
+                ? strtoupper(substr(preg_replace('/\s+/', '', (string)$product->product_name), 0, 3))
+                : 'B');
+
+        $day  = now()->format('Ymd');
+        $stem = $prefix . '-' . $day;
+
+        $last = Production::where('product_id', $product->id)
+            ->where('batch_number', 'like', $stem.'-%')
+            ->orderByDesc('id')
+            ->value('batch_number');
+
         $n = 0;
-        if ($last && preg_match('/(\d+)\s*$/', (string)$last, $m)) $n = (int)$m[1];
-        return $prefix . '-' . str_pad((string)($n + 1), 4, '0', STR_PAD_LEFT);
+        if ($last && preg_match('/-(\d+)\s*$/', (string)$last, $m)) {
+            $n = (int)$m[1];
+        }
+
+        do {
+            $n++;
+            $candidate = sprintf('%s-%04d', $stem, $n);
+        } while ($this->batchExists($product->id, $candidate));
+
+        return $candidate;
     }
 
+    private function batchExists(int $productId, string $batch): bool
+    {
+        return Production::where('product_id', $productId)
+            ->where('batch_number', $batch)
+            ->exists();
+    }
+
+    /* ============================== Pricing Helper ============================= */
     private function defaultUnitPriceFromSales(Product $product): float
     {
         $latest = Sale::where('product_id', $product->id)
@@ -523,6 +579,7 @@ class ProductionController extends Controller
         return (float) ($latest ?? $product->price ?? 0);
     }
 
+    /* ============================ Stock Recompute ============================== */
     private function recomputeProductBalance(int $productId): void
     {
         $produced = (float) Production::where('product_id', $productId)->sum('quantity');
@@ -537,6 +594,7 @@ class ProductionController extends Controller
         ]);
     }
 
+    /* ============================== KPI Snapshot ============================== */
     private function totalsSnapshot(): array
     {
         $products = Product::all();
@@ -548,6 +606,7 @@ class ProductionController extends Controller
         return [$forecastedDemand, $actualInventory, $shortfall, $recommendedProduction];
     }
 
+    /* ============================== Error Helpers ============================== */
     private function respondError(Request $request, array $errors)
     {
         if ($request->ajax() || $request->wantsJson()) {
@@ -556,12 +615,14 @@ class ProductionController extends Controller
         return back()->withErrors($errors)->withInput();
     }
 
+    /* =========================== Product Column Filter ========================= */
     private function filterProductColumns(array $attrs): array
     {
         $columns = Schema::getColumnListing('products');
         return array_intersect_key($attrs, array_flip($columns));
     }
 
+    /* ======================= Materials Consumption (BOM) ====================== */
     /**
      * Consume recipe materials for a batch.
      * Throws \RuntimeException on insufficient stock; caller converts that to 422/redirect.
@@ -605,26 +666,40 @@ class ProductionController extends Controller
         }
     }
 
+    /* ============================ Batch Creation ============================= */
     private function createBatchAndRecompute(Product $product, array $validated, Carbon $prodDate, Carbon $expiry, string $batchNumber): void
     {
         $qty = isset($validated['current_inventory'])
             ? (float)$validated['current_inventory']
             : (float)($validated['quantity'] ?? 0);
 
-        Production::create([
-            'product_id'        => $product->id,
-            'batch_number'      => $batchNumber,
-            'forecasted_demand' => (float)($validated['forecasted_demand'] ?? ($product->forecasted_demand ?? 0)),
-            'current_inventory' => $qty,
-            'quantity'          => $qty,
-            'unit_cost'         => (float)($validated['unit_cost'] ?? ($product->unit_cost ?? 0)),
-            'production_date'   => $prodDate->toDateString(),
-            'expiration_date'   => $expiry->toDateString(),
-        ]);
+        // Retry once on duplicate key (race with unique index)
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            try {
+                Production::create([
+                    'product_id'        => $product->id,
+                    'batch_number'      => $batchNumber,
+                    'forecasted_demand' => (float)($validated['forecasted_demand'] ?? ($product->forecasted_demand ?? 0)),
+                    'current_inventory' => $qty,
+                    'quantity'          => $qty,
+                    'unit_cost'         => (float)($validated['unit_cost'] ?? ($product->unit_cost ?? 0)),
+                    'production_date'   => $prodDate->toDateString(),
+                    'expiration_date'   => $expiry->toDateString(),
+                ]);
+                break;
+            } catch (QueryException $e) {
+                if ($e->getCode() === '23000' && $attempt < 2) {
+                    $batchNumber = $this->uniqueBatchNumber($product);
+                    continue;
+                }
+                throw $e;
+            }
+        }
 
         $this->recomputeProductBalance((int)$product->id);
     }
 
+    /* =========================== Card Media Helpers =========================== */
     private function enrichProductsForCards($products)
     {
         return $products->map(function ($p) { $this->attachCardMedia($p); return $p; });

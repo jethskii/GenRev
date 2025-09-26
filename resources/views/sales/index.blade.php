@@ -1,11 +1,12 @@
-{{-- resources/views/sales/index.blade.php --}}
+{{-- resources/views/sales/index.blade.php (LIGHT THEME) --}}
 @php
     /** @var \Illuminate\Support\Collection|\App\Models\Sale[] $sales */
+    // Light-theme status chips
     $statusColors = [
-        'Paid'      => 'bg-[#047705]/15 text-[#91F0A6] border-[#047705]/30',
-        'Completed' => 'bg-sky-600/15 text-sky-300 border-sky-700/40',
-        'Pending'   => 'bg-[#EDD100]/15 text-[#EDD100] border-[#EDD100]/30',
-        'Cancelled' => 'bg-rose-600/15 text-rose-300 border-rose-700/40',
+        'Paid'      => 'bg-green-50 text-green-800 border-green-200',
+        'Completed' => 'bg-blue-50 text-blue-800 border-blue-200',
+        'Pending'   => 'bg-amber-50 text-amber-800 border-amber-200',
+        'Cancelled' => 'bg-rose-50 text-rose-800 border-rose-200',
     ];
 
     // Optional data from controller (safe fallbacks here)
@@ -39,96 +40,88 @@
 
 @section('head')
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  body, p, ul, li, a, button { font-family: 'Jost', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  .liquid-card{
-    position:relative; overflow:hidden; border-radius:16px;
-    background:linear-gradient(135deg,#1F1E1E 0%, #001C00 100%);
-    border:.5px solid rgba(255,255,255,.2);
-    box-shadow:0 8px 32px rgba(0,28,0,.35);
-    backdrop-filter:blur(8px);
-  }
-  .liquid-card::before{
-    content:''; position:absolute; inset:0; pointer-events:none;
-    background:linear-gradient(45deg, rgba(4,119,5,.10), rgba(237,209,0,.08), rgba(4,119,5,.10));
-    animation:cardShine 8s ease infinite;
-  }
-  @keyframes cardShine {0%{opacity:.35} 50%{opacity:.15} 100%{opacity:.35}}
-  .liquid-input{ background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.2); color:#fff; }
-  .liquid-input::placeholder{ color:rgba(255,255,255,.6) }
-  .liquid-input:focus{ outline:none; border-color:#047705; box-shadow:0 0 0 2px rgba(4,119,5,.3); }
-  .chip{ border:1px solid; padding:.2rem .6rem; border-radius:999px; font-size:.72rem; }
-  .btn-primary{
-    background:linear-gradient(90deg,#047705 0%, #0aad0a 100%);
-    color:#fff; border:1px solid rgba(255,255,255,.15);
-    border-radius:12px; padding:.5rem 1rem; transition:.2s;
-    box-shadow:0 4px 15px rgba(4,119,5,.35);
-  }
-  .btn-primary:hover{ transform:translateY(-1px); }
-  .btn-ghost{ border:1px solid rgba(255,255,255,.15); color:#f8fafc; border-radius:10px; padding:.4rem .8rem; background:rgba(255,255,255,.03); }
-  .table-wrap{ border:1px solid rgba(255,255,255,.15); border-radius:14px; overflow:hidden; }
-  thead th{ background:rgba(255,255,255,.05); color:#cbd5e1; font-weight:600; }
-  tbody td{ color:#e5e7eb; }
-</style>
-
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+<style>
+  /* Typography + light utilities just for this page */
+  body, p, ul, li, a, button { font-family: 'Jost', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .light-card{
+    background:#fff; border:1px solid #e5e7eb; border-radius:16px;
+    box-shadow: 0 8px 18px rgba(17,24,39,.04);
+  }
+  .input-light{
+    background:#fff; border:1px solid #e5e7eb; color:#111827; border-radius:12px; padding:.5rem .75rem;
+  }
+  .input-light::placeholder{ color:#9ca3af; }
+  .input-light:focus{ outline:none; box-shadow:0 0 0 2px rgba(59,130,246,.25); border-color:#93c5fd; }
+
+  .chip{
+    border:1px solid; padding:.25rem .6rem; border-radius:999px; font-size:.72rem; font-weight:600;
+  }
+
+  /* Table */
+  .table-wrap{ border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; }
+  thead th{ background:#f9fafb; color:#374151; font-weight:700; }
+  tbody td{ color:#111827; }
+</style>
 @endsection
 
 @section('content')
-<div class="px-6 py-6">
+<div class="px-6 py-6 text-gray-900">
   {{-- HEADER --}}
   <div class="mb-4">
-    <h1 class="text-2xl font-semibold text-white">Sales Overview</h1>
-    <p class="text-sm text-gray-400">3D bar + donut breakdown above, detailed records below.</p>
+    <h1 class="text-2xl font-bold">Sales Overview</h1>
+    <p class="text-sm text-gray-500">Trends and product breakdown at a glance.</p>
   </div>
 
   {{-- KPIs --}}
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-    <div class="liquid-card p-4">
-      <p class="text-gray-400 text-sm">Annual Revenue</p>
-      <h2 class="text-2xl font-semibold text-white">₱ {{ number_format($annualRevenue, 2) }}</h2>
+    <div class="light-card p-4">
+      <p class="text-gray-500 text-sm">Annual Revenue</p>
+      <h2 class="text-2xl font-semibold">₱ {{ number_format($annualRevenue, 2) }}</h2>
     </div>
-    <div class="liquid-card p-4">
-      <p class="text-gray-400 text-sm">Monthly Revenue</p>
-      <h2 class="text-2xl font-semibold text-white">₱ {{ number_format($monthlyRevenue, 2) }}</h2>
+    <div class="light-card p-4">
+      <p class="text-gray-500 text-sm">Monthly Revenue</p>
+      <h2 class="text-2xl font-semibold">₱ {{ number_format($monthlyRevenue, 2) }}</h2>
     </div>
-    <div class="liquid-card p-4">
-      <p class="text-gray-400 text-sm">Orders</p>
-      <h2 class="text-2xl font-semibold text-white">{{ $orderCount }}</h2>
+    <div class="light-card p-4">
+      <p class="text-gray-500 text-sm">Orders</p>
+      <h2 class="text-2xl font-semibold">{{ $orderCount }}</h2>
     </div>
   </div>
 
-  {{-- CHARTS: 3D Bar + Donut --}}
+  {{-- CHARTS: Bar + Donut (light) --}}
   <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
-    <div class="liquid-card p-5 xl:col-span-2">
+    <div class="light-card p-5 xl:col-span-2">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-xl font-semibold text-white">Sales Report (12 months)</h2>
-        <div class="text-sm text-gray-300">{{ now()->format('M d, Y') }}</div>
+        <h2 class="text-xl font-semibold">Sales Report (12 months)</h2>
+        <div class="text-sm text-gray-500">{{ now()->format('M d, Y') }}</div>
       </div>
       <div id="salesBar3D" class="w-full" style="height: 340px;"></div>
     </div>
 
-    <div class="liquid-card p-5">
+    <div class="light-card p-5">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-xl font-semibold text-white">Top Products (Revenue)</h2>
-        <div class="text-sm text-gray-300">Last 90 days</div>
+        <h2 class="text-xl font-semibold">Top Products (Revenue)</h2>
+        <div class="text-sm text-gray-500">Last 90 days</div>
       </div>
       <div id="topProductsDonut" class="w-full" style="height: 340px;"></div>
-      <ul id="topProductsLegend" class="mt-3 space-y-1 text-sm text-gray-300"></ul>
+      <ul id="topProductsLegend" class="mt-3 space-y-1 text-sm text-gray-700"></ul>
     </div>
   </div>
 
   {{-- SALES TABLE --}}
-  <div class="liquid-card">
+  <div class="light-card">
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 px-5 py-4">
-      <h2 class="text-xl font-semibold text-white">Sales</h2>
+      <h2 class="text-xl font-semibold">Sales</h2>
       <div class="flex flex-wrap items-center gap-3">
         <div class="relative">
-          <input id="salesSearch" type="text" placeholder="Search invoice / product / status…" class="w-64 rounded-xl liquid-input px-3 py-2 pr-8">
-          <span class="absolute right-3 top-2.5 text-white/60">⌕</span>
+          <input id="salesSearch" type="text" placeholder="Search invoice / product / status…" class="w-64 input-light pr-8">
+          <span class="absolute right-3 top-2.5 text-gray-400">⌕</span>
         </div>
-        <input id="dateFilter" type="date" class="rounded-xl liquid-input px-3 py-2">
-        <button type="button" onclick="toggleAddSaleModal(true)" class="btn-primary">+ Add New Sale</button>
+        <input id="dateFilter" type="date" class="input-light">
+        {{-- Primary = RED, Secondary = BLUE/GREEN (from mainlayout classes) --}}
+        <button type="button" onclick="toggleAddSaleModal(true)" class="btn btn-primary">+ Add New Sale</button>
       </div>
     </div>
 
@@ -136,7 +129,7 @@
       <div class="table-wrap">
         <table class="min-w-full border-collapse">
           <thead>
-            <tr>
+            <tr class="text-sm">
               <th class="px-4 py-3 text-left">Invoice</th>
               <th class="px-4 py-3 text-left">Product</th>
               <th class="px-4 py-3 text-left">Date</th>
@@ -147,7 +140,7 @@
               <th class="px-4 py-3 text-center">Actions</th>
             </tr>
           </thead>
-          <tbody id="salesTableBody" class="divide-y divide-white/10">
+          <tbody id="salesTableBody" class="divide-y divide-gray-200">
             @forelse($sales as $row)
               @php
                 $pname   = $row->display_product ?? ($row->product ?? optional($row->productRef)->product_name);
@@ -157,7 +150,7 @@
                 $tot     = (float) ($row->total_price ?? $row->total ?? ($qty * $unit));
                 $invoice = $row->invoice_number ?? $row->order_number;
               @endphp
-              <tr class="hover:bg-white/5 transition-colors">
+              <tr class="hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-3 whitespace-nowrap">{{ $invoice }}</td>
                 <td class="px-4 py-3">{{ $pname }}</td>
                 <td class="px-4 py-3">{{ $date ? \Carbon\Carbon::parse($date)->format('Y-m-d') : '' }}</td>
@@ -165,30 +158,30 @@
                 <td class="px-4 py-3 text-right">₱ {{ number_format($unit, 2) }}</td>
                 <td class="px-4 py-3 text-right">₱ {{ number_format($tot, 2) }}</td>
                 <td class="px-4 py-3">
-                  @php $cls = $statusColors[$row->status] ?? 'bg-white/10 text-white/80 border-white/20'; @endphp
+                  @php $cls = $statusColors[$row->status] ?? 'bg-gray-100 text-gray-800 border-gray-200'; @endphp
                   <span class="chip {{ $cls }} border">{{ $row->status ?? 'Pending' }}</span>
                 </td>
                 <td class="px-4 py-3">
                   <div class="flex items-center justify-center gap-2">
-                    <a href="{{ route('sales.receipt', $row) }}" class="btn-ghost">Receipt</a>
-                    <a href="{{ route('sales.edit', $row) }}" class="btn-ghost">Edit</a>
+                    <a href="{{ route('sales.receipt', $row) }}" class="btn btn-secondary-blue">Receipt</a>
+                    <a href="{{ route('sales.edit', $row) }}" class="btn btn-secondary-green">Edit</a>
                     <form action="{{ route('sales.destroy', $row) }}" method="POST" onsubmit="return confirm('Delete this sale?')" class="inline">
                       @csrf @method('DELETE')
-                      <button class="btn-ghost border-rose-800/60 text-rose-300 hover:bg-rose-900/20">Delete</button>
+                      <button class="btn btn-ghost text-rose-700 border border-rose-200 hover:bg-rose-50">Delete</button>
                     </form>
                   </div>
                 </td>
               </tr>
             @empty
               <tr>
-                <td colspan="8" class="px-4 py-6 text-center text-white/70">No sales yet.</td>
+                <td colspan="8" class="px-4 py-6 text-center text-gray-600">No sales yet.</td>
               </tr>
             @endforelse
           </tbody>
         </table>
       </div>
 
-      <div class="flex items-center justify-between text-sm text-white/70 mt-4">
+      <div class="flex items-center justify-between text-sm text-gray-600 mt-4">
         <div>
           <span class="mr-2">INV-</span>{{ now()->format('Ymd') }}<span class="mx-2">—</span>{{ $nextInvoice ?? '' }}
         </div>
@@ -198,7 +191,7 @@
   </div>
 </div>
 
-{{-- Add Sale Modal --}}
+{{-- Add Sale Modal (kept via partial, no style changes needed) --}}
 @include('sales.partials.add-sale-modal', [
   'products' => $products ?? null,
   'statusOptions' => $statusOptions ?? ['Pending','Completed','Cancelled','Paid'],
@@ -243,7 +236,17 @@
     }
   };
 
-  // ----- 3D BAR -----
+  // Helper: read CSS vars from :root/body so charts match the layout theme
+  function cssVar(name, fallback){
+    const v = getComputedStyle(document.body).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  const C_RED    = cssVar('--chart-1', '#ef4444');
+  const C_GREEN  = cssVar('--chart-2', '#22c55e');
+  const C_YELLOW = cssVar('--chart-3', '#f59e0b');
+  const C_BLUE   = cssVar('--chart-4', '#3b82f6');
+
+  // ----- BAR (12 months) -----
   (function(){
     const el = document.querySelector('#salesBar3D');
     if (!el || !window.ApexCharts) return;
@@ -253,28 +256,29 @@
 
     const options = {
       chart: {
-        type:'bar', height:340, toolbar:{show:false}, foreColor:'#cbd5e1', background:'transparent',
-        dropShadow:{enabled:true, top:10,left:8, blur:8, opacity:.35},
-        animations:{enabled:true, easing:'easeinout', speed:700}
+        type:'bar', height:340, toolbar:{show:false}, foreColor:'#374151', background:'transparent',
+        animations:{enabled:true, easing:'easeinout', speed:600}
       },
-      grid:{borderColor:'rgba(255,255,255,.12)', strokeDashArray:4, padding:{left:10,right:10}},
+      grid:{borderColor:'#e5e7eb', strokeDashArray:4, padding:{left:10,right:10}},
       plotOptions:{ bar:{
         columnWidth:'45%', borderRadius:8, borderRadiusApplication:'around',
-        dataLabels:{position:'top'}, colors:{ranges:[{from:0,to:Number.MAX_VALUE,color:'#91F0A6'}]}
+        dataLabels:{position:'top'},
       }},
+      colors:[C_BLUE], // blue primary for bars
       dataLabels:{enabled:false},
-      stroke:{show:true, width:6, colors:['rgba(0,0,0,0)']},
+      stroke:{show:false},
       series:[{name:'Revenue', data: totals}],
-      xaxis:{categories:months, labels:{rotate:-15, style:{colors:'#cbd5e1'}},
-             axisBorder:{color:'rgba(255,255,255,.2)'}, axisTicks:{color:'rgba(255,255,255,.2)'}},
-      yaxis:{labels:{formatter:(v)=>'₱ '+Number(v).toLocaleString(), style:{colors:'#cbd5e1'}}},
-      tooltip:{theme:'dark', y:{formatter:(v)=>'₱ '+Number(v).toLocaleString()}},
-      fill:{type:'gradient', gradient:{shade:'dark', type:'vertical', shadeIntensity:.35,
-            gradientToColors:['#047705'], inverseColors:false, opacityFrom:.95, opacityTo:.9, stops:[0,60,100]}},
-      states:{hover:{filter:{type:'darken',value:.6}}, active:{filter:{type:'darken',value:.8}}}
+      xaxis:{
+        categories:months,
+        labels:{rotate:-15, style:{colors:'#374151'}},
+        axisBorder:{color:'#e5e7eb'}, axisTicks:{color:'#e5e7eb'}
+      },
+      yaxis:{labels:{formatter:(v)=>'₱ '+Number(v).toLocaleString(), style:{colors:'#374151'}}},
+      tooltip:{theme:'light', y:{formatter:(v)=>'₱ '+Number(v).toLocaleString()}},
+      fill:{type:'gradient', gradient:{shade:'light', type:'vertical',
+            gradientToColors:[C_GREEN], opacityFrom:.95, opacityTo:.9, stops:[0,60,100]}}
     };
 
-    el.style.filter = 'drop-shadow(0 12px 24px rgba(0,0,0,.35))';
     new ApexCharts(el, options).render();
   })();
 
@@ -286,14 +290,17 @@
     const labels = @json($donutLabels);
     const values = @json($donutValues);
 
+    const colors = [C_RED, C_GREEN, C_YELLOW, C_BLUE, '#60a5fa', '#34d399']; // keep mix if >4 slices
+
     const chart = new ApexCharts(el, {
-      chart:{type:'donut', height:340, foreColor:'#cbd5e1', background:'transparent'},
+      chart:{type:'donut', height:340, foreColor:'#374151', background:'transparent'},
       series: values, labels: labels, legend:{show:false},
-      tooltip:{theme:'dark', y:{formatter:(v)=>'₱ '+Number(v).toLocaleString()}},
+      colors: colors,
+      tooltip:{theme:'light', y:{formatter:(v)=>'₱ '+Number(v).toLocaleString()}},
       dataLabels:{enabled:true, formatter:(val,opts)=>`${opts.w.globals.labels[opts.seriesIndex]}`},
       plotOptions:{ pie:{ donut:{ size:'68%', labels:{ show:true, total:{ show:true, label:'Total',
         formatter:(w)=>{ const sum=w.globals.seriesTotals.reduce((a,b)=>a+b,0); return '₱ '+Number(sum).toLocaleString(); }}}}} },
-      fill:{type:'gradient'}
+      stroke:{colors:['#ffffff']}
     });
     chart.render();
 

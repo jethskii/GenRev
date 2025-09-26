@@ -2,121 +2,143 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>GenRev Admin Dashboard</title>
 
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
+
   <!-- Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inria+Sans:wght@300;400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inria+Sans:wght@300;400;700&display=swap" rel="stylesheet">
 
   <style>
-    /* =====================  Brand Palette  ===================== */
+    /* ===================== Light Theme Tokens ===================== */
     :root{
-      --olive:  #6F6F4B;  /* Olive Branch */
-      --blood:  #D64B34;  /* Blood Orange */
-      --cab:    #702C37;  /* Cab Sauv */
-      --butter: #F2B03F;  /* Golden Butter */
-      --beige:  #E8D4B9;  /* Actual Beige */
+      /* Page + Surfaces */
+      --page:#f7f8fb;            /* off-white */
+      --nav:#ffffff;             /* white navbar */
+      --card:#ffffff;            /* white cards */
+      --line:#e5e7eb;            /* light border */
+      --shadow:0 8px 20px rgba(17,24,39,.06);
 
-      /* Derived tokens */
-      --navbar: linear-gradient(135deg, rgba(112,44,55,.98) 0%, rgba(111,111,75,.95) 80%); /* cab → olive */
-      --sidebar: rgba(39,29,33,.6); /* cab tinted glass */
-      --sidebar-hover: rgba(242,176,63,.16); /* butter glow */
-      --sidebar-active: var(--butter); /* active pill */
+      /* Text */
+      --ink:#111827;             /* primary text */
+      --muted:#6b7280;           /* secondary text */
 
-      --panel: rgba(255,255,255,.05);
-      --dark-line: rgba(255,255,255,.16);
+      /* Brand accents (spec) */
+      --red:#ef4444;             /* primary */
+      --green:#10b981;           /* secondary */
+      --blue:#2563eb;            /* secondary */
+      --yellow:#f59e0b;          /* charts */
 
-      --text: #F7F1E8;            /* light ink (beige-tint) */
-      --muted: rgba(232,212,185,.78);
-
-      --shadow: 0 10px 26px rgba(0,0,0,.45);
+      /* Subtles */
+      --hover:#f3f4f6;           /* hover bg */
+      --chip:#f9fafb;            /* chip bg */
     }
 
     body{
+      background:var(--page);
+      color:var(--ink);
       font-family:'Inria Sans',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      color:var(--text);
-      background:
-        radial-gradient(80rem 60rem at 10% 0%, rgba(242,176,63,.08), transparent 60%),
-        radial-gradient(60rem 50rem at 90% 20%, rgba(214,75,52,.08), transparent 60%),
-        linear-gradient(135deg, #22161A 0%, #0E0D09 100%) fixed!important;
-      min-height:100vh;overflow-x:hidden;
+      min-height:100vh; overflow-x:hidden;
     }
 
-    /* Liquid film */
-    body::before{
-      content:'';position:fixed;inset:-50% -50%;width:200%;height:200%;
-      background:linear-gradient(45deg,
-        rgba(242,176,63,.12) 0%,
-        rgba(111,111,75,.10) 25%,
-        rgba(112,44,55,.12) 50%,
-        rgba(214,75,52,.10) 75%,
-        rgba(232,212,185,.10) 100%);
-      transform:rotate(30deg);
-      animation:liquidFlow 16s linear infinite;z-index:-1;opacity:.55;
+    /* ---- Layout shells ---- */
+    .nav-surface{
+      background:var(--nav);
+      border-bottom:1px solid var(--line);
+      box-shadow:var(--shadow);
     }
-    @keyframes liquidFlow{
-      0%{transform:rotate(30deg) translate(-10%,-10%)}
-      50%{transform:rotate(30deg) translate(10%,10%)}
-      100%{transform:rotate(30deg) translate(-10%,-10%)}
+    .sidebar{
+      background:#ffffff;
+      border-right:1px solid var(--line);
+    }
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:16px;
+      box-shadow:var(--shadow);
     }
 
-    .glass{
-      background:var(--sidebar)!important;
-      backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-      border:1px solid var(--dark-line)!important;
-      box-shadow:var(--shadow)!important;color:var(--text)
+    /* ---- Sidebar links ---- */
+    .side-link{
+      display:block; padding:.75rem 1.25rem; border-radius:999px 0 0 999px; transition:.16s;
+      color:var(--ink);
     }
-    .bg-navbar{
-      background:var(--navbar)!important;border-bottom:.5px solid var(--dark-line);
-      box-shadow:0 8px 26px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06) inset
+    .side-link:hover{ background:var(--hover); }
+    .side-link--active{
+      background:linear-gradient(90deg, rgba(16,185,129,.12) 0%, rgba(16,185,129,.10) 100%);
+      border-left:3px solid var(--green);
+      font-weight:700;
     }
-    .brand-title{font-family:'Kalam',cursive;letter-spacing:.02em;text-shadow:-2px 1px 0 rgba(242,176,63,.65)}
-    .text-muted{color:var(--muted)}
-    .section-liquid-shine{position:relative}
-    .section-liquid-shine::after{
-      content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-      background:linear-gradient(45deg,rgba(242,176,63,.10),rgba(214,75,52,.08),rgba(111,111,75,.10));
-      animation:cardShine 8s ease infinite
-    }
-    @keyframes cardShine{0%{opacity:.3}50%{opacity:.12}100%{opacity:.3}}
 
-    /* Mobile sidebar slide-in */
-    #sidebar{transition:transform .25s ease}
-    #sidebar.open{transform:translateX(0)}
-    @media(max-width:1024px){ #sidebar{transform:translateX(-100%);} }
+    /* ---- Buttons ---- */
+    .btn{ display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+          padding:.65rem 1rem; border-radius:12px; border:1px solid transparent; font-weight:700; }
+    .btn-primary{ background:var(--red); color:#fff; border-color:var(--red); }
+    .btn-primary:hover{ filter:brightness(.97); }
+    .btn-ghost{ background:#fff; border:1px solid var(--line); color:var(--ink); }
+    .btn-ghost:hover{ background:var(--hover); }
+    .btn-green{ background:var(--green); color:#fff; border-color:var(--green); }
+    .btn-blue{ background:var(--blue); color:#fff; border-color:var(--blue); }
 
-    /* Inputs accent to brand */
-    .accent-brand{ accent-color: var(--butter); }
-    .accent-wine{ accent-color: var(--cab); }
+    /* ---- Inputs ---- */
+    .input{
+      width:100%; padding:.65rem .9rem; border-radius:12px;
+      background:#fff; border:1px solid var(--line); color:var(--ink);
+      transition:border-color .15s, box-shadow .15s, transform .12s;
+    }
+    .input::placeholder{ color:#9ca3af; }
+    .input:hover{ border-color:#e2e8f0; }
+    .input:focus{ outline:0; border-color:#93c5fd; box-shadow:0 0 0 2px rgba(37,99,235,.18); transform:translateY(-1px); }
+
+    /* ---- Chips / Badges ---- */
+    .chip{
+      display:inline-flex; align-items:center; gap:.4rem;
+      padding:.32rem .6rem; border-radius:999px; font-size:.72rem; font-weight:700;
+      background:var(--chip); border:1px solid var(--line); color:var(--ink);
+    }
+
+    /* ---- Tables ---- */
+    table{ border-collapse:separate; border-spacing:0; width:100%; }
+    thead th{
+      background:#f9fafb; color:#374151; font-weight:800;
+      border-bottom:1px solid var(--line);
+    }
+    tbody td{ color:var(--ink); }
+    tbody tr:nth-child(even){ background:#fafafa; }
+    tbody tr:hover{ background:var(--hover); }
+    th, td{ border-color:var(--line)!important; }
+
+    /* ---- Brand mark ---- */
+    .brand-title{ font-family:'Kalam',cursive; letter-spacing:.02em; color:var(--ink); }
+    .muted{ color:var(--muted); }
   </style>
 </head>
 <body>
-  <div class="flex h-screen overflow-hidden">
+  <div class="flex min-h-screen">
+
     <!-- Sidebar -->
-    <aside id="sidebar" class="w-64 glass flex-shrink-0 flex flex-col">
-      <div class="p-6 text-2xl font-bold tracking-wide border-b border-[var(--dark-line)] flex justify-between items-center">
-        GenRev
+    <aside id="sidebar" class="sidebar w-64 flex-shrink-0 flex flex-col">
+      <div class="p-6 text-2xl font-bold tracking-wide border-b border-[var(--line)] flex justify-between items-center">
+        <span class="brand-title">GenRev</span>
         <button id="sidebarClose" class="lg:hidden text-xl font-bold">&times;</button>
       </div>
 
-      <!-- User Info -->
+      <!-- User -->
       <div class="px-6 pt-4 pb-2">
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold"
-               style="background:var(--sidebar-active); color:#2B1C12;">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white" style="background:var(--green);">
             {{ Auth::check() ? strtoupper(substr(Auth::user()->name, 0, 1)) : '?' }}
           </div>
           <div class="text-sm">
             <p class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</p>
-            <p class="text-xs text-muted capitalize">{{ Auth::check() && Auth::user()->role ? Auth::user()->role : 'Admin' }}</p>
+            <p class="text-xs muted capitalize">{{ Auth::check() && Auth::user()->role ? Auth::user()->role : 'Admin' }}</p>
           </div>
         </div>
       </div>
 
-      <!-- Navigation -->
+      <!-- Nav -->
       <nav class="flex-1 mt-4 space-y-1 text-sm font-medium">
         @php
           $routes = [
@@ -131,59 +153,54 @@
         @endphp
         @foreach($routes as $route => $label)
           <a href="{{ route($route) }}"
-             class="block px-6 py-3 rounded-r-full transition-all duration-150"
-             style="
-               color: var(--text);
-               background: {{ request()->routeIs($route . '*') ? 'var(--sidebar-active)' : 'transparent' }};
-               color: {{ request()->routeIs($route . '*') ? '#2B1C12' : 'var(--text)' }};
-             "
-             onmouseover="this.style.background='var(--sidebar-hover)'"
-             onmouseout="this.style.background='{{ request()->routeIs($route . '*') ? 'var(--sidebar-active)' : 'transparent' }}'">
+             class="side-link {{ request()->routeIs($route.'*') ? 'side-link--active' : '' }}">
             {{ $label }}
           </a>
         @endforeach
       </nav>
 
-      <div class="p-6 text-xs text-muted border-t border-[var(--dark-line)]">© 2025 GenRev</div>
+      <div class="p-6 text-xs muted border-t border-[var(--line)]">© {{ now()->year }} GenRev</div>
     </aside>
 
-    <!-- Main Content -->
+    <!-- Main -->
     <div class="flex flex-col flex-1 overflow-hidden">
-      <header class="bg-navbar text-white px-6 py-4 flex justify-between items-center shadow-md">
-        <div class="flex items-center space-x-4">
+
+      <!-- Top Nav -->
+      <header class="nav-surface px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center gap-4">
           <button id="sidebarToggle" class="lg:hidden text-2xl">&#9776;</button>
           <h1 class="text-xl font-bold tracking-wide brand-title">Dashboard Overview</h1>
         </div>
 
-        <!-- Controls -->
         <div class="flex flex-wrap items-center gap-4">
+          <!-- Master 3D toggle -->
           <label class="flex items-center gap-2 text-xs">
-            <input id="toggle3D" type="checkbox" checked class="sr-only peer accent-brand">
-            <span class="px-2 py-1 rounded-full glass border border-white/15">
-              <span class="inline-block w-2 h-2 rounded-full align-middle mr-1 peer-checked:bg-[var(--butter)] bg-[var(--blood)]"></span>
+            <input id="toggle3D" type="checkbox" checked class="sr-only">
+            <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">
+              <span class="inline-block w-2 h-2 rounded-full align-middle mr-1 bg-[var(--red)]" id="dot3d"></span>
               3D ON/OFF
             </span>
           </label>
 
           <label class="flex items-center gap-2 text-xs">
             Depth
-            <input id="depthRange" type="range" min="0" max="24" value="10" class="w-28 accent-brand">
+            <input id="depthRange" type="range" min="0" max="24" value="10" class="w-28">
             <span id="depthVal" class="tabular-nums">10</span>
           </label>
 
           <label class="flex items-center gap-2 text-xs">
             Tilt
-            <input id="liftRange" type="range" min="-16" max="0" value="-6" class="w-28 accent-brand">
+            <input id="liftRange" type="range" min="-16" max="0" value="-6" class="w-28">
             <span id="liftVal" class="tabular-nums">-6</span>
           </label>
         </div>
       </header>
 
-      <!-- DASHBOARD CONTENT -->
+      <!-- Content -->
       <main class="flex-1 overflow-y-auto p-8">
-        <div class="h-full grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-          {{-- 🧮 Metrics Cards --}}
+          {{-- Metrics Cards --}}
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             @php
               $metrics = [
@@ -194,55 +211,50 @@
               ];
             @endphp
             @foreach ($metrics as $metric)
-              <div class="glass section-liquid-shine p-5 rounded-2xl hover:shadow-xl transition border border-[var(--dark-line)]"
-                   style="box-shadow: var(--shadow);">
-                <div class="flex items-center space-x-4">
-                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-xl"
-                       style="background:var(--butter); color:#2B1C12;">
+              <div class="card p-5 rounded-2xl hover:shadow-lg transition">
+                <div class="flex items-center gap-4">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-xl text-white" style="background:var(--blue);">
                     {{ $metric['icon'] }}
                   </div>
                   <div>
-                    <p class="text-xs uppercase font-semibold tracking-wide opacity-90">{{ $metric['label'] }}</p>
+                    <p class="text-xs uppercase font-semibold tracking-wide muted">{{ $metric['label'] }}</p>
                     <h3 class="text-2xl font-bold">{{ $metric['value'] }}</h3>
-                    <p class="text-xs text-muted">{{ $metric['note'] }}</p>
+                    <p class="text-xs muted">{{ $metric['note'] }}</p>
                   </div>
                 </div>
               </div>
             @endforeach
           </div>
 
-          {{-- 📊 Sales Report Widget (sparkline) --}}
-          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- Sales Report (sparkline) --}}
+          <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-4">
               <div>
                 <h2 class="text-lg font-semibold mb-1">📈 Sales Report</h2>
-                <p class="text-xs text-muted">Real-time sales analytics</p>
+                <p class="text-xs muted">Real-time sales analytics</p>
               </div>
-              <div class="flex space-x-2">
-                <select id="salesRange" class="text-xs px-2 py-1 rounded bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-1"
-                        style="--tw-ring-color: var(--butter);">
-                  <option value="today">Today</option>
-                  <option value="week" selected>This Week</option>
-                  <option value="month">This Month</option>
-                  <option value="7days">Last 7 Days</option>
-                  <option value="30days">Last 30 Days</option>
-                </select>
-              </div>
+              <select id="salesRange" class="input w-40 py-1">
+                <option value="today">Today</option>
+                <option value="week" selected>This Week</option>
+                <option value="month">This Month</option>
+                <option value="7days">Last 7 Days</option>
+                <option value="30days">Last 30 Days</option>
+              </select>
             </div>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               @php
                 $avgPrice = $totalSales > 0 ? ($totalRevenue / max($totalSales,1)) : 0;
                 $salesStats = [
-                  ['label' => 'Total Revenue', 'value' => '₱' . number_format($totalRevenue, 2), 'icon' => '💰', 'color' => 'text-[var(--butter)]'],
-                  ['label' => 'Units Sold',    'value' => number_format($totalSales, 0),         'icon' => '📦', 'color' => 'text-[var(--beige)]'],
-                  ['label' => 'Avg Price/Unit','value' => '₱' . number_format($avgPrice, 2),     'icon' => '📊', 'color' => 'text-[var(--beige)]'],
-                  ['label' => 'Biggest Day',   'value' => 'N/A',                                 'icon' => '🔥', 'color' => 'text-[var(--blood)]'],
+                  ['label' => 'Total Revenue', 'value' => '₱' . number_format($totalRevenue, 2), 'icon' => '💰', 'color' => 'text-[var(--red)]'],
+                  ['label' => 'Units Sold',    'value' => number_format($totalSales, 0),         'icon' => '📦', 'color' => 'text-[var(--blue)]'],
+                  ['label' => 'Avg Price/Unit','value' => '₱' . number_format($avgPrice, 2),     'icon' => '📊', 'color' => 'text-[var(--green)]'],
+                  ['label' => 'Biggest Day',   'value' => 'N/A',                                 'icon' => '🔥', 'color' => 'text-[var(--yellow)]'],
                 ];
               @endphp
               @foreach($salesStats as $stat)
                 <div class="text-center">
                   <div class="text-2xl mb-1">{{ $stat['icon'] }}</div>
-                  <div class="text-xs text-muted mb-1">{{ $stat['label'] }}</div>
+                  <div class="text-xs muted mb-1">{{ $stat['label'] }}</div>
                   <div class="text-sm font-semibold {{ $stat['color'] }}">{{ $stat['value'] }}</div>
                 </div>
               @endforeach
@@ -250,42 +262,40 @@
             <div class="h-32 relative"><canvas id="salesTrendsChart"></canvas></div>
           </div>
 
-          {{-- 🏆 Most Sold Products --}}
-          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- Most Sold Products --}}
+          <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-4">
               <div>
                 <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products</h2>
-                <p class="text-xs text-muted">Top 5 products by revenue</p>
+                <p class="text-xs muted">Top 5 products by revenue</p>
               </div>
-              <a href="{{ route('sales') }}" class="text-xs px-3 py-1 rounded-full"
-                 style="background:var(--butter); color:#2B1C12;">View all</a>
+              <a href="{{ route('sales') }}" class="btn btn-green text-xs">View all</a>
             </div>
 
             @if(($topProducts ?? collect())->isEmpty())
               <div class="text-center py-8">
                 <div class="text-4xl mb-2">📊</div>
-                <div class="text-sm text-muted">No sales data available</div>
-                <div class="text-xs text-muted mt-1">Start recording sales to see top products</div>
+                <div class="text-sm muted">No sales data available</div>
+                <div class="text-xs muted mt-1">Start recording sales to see top products</div>
               </div>
             @else
               <div class="space-y-3">
                 @foreach($topProducts as $index => $product)
-                  <div class="flex items-center space-x-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition">
-                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold"
-                         style="background:var(--butter); color:#2B1C12;">
+                  <div class="flex items-center gap-3 p-3 rounded-lg bg-[#fafafa] hover:bg-[#f3f4f6] transition">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white" style="background:var(--red);">
                       {{ $index + 1 }}
                     </div>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center justify-between mb-1">
                         <div class="font-medium truncate">{{ $product->product_name ?? 'Product' }}</div>
-                        <div class="text-sm font-semibold" style="color:var(--beige);">₱{{ number_format($product->revenue ?? 0, 2) }}</div>
+                        <div class="text-sm font-semibold text-[var(--blue)]">₱{{ number_format($product->revenue ?? 0, 2) }}</div>
                       </div>
-                      <div class="flex items-center justify-between text-xs text-muted">
+                      <div class="flex items-center justify-between text-xs muted">
                         <span>{{ number_format($product->quantity ?? 0, 2) }} sold</span>
                         <span>{{ number_format($product->revenue_share ?? 0, 1) }}% of total</span>
                       </div>
-                      <div class="w-full bg-white/10 rounded-full h-1.5 mt-2">
-                        <div class="h-1.5 rounded-full" style="width: {{ min(($product->revenue_share ?? 0), 100) }}%; background:linear-gradient(90deg,var(--blood),var(--butter));"></div>
+                      <div class="w-full bg-[var(--line)]/40 rounded-full h-1.5 mt-2">
+                        <div class="h-1.5 rounded-full" style="width: {{ min(($product->revenue_share ?? 0), 100) }}%; background:linear-gradient(90deg,var(--red),var(--yellow));"></div>
                       </div>
                     </div>
                   </div>
@@ -294,19 +304,18 @@
             @endif
           </div>
 
-          {{-- 🧾 Recent Sales Table --}}
-          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg overflow-auto">
+          {{-- Recent Sales --}}
+          <div class="card p-5 rounded-2xl overflow-auto">
             <div class="flex items-center justify-between">
               <div>
                 <h2 class="text-base font-semibold mb-1">Recent Sales</h2>
-                <p class="text-xs text-muted mb-3">Latest from <strong>weekly product sales</strong></p>
+                <p class="text-xs muted mb-3">Latest from <strong>weekly product sales</strong></p>
               </div>
-              <a href="{{ route('sales') }}" class="text-xs px-3 py-1 rounded-full"
-                 style="background:var(--butter); color:#2B1C12;">View all</a>
+              <a href="{{ route('sales') }}" class="btn btn-blue text-xs">View all</a>
             </div>
 
-            <table class="w-full text-sm text-left border-collapse">
-              <thead class="uppercase border-b border-[var(--dark-line)] bg-opacity-20">
+            <table class="text-sm text-left">
+              <thead class="uppercase">
                 <tr>
                   <th class="py-2 px-3">Product</th>
                   <th class="py-2 px-3">Qty</th>
@@ -316,7 +325,7 @@
               </thead>
               <tbody>
                 @forelse ($recentSales as $sale)
-                  <tr class="border-t border-[var(--dark-line)] hover:bg-[rgba(255,255,255,.06)] transition">
+                  <tr class="border-t">
                     <td class="py-2 px-3">{{ $sale->product_name }}</td>
                     <td class="py-2 px-3">{{ $sale->quantity }}</td>
                     <td class="py-2 px-3">₱{{ number_format($sale->price, 2) }}</td>
@@ -324,25 +333,25 @@
                   </tr>
                 @empty
                   <tr>
-                    <td colspan="4" class="py-3 text-center text-muted">No sales found.</td>
+                    <td colspan="4" class="py-3 text-center muted">No sales found.</td>
                   </tr>
                 @endforelse
               </tbody>
             </table>
           </div>
 
-          {{-- 📦 Materials Snapshot --}}
-          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- Materials Snapshot --}}
+          <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Materials Logged (This Week)</h2>
-              <span class="text-xs text-muted">On hand: {{ number_format($totalMaterialsWeight, 2) }} kg</span>
+              <span class="text-xs muted">On hand: {{ number_format($totalMaterialsWeight, 2) }} kg</span>
             </div>
             @php $recentMaterials = $recentMaterials ?? collect(); @endphp
             @if($recentMaterials->isEmpty())
-              <div class="text-sm text-muted">No materials logged this week.</div>
+              <div class="text-sm muted">No materials logged this week.</div>
             @else
-              <table class="w-full text-sm text-left border-collapse">
-                <thead class="uppercase border-b border-[var(--dark-line)] bg-opacity-20">
+              <table class="text-sm text-left">
+                <thead class="uppercase">
                   <tr>
                     <th class="py-2 px-3">Material</th>
                     <th class="py-2 px-3">Qty (kg)</th>
@@ -351,7 +360,7 @@
                 </thead>
                 <tbody>
                   @foreach($recentMaterials as $m)
-                    <tr class="border-t border-[var(--dark-line)] hover:bg-[rgba(255,255,255,.06)] transition">
+                    <tr class="border-t">
                       <td class="py-2 px-3">{{ $m->name ?? $m->material_name ?? 'Material' }}</td>
                       <td class="py-2 px-3">{{ number_format($m->quantity_kg, 2) }}</td>
                       <td class="py-2 px-3">{{ \Carbon\Carbon::parse($m->created_at)->format('M d, Y') }}</td>
@@ -362,48 +371,48 @@
             @endif
           </div>
 
-          {{-- 📈 Expiration Trend (3D BAR + per-chart toggle) --}}
-          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- Expiration Trend --}}
+          <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Expiration Trend</h2>
               <label class="text-xs flex items-center gap-2">
-                <input id="toggleExpiry" type="checkbox" checked class="sr-only peer accent-brand">
-                <span class="px-2 py-1 rounded-full glass border border-white/15">3D</span>
+                <input id="toggleExpiry" type="checkbox" checked class="sr-only">
+                <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D</span>
               </label>
             </div>
             <div class="h-56 relative">
               <canvas id="expiryChart"></canvas>
-              <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm text-muted">No expiries this week</div>
+              <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No expiries this week</div>
             </div>
           </div>
 
-          {{-- 📊 Weekly Production Chart (3D BAR + per-chart toggle) --}}
-          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- Weekly Production --}}
+          <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Weekly Production</h2>
               <label class="text-xs flex items-center gap-2">
-                <input id="toggleProduction" type="checkbox" checked class="sr-only peer accent-brand">
-                <span class="px-2 py-1 rounded-full glass border border-white/15">3D</span>
+                <input id="toggleProduction" type="checkbox" checked class="sr-only">
+                <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D</span>
               </label>
             </div>
             <div class="h-56 relative">
               <canvas id="productionChart"></canvas>
-              <div id="prodEmpty" class="absolute inset-0 hidden items-center justify-center text-sm text-muted">No data for this week</div>
+              <div id="prodEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
           </div>
 
-          {{-- 💸 Weekly Sales Chart (Qty 3D + Revenue line + per-chart toggle) --}}
-          <div class="glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
+          {{-- Weekly Sales --}}
+          <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Weekly Sales</h2>
               <label class="text-xs flex items-center gap-2">
-                <input id="toggleSales" type="checkbox" checked class="sr-only peer accent-brand">
-                <span class="px-2 py-1 rounded-full glass border border-white/15">3D (Qty)</span>
+                <input id="toggleSales" type="checkbox" checked class="sr-only">
+                <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D (Qty)</span>
               </label>
             </div>
             <div class="h-56 relative">
               <canvas id="salesChart"></canvas>
-              <div id="salesEmpty" class="absolute inset-0 hidden items-center justify-center text-sm text-muted">No data for this week</div>
+              <div id="salesEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
           </div>
 
@@ -412,14 +421,14 @@
     </div>
   </div>
 
-  {{-- 📦 Materials Used --}}
-  <div class="mx-8 my-6 glass section-liquid-shine border border-[var(--dark-line)] shadow-md p-5 rounded-2xl backdrop-blur-lg">
+  <!-- Materials Used (full-width) -->
+  <div class="mx-8 my-6 card p-5 rounded-2xl">
     <div class="flex items-center justify-between mb-2">
       <div>
         <h2 class="text-base font-semibold">Materials Used (This Week)</h2>
-        <p class="text-xs text-muted">Based on production × recipe</p>
+        <p class="text-xs muted">Based on production × recipe</p>
       </div>
-      <div class="text-right text-xs text-muted">
+      <div class="text-right text-xs muted">
         <div>Total Qty: {{ number_format($materialsUsageTotals['qty'] ?? 0, 3) }}</div>
         <div>Total Cost: ₱{{ number_format($materialsUsageTotals['cost'] ?? 0, 2) }}</div>
       </div>
@@ -427,11 +436,11 @@
 
     @php $rows = $materialsUsage ?? collect(); @endphp
     @if($rows->isEmpty())
-      <div class="text-sm text-muted">No materials consumed this week.</div>
+      <div class="text-sm muted">No materials consumed this week.</div>
     @else
       <div class="overflow-x-auto">
-        <table class="w-full text-sm text-left border-collapse">
-          <thead class="uppercase border-b border-[var(--dark-line)] bg-opacity-20">
+        <table class="text-sm text-left">
+          <thead class="uppercase">
             <tr>
               <th class="py-2 px-3">Material</th>
               <th class="py-2 px-3 text-right">Qty Used</th>
@@ -440,7 +449,7 @@
           </thead>
           <tbody>
             @foreach($rows as $r)
-              <tr class="border-t border-[var(--dark-line)] hover:bg-[rgba(255,255,255,.06)] transition">
+              <tr class="border-t">
                 <td class="py-2 px-3">{{ $r->material_name }}</td>
                 <td class="py-2 px-3 text-right">{{ number_format($r->qty_used, 3) }} {{ $r->unit ?? 'kg' }}</td>
                 <td class="py-2 px-3 text-right">₱{{ number_format($r->cost_used, 2) }}</td>
@@ -455,39 +464,36 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 
-  <!-- ===== Chart.js Bar 3D plugin (isometric faces) ===== -->
+  <!-- Simple Bar “3D” faces plugin (works with light theme) -->
   <script>
     const Bar3DPlugin = {
       id: 'bar3d',
-      afterDatasetDraw(chart, args, pluginOptions) {
-        const enabled = (pluginOptions && pluginOptions.enabled) ?? true;
-        if (!enabled) return;
-
+      afterDatasetDraw(chart, args, opts) {
+        if (!opts?.enabled) return;
         const {ctx, chartArea} = chart;
         const meta = args.meta;
         if (meta.type !== 'bar') return;
 
-        const depth  = pluginOptions?.depth ?? 10;
-        const lift   = pluginOptions?.lift ?? -6;
+        const depth = opts.depth ?? 10;
+        const lift  = opts.lift ?? -6;
 
-        const shade = (rgba, factor=0.85) => {
-          const m = rgba && rgba.toString().match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-          if (!m) return rgba || 'rgba(111,111,75,0.35)';
-          const [r,g,b] = [m[1],m[2],m[3]].map(n => Math.max(0, Math.min(255, Math.floor(n*factor))));
-          const aMatch = rgba.match(/rgba\(.+,\s*([.\d]+)\)/i);
-          const a = aMatch ? parseFloat(aMatch[1]) : 1;
+        const dim = (rgba, f=0.85) => {
+          const m = (rgba||'').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+          if (!m) return rgba||'rgba(0,0,0,0.2)';
+          const [r,g,b] = [m[1],m[2],m[3]].map(n=>Math.max(0,Math.min(255,Math.floor(n*f))));
+          const a = (rgba.match(/rgba\(.+,\s*([.\d]+)\)/i)?.[1]) ?? 1;
           return `rgba(${r},${g},${b},${a})`;
         };
 
-        const dataset = chart.config.data.datasets[args.index];
-        const baseFill   = dataset.backgroundColor || 'rgba(111,111,75,0.35)';   // olive
-        const baseStroke = dataset.borderColor     || 'rgba(111,111,75,1)';
-        const topFill    = dataset.topFaceColor    || shade(baseFill, 1.15);
-        const sideFill   = dataset.sideFaceColor   || shade(baseFill, 0.75);
-        const topStroke  = dataset.topStrokeColor  || shade(baseStroke, 1.1);
-        const sideStroke = dataset.sideStrokeColor || shade(baseStroke, 0.8);
+        const ds = chart.config.data.datasets[args.index];
+        const baseFill   = ds.backgroundColor || 'rgba(16,185,129,0.25)';
+        const baseStroke = ds.borderColor     || 'rgba(16,185,129,1)';
+        const topFill    = ds.topFaceColor    || dim(baseFill, 1.15);
+        const sideFill   = ds.sideFaceColor   || dim(baseFill, 0.78);
+        const topStroke  = ds.topStrokeColor  || dim(baseStroke, 1.1);
+        const sideStroke = ds.sideStrokeColor || dim(baseStroke, 0.85);
 
-        meta.data.forEach((bar) => {
+        meta.data.forEach(bar => {
           const p = bar.getProps(['x','y','base','width'], true);
           if (!p) return;
           const x = p.x - p.width/2;
@@ -498,56 +504,158 @@
 
           const dx = depth, dy = lift;
 
-          const top = [
-            {x: x,     y: y},
-            {x: x+dx,  y: y+dy},
-            {x: x+dx+w,y: y+dy},
-            {x: x+w,   y: y},
-          ];
-          const side = [
-            {x: x+w,   y: y},
-            {x: x+w+dx,y: y+dy},
-            {x: x+w+dx,y: y+dy+h},
-            {x: x+w,   y: y+h},
-          ];
-
-          const drawPoly = (pts, fill, stroke) => {
-            ctx.save();
+          const poly = (pts, fill, stroke) => {
             ctx.beginPath();
             ctx.moveTo(pts[0].x, pts[0].y);
-            for (let j=1;j<pts.length;j++) ctx.lineTo(pts[j].x, pts[j].y);
+            for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
             ctx.closePath();
             ctx.fillStyle = fill; ctx.fill();
             if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
-            ctx.restore();
           };
 
-          // top face with soft shadow
-          ctx.save();
-          ctx.shadowColor = 'rgba(0,0,0,0.25)';
-          ctx.shadowBlur = 8;
-          ctx.shadowOffsetX = 0;
-          ctx.shadowOffsetY = 4;
-          drawPoly(top, topFill, topStroke);
-          ctx.restore();
+          const top = [{x, y},{x:x+dx, y:y+dy},{x:x+dx+w, y:y+dy},{x:x+w, y}];
+          const side = [{x:x+w, y},{x:x+w+dx, y:y+dy},{x:x+w+dx, y:y+dy+h},{x:x+w, y:y+h}];
 
-          // side face
-          drawPoly(side, sideFill, sideStroke);
+          // draw faces
+          ctx.save(); ctx.shadowColor='rgba(0,0,0,.12)'; ctx.shadowBlur=6; ctx.shadowOffsetY=3;
+          poly(top, topFill, topStroke); ctx.restore();
+          poly(side, sideFill, sideStroke);
         });
       }
     };
     Chart.register(Bar3DPlugin);
   </script>
 
-  <!-- ===== Dashboard Charts + Toggles ===== -->
+  <!-- Dashboard Charts + Toggles -->
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const userMenuButton = document.getElementById('userMenuButton');
-      const userDropdown = document.getElementById('userDropdown');
+    document.addEventListener('DOMContentLoaded', () => {
       const sidebar = document.getElementById('sidebar');
-      const sidebarToggle = document.getElementById('sidebarToggle');
-      const sidebarClose = document.getElementById('sidebarClose');
+      document.getElementById('sidebarToggle')?.addEventListener('click', ()=> sidebar?.classList.toggle('!-translate-x-full'));
+      document.getElementById('sidebarClose')?.addEventListener('click',  ()=> sidebar?.classList.add('!-translate-x-full'));
+      // ensure default desktop visible
+      sidebar?.classList.remove('!-translate-x-full');
 
+      // ==== Data from server ====
+      const labels = @json($labels ?? []);
+      const prod   = @json($weeklyProductionSeries ?? []);
+      const qty    = @json($weeklySalesQtySeries ?? []);
+      const rev    = @json($weeklySalesRevenueSeries ?? []);
+      const exp    = @json($weeklyExpirySeries ?? []);
+
+      // Palette for charts (spec)
+      const C_RED    = 'rgba(239,68,68,1)';
+      const C_RED_30 = 'rgba(239,68,68,.3)';
+      const C_GREEN    = 'rgba(16,185,129,1)';
+      const C_GREEN_30 = 'rgba(16,185,129,.3)';
+      const C_BLUE    = 'rgba(37,99,235,1)';
+      const C_BLUE_30 = 'rgba(37,99,235,.3)';
+      const C_YELLOW    = 'rgba(245,158,11,1)';
+      const C_YELLOW_30 = 'rgba(245,158,11,.3)';
+
+      const gridColor = 'rgba(107,114,128,.25)';
+      const tickColor = '#4b5563';
+      const barRadius = 6;
+
+      const showIfEmpty = (arr, id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const empty = !arr || arr.length === 0 || arr.every(v => Number(v) === 0);
+        el.classList.toggle('hidden', !empty);
+        el.classList.add('flex');
+      };
+
+      // ----- Production (Green bars) -----
+      showIfEmpty(prod, 'prodEmpty');
+      const productionChart = new Chart(document.getElementById('productionChart'), {
+        type: 'bar',
+        data: { labels, datasets: [{
+          label: 'Units Produced',
+          data: prod,
+          backgroundColor: C_GREEN_30,
+          borderColor: C_GREEN,
+          borderWidth: 2,
+          borderRadius: barRadius,
+          topFaceColor: 'rgba(16,185,129,.45)',
+          sideFaceColor: 'rgba(16,185,129,.25)'
+        }]},
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins: {
+            legend:{ labels:{ color: tickColor } },
+            title:{ display:true, text:'Weekly Production', color: '#111827' },
+            bar3d:{ enabled: true, depth: 10, lift: -6 }
+          },
+          scales: {
+            x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
+            y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } }
+          }
+        }
+      });
+
+      // ----- Sales (Blue bars qty + Red line revenue) -----
+      showIfEmpty([...(qty||[]), ...(rev||[])], 'salesEmpty');
+      const salesChart = new Chart(document.getElementById('salesChart'), {
+        data: {
+          labels,
+          datasets: [
+            { type:'bar', label:'Qty Sold', data: qty, yAxisID:'y',
+              backgroundColor: C_BLUE_30, borderColor: C_BLUE, borderWidth:2, borderRadius: barRadius,
+              topFaceColor:'rgba(37,99,235,.5)', sideFaceColor:'rgba(37,99,235,.3)'
+            },
+            { type:'line', label:'Revenue', data: rev, yAxisID:'y1',
+              borderColor: C_RED, backgroundColor: C_RED, borderWidth:3, tension:.35, pointRadius:3, fill:false
+            }
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins: {
+            legend:{ labels:{ color: tickColor } },
+            title:{ display:true, text:'Weekly Sales', color:'#111827' },
+            tooltip:{ callbacks:{ label:(ctx)=> ctx.dataset.type==='line'
+              ? `Revenue: ₱${Number(ctx.parsed.y).toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`
+              : `Qty: ${ctx.parsed.y}` } },
+            bar3d:{ enabled: true, depth: 10, lift: -6 }
+          },
+          scales: {
+            x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
+            y:{ position:'left', beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } },
+            y1:{ position:'right', beginAtZero:true, ticks:{ color: tickColor }, grid:{ drawOnChartArea:false } }
+          }
+        }
+      });
+
+      // ----- Sales sparkline (Red) -----
+      const spark = new Chart(document.getElementById('salesTrendsChart'), {
+        type:'line',
+        data:{ labels, datasets:[{ label:'Revenue', data: rev, borderColor:C_RED, backgroundColor:C_RED, borderWidth:2, tension:.35, pointRadius:0, fill:false }] },
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{ display:false }, y:{ display:false, beginAtZero:true } } }
+      });
+
+      // ----- Expiration (Yellow bars) -----
+      showIfEmpty(exp, 'expEmpty');
+      const expiryChart = new Chart(document.getElementById('expiryChart'), {
+        type:'bar',
+        data:{ labels, datasets:[{
+          label:'Expiring Items',
+          data: exp,
+          backgroundColor: C_YELLOW_30,
+          borderColor: C_YELLOW,
+          borderWidth:2,
+          borderRadius: barRadius,
+          topFaceColor:'rgba(245,158,11,.45)',
+          sideFaceColor:'rgba(245,158,11,.28)'
+        }]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ labels:{ color: tickColor } }, title:{ display:true, text:'Expirations This Week', color:'#111827' },
+                   tooltip:{ callbacks:{ label:(ctx)=> `Expiring: ${Number(ctx.parsed.y).toLocaleString()}` } },
+                   bar3d:{ enabled: true, depth: 10, lift: -6 } },
+          scales:{ x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } }, y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } } }
+        }
+      });
+
+      // ===== 3D Toggles/Controls =====
       const toggle3D = document.getElementById('toggle3D');
       const toggleProduction = document.getElementById('toggleProduction');
       const toggleSales = document.getElementById('toggleSales');
@@ -556,130 +664,29 @@
       const liftRange = document.getElementById('liftRange');
       const depthVal = document.getElementById('depthVal');
       const liftVal = document.getElementById('liftVal');
+      const dot3d = document.getElementById('dot3d');
 
-      sidebarToggle?.addEventListener('click', ()=> sidebar?.classList.add('open'));
-      sidebarClose?.addEventListener('click', ()=> sidebar?.classList.remove('open'));
-
-      // ==== Data ====
-      const labels = @json($labels ?? []);
-      const prod   = @json($weeklyProductionSeries ?? []);
-      const qty    = @json($weeklySalesQtySeries ?? []);
-      const rev    = @json($weeklySalesRevenueSeries ?? []);
-      const exp    = @json($weeklyExpirySeries ?? []);
-
-      const grid  = 'rgba(255,255,255,0.12)';
-      const tick  = getComputedStyle(document.documentElement).getPropertyValue('--beige') || '#E8D4B9';
-      const title = '#F7F1E8';
-
-      /* Palette → charts */
-      const oliveFill = 'rgba(111,111,75,0.35)';
-      const oliveLine = 'rgba(111,111,75,1)';
-      const cabLine   = 'rgba(112,44,55,1)';
-      const butter    = 'rgba(242,176,63,1)';
-      const butterFill= 'rgba(242,176,63,0.35)';
-      const blood     = 'rgba(214,75,52,1)';
-      const barRadius = 6;
-
-      const showIfEmpty = (arr, elId) => {
-        const el = document.getElementById(elId);
-        if (!el) return;
-        if (!arr || arr.length === 0 || arr.every(v => Number(v) === 0)) el.classList.remove('hidden');
-        else el.classList.add('hidden');
-      };
-
-      const charts = {};
-
-      // Production (Olive)
-      showIfEmpty(prod, 'prodEmpty');
-      charts.production = new Chart(document.getElementById('productionChart'), {
-        type: 'bar',
-        data: { labels, datasets: [{
-          label: 'Units Produced', data: prod,
-          backgroundColor: oliveFill, borderColor: oliveLine, borderWidth: 2, borderRadius: barRadius,
-          topFaceColor:'rgba(160,160,110,0.45)', sideFaceColor:'rgba(90,90,60,0.35)'
-        }]},
-        options: {
-          responsive:true, maintainAspectRatio:false,
-          plugins: { legend:{ labels:{ color: tick } }, title:{ display:true, text:'Weekly Production', color: title },
-                     bar3d:{ enabled: true, depth: Number(depthRange.value), lift: Number(liftRange.value) } },
-          scales: { x:{ ticks:{ color: tick }, grid:{ color: grid } }, y:{ beginAtZero:true, ticks:{ color: tick }, grid:{ color: grid } } }
-        }
-      });
-
-      // Sales (Qty Olive 3D + Revenue Cab line)
-      showIfEmpty([...(qty||[]), ...(rev||[])], 'salesEmpty');
-      charts.sales = new Chart(document.getElementById('salesChart'), {
-        data: {
-          labels,
-          datasets: [
-            { type:'bar', label:'Qty Sold', data: qty, backgroundColor: oliveFill, borderColor: oliveLine, borderWidth:2, borderRadius: barRadius,
-              yAxisID:'y', topFaceColor:'rgba(160,160,110,0.45)', sideFaceColor:'rgba(90,90,60,0.35)'},
-            { type:'line', label:'Revenue', data: rev, borderColor: cabLine, borderWidth:3, tension:.3, pointRadius:3, yAxisID:'y1'}
-          ]
-        },
-        options: {
-          responsive:true, maintainAspectRatio:false,
-          plugins: { legend:{ labels:{ color: tick } }, title:{ display:true, text:'Weekly Sales', color: title },
-            tooltip:{ callbacks:{ label:(ctx)=> ctx.dataset.type==='line'
-              ? `Revenue: ₱${Number(ctx.parsed.y).toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`
-              : `Qty: ${ctx.parsed.y}`} },
-            bar3d:{ enabled: true, depth: Number(depthRange.value), lift: Number(liftRange.value) } },
-          scales: {
-            x:{ ticks:{ color: tick }, grid:{ color: grid } },
-            y:{ position:'left', beginAtZero:true, ticks:{ color: tick }, grid:{ color: grid } },
-            y1:{ position:'right', beginAtZero:true, ticks:{ color: tick }, grid:{ drawOnChartArea:false } }
-          }
-        }
-      });
-
-      // Sparkline (Cab line)
-      charts.spark = new Chart(document.getElementById('salesTrendsChart'), {
-        type:'line',
-        data:{ labels, datasets:[{ label:'Revenue', data: rev, borderColor: cabLine, borderWidth:2, tension:.35, pointRadius:0, fill:false }] },
-        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{ display:false }, y:{ display:false, beginAtZero:true } } }
-      });
-
-      // Expiration (Butter bars)
-      showIfEmpty(exp,'expEmpty');
-      charts.expiry = new Chart(document.getElementById('expiryChart'), {
-        type:'bar',
-        data:{ labels, datasets:[{
-          label:'Expiring Items', data: exp, backgroundColor: butterFill, borderColor: butter, borderWidth:2, borderRadius: barRadius,
-          maxBarThickness: 32, categoryPercentage:.7, barPercentage:.8,
-          topFaceColor:'rgba(255,220,150,0.45)', sideFaceColor:'rgba(210,160,50,0.35)'
-        }]},
-        options:{
-          responsive:true, maintainAspectRatio:false,
-          plugins:{ legend:{ labels:{ color: tick } }, title:{ display:true, text:'Expirations This Week', color: title },
-                   tooltip:{ callbacks:{ label:(ctx)=> `Expiring: ${Number(ctx.parsed.y).toLocaleString()}` } },
-                   bar3d:{ enabled: true, depth: Number(depthRange.value), lift: Number(liftRange.value) } },
-          scales:{ x:{ ticks:{ color: tick }, grid:{ color: grid } }, y:{ beginAtZero:true, ticks:{ color: tick }, grid:{ color: grid } } }
-        }
-      });
-
-      // ===== 3D Propagation =====
       const apply3D = () => {
-        const master = toggle3D.checked;
-        const depth = Number(depthRange.value);
-        const lift  = Number(liftRange.value);
+        const master = toggle3D?.checked ?? true;
+        const depth = Number(depthRange?.value ?? 10);
+        const lift  = Number(liftRange?.value ?? -6);
         depthVal.textContent = depth;
         liftVal.textContent = lift;
+        dot3d.style.background = master ? 'var(--green)' : 'var(--red)';
 
-        const flags = {
-          production: master && toggleProduction.checked,
-          sales:      master && toggleSales.checked,
-          expiry:     master && toggleExpiry.checked
+        const set = (chart, enabled) => {
+          if (!chart) return;
+          chart.options.plugins = chart.options.plugins || {};
+          chart.options.plugins.bar3d = chart.options.plugins.bar3d || {};
+          chart.options.plugins.bar3d.enabled = enabled && master;
+          chart.options.plugins.bar3d.depth = depth;
+          chart.options.plugins.bar3d.lift = lift;
+          chart.update();
         };
 
-        Object.entries(flags).forEach(([key, enabled]) => {
-          const c = charts[key]; if (!c) return;
-          c.options.plugins = c.options.plugins || {};
-          c.options.plugins.bar3d = c.options.plugins.bar3d || {};
-          c.options.plugins.bar3d.enabled = enabled;
-          c.options.plugins.bar3d.depth = depth;
-          c.options.plugins.bar3d.lift = lift;
-          c.update();
-        });
+        set(productionChart, toggleProduction?.checked);
+        set(salesChart, toggleSales?.checked);
+        set(expiryChart, toggleExpiry?.checked);
       };
 
       [toggle3D, toggleProduction, toggleSales, toggleExpiry, depthRange, liftRange]

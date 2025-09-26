@@ -3,17 +3,33 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use App\Models\Employee;
 
 class AdminUserSeeder extends Seeder
 {
-    public function run()
+    public function run(): void
     {
-        User::create([
-            'name' => 'Master Admin',
-            'email' => 'admin@example.com',
-            'password' => Hash::make('password123'),
-        ]);
+        // Create or update admin user
+        $user = User::updateOrCreate(
+            ['email' => 'admin@example.com'], // lookup by email
+            [
+                'name'     => 'Master Admin',
+                'password' => 'password123', // auto-hashed by User model cast
+                'role'     => 'admin',
+            ]
+        );
+
+        // Ensure there’s a linked Employee record for username login
+        Employee::updateOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'user_id'    => $user->id,
+                'first_name' => 'Master',
+                'last_name'  => 'Admin',
+                'username'   => 'admin',
+                'status'     => 'active',
+            ]
+        );
     }
 }

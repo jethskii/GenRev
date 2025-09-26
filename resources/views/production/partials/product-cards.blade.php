@@ -5,30 +5,31 @@ use Illuminate\Support\Str;
 
 @once
 <style>
+  /* ===== Card + image (light) ===== */
   .prod-card-img{
     width: 100%;
     height: 10rem;
     object-fit: cover;
     border-radius: 12px;
-    border: 1px solid rgba(255,255,255,.12);
-    background: linear-gradient(135deg, #657423 0%, #2a2a2a 100%);
+    border: 1px solid rgba(0,0,0,.08);
+    background: #f3f4f6; /* gray-100 */
   }
   .prod-card:hover .prod-card-img{ filter: brightness(1.02); }
   .prod-card { pointer-events: auto; }
   .btn-busy { opacity: .7; pointer-events: none; }
 
-  /* ===== 3D Buttons ===== */
+  /* ===== 3D Buttons (light) ===== */
   .btn-3d{
     position: relative;
     border-radius: 14px;
     font-weight: 700;
     padding: .55rem .9rem;
-    border: 1px solid rgba(255,255,255,.12);
+    border: 1px solid rgba(0,0,0,.08);
     transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, background .12s ease;
     box-shadow:
-      0 10px 18px rgba(0,0,0,.35),
-      0 2px 0 rgba(255,255,255,.06) inset,
-      0 -2px 0 rgba(0,0,0,.25) inset;
+      0 10px 18px rgba(0,0,0,.10),
+      0 2px 0 rgba(255,255,255,.9) inset,
+      0 -2px 0 rgba(0,0,0,.06) inset;
     backdrop-filter: blur(3px);
     line-height: 1;
   }
@@ -36,43 +37,42 @@ use Illuminate\Support\Str;
   .btn-3d:active{
     transform: translateY(0px);
     box-shadow:
-      0 3px 10px rgba(0,0,0,.35),
-      0 -2px 0 rgba(255,255,255,.03) inset,
-      0 2px 0 rgba(0,0,0,.35) inset;
+      0 3px 10px rgba(0,0,0,.10),
+      0 -2px 0 rgba(255,255,255,.6) inset,
+      0 2px 0 rgba(0,0,0,.08) inset;
   }
 
   .btn-3d-danger{
-    color:#fff;
-    background: linear-gradient(180deg, #ff5353 0%, #c51e1e 100%);
-    border-color: rgba(255,83,83,.3);
-    text-shadow: 0 1px 0 rgba(0,0,0,.35);
+    color:#991b1b; /* red-800 text on soft bg */
+    background: linear-gradient(180deg, #fee2e2 0%, #fecaca 100%);
+    border-color: #fecaca;
   }
-  .btn-3d-danger:hover{ background: linear-gradient(180deg, #ff5f5f 0%, #d22020 100%); }
+  .btn-3d-danger:hover{ background: linear-gradient(180deg, #fecaca 0%, #fca5a5 100%); }
 
   .btn-3d-neutral{
-    color:#eaeaea;
-    background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
-    border-color: rgba(255,255,255,.15);
+    color:#374151;
+    background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+    border-color: #e5e7eb;
   }
 
-  /* ===== Modal (Glass + 3D confirm) ===== */
+  /* ===== Modal (light) ===== */
   .modal-overlay{
     position: fixed; inset: 0; z-index: 60;
     display: none; align-items: center; justify-content: center;
-    background: rgba(0,0,0,.55);
+    background: rgba(17,24,39,.45);
   }
   .modal-overlay.show{ display:flex; }
   .modal-card{
     width: 100%; max-width: 460px;
     border-radius: 18px;
-    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-    border: 1px solid rgba(255,255,255,.12);
-    box-shadow: 0 20px 48px rgba(0,0,0,.45);
-    color: #fff;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 20px 48px rgba(0,0,0,.20);
+    color: #111827;
   }
-  .modal-header{ padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
-  .modal-body{ padding: 16px; color: #eaeaea; }
-  .modal-actions{ padding: 14px 16px; display:flex; gap:.5rem; justify-content:flex-end; border-top: 1px solid rgba(255,255,255,.08); }
+  .modal-header{ padding: 14px 16px; border-bottom: 1px solid #e5e7eb; }
+  .modal-body{ padding: 16px; color: #374151; }
+  .modal-actions{ padding: 14px 16px; display:flex; gap:.5rem; justify-content:flex-end; border-top: 1px solid #e5e7eb; }
 </style>
 @endonce
 
@@ -84,12 +84,12 @@ use Illuminate\Support\Str;
     $status  = $p->stock_status ?? ((float)($p->quantity ?? 0) > 0 ? 'in_stock' : 'out_of_stock');
 
     $delta = (float)($p->quantity ?? 0) - (float)($p->forecasted_demand ?? 0);
-    $ring  = $delta <= 0 ? 'ring-1 ring-rose-700/50' : ($delta <= 10 ? 'ring-1 ring-amber-600/40' : '');
+    $ring  = $delta <= 0 ? 'ring-1 ring-red-200' : ($delta <= 10 ? 'ring-1 ring-amber-200' : '');
 
     $badge = null; $badgeCls = '';
     if (isset($p->is_expired) || isset($p->days_to_expiry)) {
-        if ($p->is_expired ?? false) { $badge = 'Expired'; $badgeCls = 'bg-rose-600/15 text-rose-300 border border-rose-700/40'; }
-        elseif (($p->days_to_expiry ?? 99) <= 3) { $badge = ($p->days_to_expiry).'d left'; $badgeCls = 'bg-amber-500/15 text-amber-300 border border-amber-600/40'; }
+        if ($p->is_expired ?? false) { $badge = 'Expired'; $badgeCls = 'bg-red-100 text-red-700 border border-red-200'; }
+        elseif (($p->days_to_expiry ?? 99) <= 3) { $badge = ($p->days_to_expiry).'d left'; $badgeCls = 'bg-amber-100 text-amber-700 border border-amber-200'; }
     }
 
     $imgPrimary   = $p->card_image_url ?? $p->image_thumb_url ?? $p->image_url ?? asset('images/default-product.png');
@@ -99,7 +99,7 @@ use Illuminate\Support\Str;
   @endphp
 
   <div
-    class="prod-card glass rounded-2xl border border-white/10 p-4 flex flex-col gap-3 hover:bg-white/5 transition {{ $ring }}"
+    class="prod-card bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-3 hover:bg-gray-50 transition shadow-sm {{ $ring }}"
     id="product-card-{{ $p->id }}"
     data-id="{{ $p->id }}"
     data-name="{{ e($p->product_name) }}"
@@ -117,12 +117,12 @@ use Illuminate\Support\Str;
         onerror="this.onerror=null;this.src='{{ asset('images/default-product.png') }}';"
       >
       @if($badge)
-        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs {{ $badgeCls }} backdrop-blur">
+        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs {{ $badgeCls }}">
           {{ $badge }}
         </span>
       @endif
       @if(!empty($p->category))
-        <span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/80 border border-white/20 backdrop-blur">
+        <span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs bg-white border border-gray-200 text-gray-700">
           {{ $p->category }}
         </span>
       @endif
@@ -131,32 +131,33 @@ use Illuminate\Support\Str;
     {{-- Info --}}
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
-        <h3 class="text-lg font-semibold text-white truncate" title="{{ $p->product_name }}">{{ $p->product_name }}</h3>
-        <p class="text-xs text-white/60">SKU: {{ $sku }}</p>
+        <h3 class="text-lg font-semibold text-gray-900 truncate" title="{{ $p->product_name }}">{{ $p->product_name }}</h3>
+        <p class="text-xs text-gray-500">SKU: {{ $sku }}</p>
       </div>
     </div>
 
     <div class="grid grid-cols-2 gap-3 text-sm">
-      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
-        <p class="text-white/60">Inventory</p>
-        <p class="text-white font-semibold">{{ $qty }} kg</p>
+      <div class="bg-gray-50 rounded-xl p-3 border border-gray-200">
+        <p class="text-gray-500">Inventory</p>
+        <p class="text-gray-900 font-semibold">{{ $qty }} kg</p>
       </div>
-      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
-        <p class="text-white/60">Forecasted Demand</p>
-        <p class="text-white font-semibold">{{ $demand }} kg</p>
+      <div class="bg-gray-50 rounded-xl p-3 border border-gray-200">
+        <p class="text-gray-500">Forecasted Demand</p>
+        <p class="text-gray-900 font-semibold">{{ $demand }} kg</p>
       </div>
-      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
-        <p class="text-white/60">Unit Cost</p>
-        <p class="text-white font-semibold">₱ {{ $unit }}</p>
+      <div class="bg-gray-50 rounded-xl p-3 border border-gray-200">
+        <p class="text-gray-500">Unit Cost</p>
+        <p class="text-gray-900 font-semibold">₱ {{ $unit }}</p>
       </div>
-      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
-        <p class="text-white/60">Status</p>
+      <div class="bg-gray-50 rounded-xl p-3 border border-gray-200">
+        <p class="text-gray-500">Status</p>
         @php
           $cls = $status === 'in_stock'
-            ? 'bg-emerald-600/15 text-emerald-300 border-emerald-700/40'
-            : 'bg-rose-600/15 text-rose-300 border-rose-700/40';
+            ? 'bg-green-100 text-green-700 border-green-200'
+            : 'bg-yellow-100 text-yellow-700 border-yellow-200';
+          $label = $status === 'in_stock' ? 'In Stock' : 'Low Stock';
         @endphp
-        <span class="px-2 py-0.5 rounded-full text-xs border {{ $cls }}">{{ Str::of($status)->replace('_',' ')->title() }}</span>
+        <span class="px-2 py-0.5 rounded-full text-xs border {{ $cls }}">{{ $label }}</span>
       </div>
     </div>
 
@@ -165,7 +166,7 @@ use Illuminate\Support\Str;
       <div class="flex items-center gap-2">
         @if (Route::has('production.show'))
           <a href="{{ route('production.show', $p->id) }}"
-             class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/90 hover:bg-white/10">
+             class="px-3 py-2 rounded-xl bg-gray-100 border border-gray-200 text-gray-800 hover:bg-gray-200">
             Manage Orders
           </a>
         @endif
@@ -184,10 +185,10 @@ use Illuminate\Support\Str;
           Delete Product
         </button>
 
-        {{-- Quick Add to Sales --}}
+        {{-- Quick Add to Sales (pastel blue like screenshot “Quick Add”) --}}
         <button
           type="button"
-          class="js-quick-add px-3 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold hover:opacity-90"
+          class="js-quick-add px-3 py-2 rounded-xl bg-blue-100 text-blue-700 font-semibold hover:bg-blue-200"
           data-id="{{ (int)$p->id }}"
           data-name="{{ e($p->product_name) }}"
           data-price="{{ $defaultPrice }}"
@@ -198,7 +199,7 @@ use Illuminate\Support\Str;
     </div>
   </div>
 @empty
-  <div class="col-span-full text-center text-white/70 py-10">No products yet.</div>
+  <div class="col-span-full text-center text-gray-500 py-10">No products yet.</div>
 @endforelse
 
 {{-- ===== Global Delete Product Modal (single reusable instance) ===== --}}
@@ -210,7 +211,7 @@ use Illuminate\Support\Str;
     </div>
     <div class="modal-body">
       <p class="text-sm leading-relaxed">
-        This action will permanently remove <span id="delProductName" class="font-semibold text-white"></span> and
+        This action will permanently remove <span id="delProductName" class="font-semibold text-gray-900"></span> and
         all related data. Are you sure you want to continue?
       </p>
     </div>
@@ -229,8 +230,8 @@ use Illuminate\Support\Str;
   function toast(message, type='info') {
     const el = document.createElement('div');
     el.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl text-sm shadow z-[9999] ${
-      type==='success' ? 'bg-emerald-600' : type==='error' ? 'bg-red-600' : 'bg-black/80'
-    } text-white`;
+      type==='success' ? 'bg-green-600 text-white' : type==='error' ? 'bg-red-600 text-white' : 'bg-gray-900 text-white'
+    }`;
     el.textContent = message;
     document.body.appendChild(el);
     setTimeout(() => el.remove(), 2500);
@@ -284,11 +285,8 @@ use Illuminate\Support\Str;
         if (bId) bId.value = data.production_id || '';
 
         const modal = document.getElementById('saleModal');
-        if (modal) {
-          modal.classList.remove('hidden'); modal.removeAttribute('aria-hidden');
-        } else {
-          toast('Sales modal not found.', 'error');
-        }
+        if (modal) { modal.classList.remove('hidden'); modal.removeAttribute('aria-hidden'); }
+        else { toast('Sales modal not found.', 'error'); }
       }
     } catch (e) {
       console.warn(e);
@@ -327,9 +325,7 @@ use Illuminate\Support\Str;
     btnConfirm?.classList.add('btn-busy');
 
     try {
-      // RESTful route: products.destroy
       const url = '{{ route('products.destroy', 0) }}'.replace('/0', '/' + activeProductId);
-
       const res = await fetch(url, {
         method: 'DELETE',
         headers: {
@@ -341,14 +337,10 @@ use Illuminate\Support\Str;
 
       if (!res.ok) {
         let msg = 'Failed to delete product.';
-        try {
-          const data = await res.json();
-          if (data?.message) msg = data.message;
-        } catch(_) {}
+        try { const data = await res.json(); if (data?.message) msg = data.message; } catch(_) {}
         throw new Error(msg);
       }
 
-      // remove card from UI
       const card = document.getElementById(`product-card-${activeProductId}`);
       if (card) card.remove();
       toast('Product permanently deleted.', 'success');
@@ -372,7 +364,7 @@ use Illuminate\Support\Str;
       return;
     }
 
-    if (e.target === delModal) closeDelModal(); // click backdrop to close
+    if (e.target === delModal) closeDelModal();
   }, true);
 
   btnCancel?.addEventListener('click', closeDelModal);

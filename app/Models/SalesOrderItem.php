@@ -15,19 +15,27 @@ class SalesOrderItem extends Model
         'sales_order_id',
         'product_id',
         'production_id',   // optional traceability
-        'description',     // display name
+        'description',     // display name / override
         'quantity',
         'unit_price',
         'total_price',
-        'delivery_date',   // used for expiry buffer checks
+        'delivery_date',   // expected delivery / expiry buffer checks
         'status',
     ];
 
     protected $casts = [
-        'quantity'      => 'integer',
+        'quantity'      => 'decimal:3',
         'unit_price'    => 'decimal:2',
         'total_price'   => 'decimal:2',
-        'delivery_date' => 'datetime',
+        'delivery_date' => 'datetime:Y-m-d',
+        'status'        => 'string',
+    ];
+
+    /** Automatically expose useful derived fields */
+    protected $appends = [
+        'allocated_qty',
+        'remaining_qty',
+        'is_fully_allocated',
     ];
 
     /* ----------------
@@ -57,7 +65,13 @@ class SalesOrderItem extends Model
     public function batches()
     {
         return $this->belongsToMany(Batch::class, 'batch_allocations', 'order_item_id', 'batch_id')
-            ->withPivot(['allocated_qty', 'locked_by_admin', 'override_reason', 'approved_by', 'approved_at'])
+            ->withPivot([
+                'allocated_qty',
+                'locked_by_admin',
+                'override_reason',
+                'approved_by',
+                'approved_at',
+            ])
             ->withTimestamps();
     }
 
@@ -65,20 +79,28 @@ class SalesOrderItem extends Model
      |  Accessors
      * ------------- */
 
-    public function getAllocatedQtyAttribute(): int
+    public function getAllocatedQtyAttribute(): float
     {
-        $allocs = $this->relationLoaded('allocations') ? $this->allocations : $this->allocations()->get();
-        return (int) ($allocs->sum('allocated_qty') ?? 0);
+        $allocs = $this->relationLoaded('allocations')
+            ? $this->allocations
+            : $this->allocations()->get();
+
+        return (float) ($allocs->sum('allocated_qty') ?? 0);
     }
 
-    public function getRemainingQtyAttribute(): int
+    public function getRemainingQtyAttribute(): float
     {
-        return max(0, (int) $this->quantity - $this->allocated_qty);
+        return max(0, (float) $this->quantity - $this->allocated_qty);
     }
 
     public function getIsFullyAllocatedAttribute(): bool
     {
-        return $this->remaining_qty === 0;
+        return $this->remaining_qty <= 0;
+    }
+
+    public function getDisplayNameAttribute(): string
+    {
+        return $this->description ?: optional($this->product)->product_name ?: 'Unnamed Item';
     }
 
     /* ----------
@@ -87,9 +109,10 @@ class SalesOrderItem extends Model
 
     public function scopeNeedingAllocation($q)
     {
-        return $q->where(function ($qq) {
-            $qq->whereRaw('(COALESCE((SELECT SUM(allocated_qty) FROM batch_allocations WHERE order_item_id = sales_order_items.id AND deleted_at IS NULL), 0)) < quantity');
-        });
+        return $q->whereRaw('COALESCE(
+            (SELECT SUM(allocated_qty) FROM batch_allocations 
+             WHERE order_item_id = sales_order_items.id AND deleted_at IS NULL), 0
+        ) < quantity');
     }
 
     public function scopeForProduct($q, int $productId)
@@ -97,20 +120,26 @@ class SalesOrderItem extends Model
         return $q->where('product_id', $productId);
     }
 
+    public function scopeForOrder($q, int $orderId)
+    {
+        return $q->where('sales_order_id', $orderId);
+    }
+
     /* -------------
-     |  Mutators / Model events
+     |  Mutators / Events
      * ------------- */
 
-    // Keep total_price always in sync
+    /** Keep total_price always in sync */
     public function refreshTotals(): void
     {
-        $this->total_price = (float) $this->quantity * (float) $this->unit_price;
+        $qty  = (float) ($this->quantity ?? 0);
+        $unit = (float) ($this->unit_price ?? 0);
+        $this->total_price = round($qty * $unit, 2);
     }
 
     protected static function booted(): void
     {
         static::saving(function (self $item) {
-            // Auto-calc total before save
             $item->refreshTotals();
         });
     }
