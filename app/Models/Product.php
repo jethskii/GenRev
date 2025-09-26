@@ -93,7 +93,10 @@ class Product extends Model
      * ---------------------------------------------------------------------*/
     public function productions() { return $this->hasMany(Production::class); }
     public function sales()       { return $this->hasMany(Sale::class); }
-    public function recipes()     { return $this->hasMany(ProductRecipe::class); }
+    public function recipes()
+{
+    return $this->hasMany(ProductRecipe::class)->with('material');
+}
 
     /* ----------------------------------------------------------------------
      | Accessors / Mutators (null-safe, view-friendly)

@@ -1,42 +1,96 @@
 @extends('layout.mainlayout')
 
+@section('styles')
+<style>
+  /* ---- Light theme tokens (shared) ---- */
+  :root{
+    --bg-offwhite:#f7f7f5;
+    --ink:#0f172a;
+    --muted:#475569;
+    --line:#e5e7eb;
+
+    --red:#dc2626;     /* primary */
+    --green:#16a34a;   /* secondary */
+    --blue:#2563eb;    /* secondary */
+  }
+
+  .page-card{
+    background:#fff;
+    color:var(--ink);
+    border:1px solid var(--line);
+    border-radius:1rem;
+    padding:1.25rem;
+    box-shadow:0 1px 2px rgba(0,0,0,.04),0 10px 24px rgba(0,0,0,.05);
+  }
+  .soft-ring{ border:1px solid var(--line); border-radius:1rem; }
+
+  .label{font-size:.85rem;color:var(--muted);margin-bottom:.35rem;display:block}
+  .input, .select, .textarea{
+    width:100%; background:#fff; color:var(--ink);
+    border:1px solid var(--line); border-radius:.75rem;
+    padding:.6rem .8rem; line-height:1.35;
+    transition: box-shadow .15s ease, border-color .15s ease;
+  }
+  .input:focus, .select:focus, .textarea:focus{
+    outline:0; border-color:var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,.15);
+  }
+  .help{font-size:.75rem;color:#64748b}
+
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:.75rem;padding:.6rem .9rem;font-weight:700;border:1px solid transparent;transition:filter .12s ease}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .btn-primary{background:var(--red);color:#fff}
+  .btn-primary:hover{filter:brightness(.97)}
+  .btn-outline{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn-outline:hover{filter:brightness(.98)}
+
+  /* table */
+  table{border-collapse:separate;border-spacing:0}
+  thead th{
+    font-size:.72rem;letter-spacing:.02em;text-transform:uppercase;
+    color:#334155;background:#fafafa;border-bottom:1px solid var(--line);
+  }
+  tbody td{border-top:1px solid var(--line)}
+  tbody tr:hover{background:#fafafa}
+  tfoot th, tfoot td{border-top:2px solid var(--line);background:#fafafa}
+</style>
+@endsection
+
 @section('content')
-<div class="glass section-liquid-shine text-white p-6 rounded-2xl shadow-md border border-dark-line">
+<div class="page-card">
 
   {{-- Header --}}
   <div class="flex items-center justify-between mb-6">
     <div>
       <h2 id="productTitle" class="text-2xl font-bold tracking-wide">{{ $product->product_name }}</h2>
-      <p class="text-sm text-[var(--muted,#A3B4A7)]">
+      <p class="text-sm text-[color:var(--muted)]">
         Category: <span id="productCategory">{{ $product->category ?? 'Uncategorized' }}</span>
       </p>
     </div>
     <img
       id="productImage"
       src="{{ $product->image_url ?? '/images/default-burger.png' }}"
-      class="w-24 h-24 object-cover rounded-xl shadow border border-dark-line ring-1 ring-white/10"
+      class="w-24 h-24 object-cover rounded-xl border border-[color:var(--line)]"
       alt="{{ $product->product_name }}"
     >
   </div>
 
   {{-- Top actions --}}
   <div class="flex justify-between items-center mb-4">
-    <a href="{{ route('production.index') }}" class="text-[var(--sidebar-active,#EDD100)] hover:opacity-90">&larr; Back to Production</a>
-    <button id="addOrderBtn" type="button"
-            class="px-4 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold shadow hover:opacity-90 transition">
+    <a href="{{ route('production.index') }}" class="text-[color:var(--blue)] hover:underline">&larr; Back to Production</a>
+    <button id="addOrderBtn" type="button" class="btn btn-primary">
       + Add Order
     </button>
   </div>
 
   {{-- Flash + Errors --}}
   @if(session('success'))
-    <div class="mb-4 p-3 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">{{ session('success') }}</div>
+    <div class="mb-4 rounded-lg border border-green-200 bg-green-50 text-green-800 px-3 py-2">{{ session('success') }}</div>
   @endif
   @if(session('error'))
-    <div class="mb-4 p-3 rounded-xl bg-red-500/15 text-red-200 border border-red-400/30">{{ session('error') }}</div>
+    <div class="mb-4 rounded-lg border border-red-200 bg-red-50 text-red-800 px-3 py-2">{{ session('error') }}</div>
   @endif
   @if ($errors->any())
-    <div class="mb-4 p-3 rounded-xl bg-red-500/10 text-red-200 border border-red-400/30">
+    <div class="mb-4 rounded-lg border border-red-200 bg-red-50 text-red-800 px-3 py-2">
       <ul class="list-disc pl-6">
         @foreach ($errors->all() as $err)<li>{{ $err }}</li>@endforeach
       </ul>
@@ -44,9 +98,9 @@
   @endif
 
   {{-- Orders Table --}}
-  <div class="overflow-x-auto rounded-2xl ring-1 ring-white/10">
+  <div class="overflow-x-auto soft-ring">
     <table class="min-w-full text-sm text-left rounded-2xl overflow-hidden">
-      <thead class="bg-white/5 text-white uppercase text-xs">
+      <thead>
         <tr>
           <th class="py-3 px-4">Batch #</th>
           <th class="py-3 px-4">Forecasted</th>
@@ -57,9 +111,9 @@
           <th class="py-3 px-4">Actions</th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-white/10">
+      <tbody>
         @forelse ($orders as $o)
-          <tr class="hover:bg-white/5 transition">
+          <tr>
             <td class="py-3 px-4 font-mono text-xs">{{ $o->batch_number }}</td>
             <td class="py-3 px-4">{{ (float)$o->forecasted_demand }} kg</td>
             <td class="py-3 px-4">{{ (float)($o->quantity ?? $o->current_inventory) }} kg</td>
@@ -70,50 +124,42 @@
             </td>
             <td class="py-3 px-4">
               <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <a href="{{ route('production.edit', $o->id) }}"
-                   class="px-3 py-1.5 rounded-full border border-white/20 hover:border-[var(--brand-green,#047705)] hover:bg-[var(--brand-green,#047705)]/20 transition">
-                  Edit
-                </a>
+                <a href="{{ route('production.edit', $o->id) }}" class="btn btn-outline">Edit</a>
                 <form action="{{ route('production.destroy', $o->id) }}" method="POST"
                       onsubmit="return confirm('Delete this batch? Inventory will be adjusted.')">
                   @csrf @method('DELETE')
-                  <button type="submit"
-                          class="px-3 py-1.5 rounded-full border border-red-500/40 text-red-300 hover:bg-red-500/10 transition">
-                    Delete
-                  </button>
+                  <button type="submit" class="btn btn-primary" style="background:var(--red)">Delete</button>
                 </form>
               </div>
             </td>
           </tr>
         @empty
-          <tr><td colspan="7" class="py-4 text-center text-[var(--muted,#A3B4A7)]">No production orders yet.</td></tr>
+          <tr><td colspan="7" class="py-4 text-center text-[color:var(--muted)]">No production orders yet.</td></tr>
         @endforelse
       </tbody>
     </table>
   </div>
 </div>
 
-{{-- Add Order Modal --}}
+{{-- Add Order Modal (light) --}}
 <div id="addOrderModal" class="fixed inset-0 z-[9999] hidden">
-  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeOrderModal()" aria-hidden="true"></div>
+  <div class="absolute inset-0 bg-black/40" onclick="closeOrderModal()" aria-hidden="true"></div>
 
-  <div class="relative mx-auto my-10 max-w-md w-[92%] glass border border-dark-line rounded-2xl shadow-xl text-white p-6 animate-fadeIn">
+  <div class="relative mx-auto my-10 max-w-md w-[92%] page-card animate-fadeIn">
     <button type="button" onclick="closeOrderModal()" aria-label="Close"
-            class="absolute top-2 right-4 text-2xl font-bold hover:text-red-400">&times;</button>
+            class="absolute top-2 right-4 text-2xl font-bold text-[color:var(--muted)] hover:text-[color:var(--red)]">&times;</button>
 
     <h3 id="modalTitle" class="text-xl font-semibold mb-4">Add Order ({{ $product->product_name }})</h3>
 
-    {{-- IMPORTANT: post to production.orders.store (no URL params). Provide product_id as a hidden field. --}}
+    {{-- IMPORTANT: controller expects POST to production.orders.store with product_id hidden --}}
     <form id="addOrderForm" action="{{ route('production.orders.store') }}" method="POST" class="space-y-3">
       @csrf
       <input type="hidden" id="po_product_id" name="product_id" value="{{ (int) $product->id }}">
 
       {{-- Product select + quick add --}}
       <div>
-        <label class="block text-sm mb-1">Product</label>
-
-        <select id="po_product_select"
-                class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+        <label class="label">Product</label>
+        <select id="po_product_select" class="select">
           @foreach(($allProducts ?? collect([$product])) as $p)
             <option value="{{ $p->id }}" {{ (int)$p->id === (int)$product->id ? 'selected' : '' }}>
               {{ $p->product_name }}
@@ -122,68 +168,53 @@
         </select>
 
         <div class="mt-2">
-          <button type="button" id="po_new_toggle"
-                  class="text-xs px-2.5 py-1 rounded-full border border-white/20 hover:border-[var(--brand-green,#047705)] hover:bg-[var(--brand-green,#047705)]/20 transition">
-            + New product
-          </button>
+          <button type="button" id="po_new_toggle" class="btn btn-outline px-2 py-1 text-sm">+ New product</button>
         </div>
 
         {{-- inline quick-add form --}}
-        <div id="po_new_wrap" class="mt-3 hidden rounded-xl border border-white/10 bg-white/5 p-3">
+        <div id="po_new_wrap" class="mt-3 hidden rounded-xl border border-[color:var(--line)] bg-white p-3">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs mb-1">Product Name</label>
-              <input id="po_new_name" type="text" class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2" placeholder="e.g., Burger Patty" />
+              <label class="label">Product Name</label>
+              <input id="po_new_name" type="text" class="input" placeholder="e.g., Burger Patty" />
             </div>
             <div>
-              <label class="block text-xs mb-1">Category (optional)</label>
-              <input id="po_new_cat" type="text" class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2" placeholder="e.g., Meat" />
+              <label class="label">Category (optional)</label>
+              <input id="po_new_cat" type="text" class="input" placeholder="e.g., Meat" />
             </div>
             <div>
-              <label class="block text-xs mb-1">Unit Cost (₱)</label>
-              <input id="po_new_cost" type="number" step="any" min="0" class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2" />
+              <label class="label">Unit Cost (₱)</label>
+              <input id="po_new_cost" type="number" step="any" min="0" class="input" />
             </div>
             <div>
-              <label class="block text-xs mb-1">Shelf Life (days)</label>
-              <input id="po_new_shelf" type="number" min="0" class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2" value="7" />
+              <label class="label">Shelf Life (days)</label>
+              <input id="po_new_shelf" type="number" min="0" class="input" value="7" />
             </div>
           </div>
           <div class="mt-3 flex items-center gap-2">
-            <button type="button" id="po_new_save"
-                    class="px-3 py-1.5 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] text-sm font-semibold hover:opacity-90 transition">
-              Save product
-            </button>
-            <button type="button" id="po_new_cancel"
-                    class="px-3 py-1.5 rounded-xl border border-white/15 text-sm hover:bg-white/10 transition">
-              Cancel
-            </button>
-            <span id="po_new_err" class="text-xs text-red-300 ml-2 hidden"></span>
+            <button type="button" id="po_new_save" class="btn btn-primary text-sm">Save product</button>
+            <button type="button" id="po_new_cancel" class="btn btn-outline text-sm">Cancel</button>
+            <span id="po_new_err" class="text-xs text-[color:var(--red)] ml-2 hidden"></span>
           </div>
         </div>
       </div>
 
       {{-- Batch Number (preview only) --}}
       <div>
-        <label class="block text-sm mb-1">Batch Number</label>
-        <input id="po_batch_preview"
-               class="w-full rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-white/90 cursor-not-allowed"
-               value="{{ $nextBatchNumber ?? 'Auto' }}"
-               readonly>
+        <label class="label">Batch Number</label>
+        <input id="po_batch_preview" class="input cursor-not-allowed bg-gray-50" value="{{ $nextBatchNumber ?? 'Auto' }}" readonly>
       </div>
 
       {{-- Forecasted / Produced --}}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="block text-sm mb-1">Forecasted Demand (kg)</label>
-          <input id="po_fc" name="forecasted_demand" type="number" step="any"
-                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          <label class="label">Forecasted Demand (kg)</label>
+          <input id="po_fc" name="forecasted_demand" type="number" step="any" class="input"
                  value="{{ old('forecasted_demand', (float)($product->forecasted_demand ?? 0)) }}">
         </div>
         <div>
-          <label class="block text-sm mb-1">Produced Quantity (kg)</label>
-          {{-- IMPORTANT: controller expects "quantity" --}}
-          <input id="po_prod_qty" name="quantity" type="number" step="any" required
-                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          <label class="label">Produced Quantity (kg)</label>
+          <input id="po_prod_qty" name="quantity" type="number" step="any" required class="input"
                  value="{{ old('quantity') }}">
         </div>
       </div>
@@ -191,70 +222,55 @@
       {{-- Unit Cost / Unit Price --}}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="block text-sm mb-1">Unit Cost (₱)</label>
-          <input id="po_cost" name="unit_cost" type="number" step="any" required
-                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          <label class="label">Unit Cost (₱)</label>
+          <input id="po_cost" name="unit_cost" type="number" step="any" required class="input"
                  value="{{ old('unit_cost', (float)($product->unit_cost ?? 0)) }}">
         </div>
         <div>
-          <label class="block text-sm mb-1">Unit Price (₱)</label>
-          <input id="po_price" name="unit_price" type="number" step="any"
-                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          <label class="label">Unit Price (₱)</label>
+          <input id="po_price" name="unit_price" type="number" step="any" class="input"
                  value="{{ old('unit_price', (float)($defaultUnitPrice ?? $product->default_price ?? 0)) }}">
-          <p class="text-xs text-[var(--muted,#A3B4A7)] mt-1">Leave blank to use latest sale/product price.</p>
+          <p class="help mt-1">Leave blank to use latest sale/product price.</p>
         </div>
       </div>
 
       {{-- Dates --}}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label class="block text-sm mb-1">Production Date</label>
-          <input id="po_prod_date" name="production_date" type="date" required
-                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          <label class="label">Production Date</label>
+          <input id="po_prod_date" name="production_date" type="date" required class="input"
                  value="{{ old('production_date', $defaultProdDate ?? now()->toDateString()) }}">
         </div>
         <div>
-          <label class="block text-sm mb-1">Expiration Date (auto)</label>
-          <input id="po_exp_preview" type="date" readonly
-                 class="w-full rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-white/90 cursor-not-allowed"
+          <label class="label">Expiration Date (auto)</label>
+          <input id="po_exp_preview" type="date" readonly class="input cursor-not-allowed bg-gray-50"
                  value="{{ old('expiration_date', $defaultExpiry ?? '') }}">
-          <p class="text-xs text-[var(--muted,#A3B4A7)] mt-1">
-            Computed from production date + {{ (int)($product->shelf_life_days ?? 7) }} days.
-          </p>
+          <p class="help mt-1">Computed from production date + {{ (int)($product->shelf_life_days ?? 7) }} days.</p>
         </div>
       </div>
 
-      {{-- Optional order fields (kept / ignored by controller) --}}
+      {{-- Optional fields --}}
       <div>
-        <label class="block text-sm mb-1">Order Date</label>
-        <input id="po_order_date" name="order_date" type="date"
-               class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+        <label class="label">Order Date</label>
+        <input id="po_order_date" name="order_date" type="date" class="input"
                value="{{ old('order_date', now()->toDateString()) }}">
-        <p class="text-xs text-[var(--muted,#A3B4A7)] mt-1">Leave blank to use today.</p>
+        <p class="help mt-1">Leave blank to use today.</p>
       </div>
       <div>
-        <label class="block text-sm mb-1">Order Quantity (kg)</label>
-        <input id="po_order_qty" name="order_quantity_kg" type="number" step="any"
-               class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+        <label class="label">Order Quantity (kg)</label>
+        <input id="po_order_qty" name="order_quantity_kg" type="number" step="any" class="input"
                value="{{ old('order_quantity_kg') }}">
       </div>
       <div>
-        <label class="block text-sm mb-1">Customer (optional)</label>
-        <input name="customer_name"
-               class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-               value="{{ old('customer_name') }}" placeholder="Walk-in, Distributor A, etc.">
+        <label class="label">Customer (optional)</label>
+        <input name="customer_name" class="input" value="{{ old('customer_name') }}" placeholder="Walk-in, Distributor A, etc.">
       </div>
       <div>
-        <label class="block text-sm mb-1">Notes</label>
-        <textarea name="notes" rows="2"
-                  class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                  placeholder="Special handling, delivery date, etc.">{{ old('notes') }}</textarea>
+        <label class="label">Notes</label>
+        <textarea name="notes" rows="2" class="textarea" placeholder="Special handling, delivery date, etc.">{{ old('notes') }}</textarea>
       </div>
 
-      <button id="submitAddOrder"
-              class="w-full mt-2 px-4 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold shadow hover:opacity-90 transition">
-        Add Order (Production + Sale)
-      </button>
+      <button id="submitAddOrder" class="btn btn-primary w-full">Add Order (Production + Sale)</button>
     </form>
   </div>
 </div>
@@ -262,7 +278,7 @@
 {{-- Tiny animation --}}
 <style>
 @keyframes fadeIn { from{opacity:0;transform:scale(.98)} to{opacity:1;transform:scale(1)} }
-.animate-fadeIn{ animation:fadeIn .2s ease-out }
+.animate-fadeIn{ animation:fadeIn .18s ease-out }
 </style>
 @endsection
 
@@ -308,7 +324,7 @@
     if (e.target && e.target.id === 'po_prod_date') syncExpiryPreview();
   });
 
-  // Auto-fill from server for a given product name (only if field is empty)
+  // Auto-fill from server for a given product name (only if empty)
   function autoFillCostPriceForName(name){
     fetch(`{{ route('production.info', ':name') }}`.replace(':name', encodeURIComponent(name)))
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -335,7 +351,6 @@
 
   const csrfToken = () => (document.querySelector('#addOrderForm input[name=_token]')?.value || '');
 
-  // ✅ Only update hidden product_id and the modal title (do NOT rewrite form action)
   function updateFormForProduct(productId, productName){
     const hid = $$('#po_product_id');
     if (hid) hid.value = String(productId);
@@ -357,7 +372,6 @@
       autoFillCostPriceForName(opt.textContent.trim());
     });
 
-    // toggle quick-add
     tog?.addEventListener('click', () => {
       wrap?.classList.toggle('hidden');
       if (err){ err.textContent=''; err.classList.add('hidden'); }

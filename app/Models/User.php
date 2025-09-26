@@ -3,25 +3,20 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, SoftDeletes;
 
-    /**
-     * Role constants (supports both your DB enum and app roles).
-     * Your DB currently has: admin | staff | manager.
-     * Some code also uses: admin | sales | inventory.
-     */
-    public const ROLE_ADMIN      = 'admin';
-    public const ROLE_STAFF      = 'staff';
-    public const ROLE_MANAGER    = 'manager';
-    public const ROLE_SALES      = 'sales';
-    public const ROLE_INVENTORY  = 'inventory';
+    public const ROLE_ADMIN     = 'admin';
+    public const ROLE_STAFF     = 'staff';
+    public const ROLE_MANAGER   = 'manager';
+    public const ROLE_SALES     = 'sales';
+    public const ROLE_INVENTORY = 'inventory';
 
-    /** All known roles (helpers will accept any of these). */
     public const KNOWN_ROLES = [
         self::ROLE_ADMIN,
         self::ROLE_STAFF,
@@ -30,10 +25,10 @@ class User extends Authenticatable
         self::ROLE_INVENTORY,
     ];
 
-    /**
-     * Mass-assignable attributes.
-     * Includes your profile columns visible in the DB screenshot.
-     */
+    protected $attributes = [
+        'role' => self::ROLE_STAFF,
+    ];
+
     protected $fillable = [
         'name',
         'email',
@@ -47,128 +42,107 @@ class User extends Authenticatable
         'email_verified_at',
     ];
 
-    /** Hidden attributes for arrays/JSON. */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+        'password'          => 'hashed',
+        'deleted_at'        => 'datetime',
+    ];
+
     /**
-     * Attribute casting.
-     * - 'hashed' automatically bcrypts on set.
+     * Allow overriding the table via .env:
+     *   AUTH_TABLE=app_users   (fallback: users)
      */
-    protected function casts(): array
+    public function getTable()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password'          => 'hashed',
-        ];
+        return env('AUTH_TABLE', 'users');
     }
 
-    /* -------------------------------------------------------
-     | Relationships
-     * ------------------------------------------------------*/
-
-    /** Linked employee profile (if present). */
+    /* Relationships */
     public function employee()
     {
-        return $this->hasOne(\App\Models\Employee::class);
+        return $this->hasOne(Employee::class, 'user_id');
     }
 
-    /** Example relation kept from your codebase. */
     public function approvedAllocations()
     {
-        return $this->hasMany(\App\Models\BatchAllocation::class, 'approved_by');
+        return $this->hasMany(BatchAllocation::class, 'approved_by');
     }
 
-    /* -------------------------------------------------------
-     | Mutators / Normalizers
-     * ------------------------------------------------------*/
-
-    /** Always store role in lowercase (handles enum strings). */
+    /* Normalizers */
     public function setRoleAttribute($value): void
     {
-        $this->attributes['role'] = is_string($value) ? strtolower($value) : $value;
+        $this->attributes['role'] = is_string($value) ? strtolower(trim($value)) : $value;
     }
 
-    /** Always store email in lowercase for consistent login lookups. */
     public function setEmailAttribute($value): void
     {
         $this->attributes['email'] = is_string($value) ? strtolower(trim($value)) : $value;
     }
 
-    /** Optionally normalize alt_email too. */
     public function setAltEmailAttribute($value): void
     {
         $this->attributes['alt_email'] = is_string($value) ? strtolower(trim($value)) : $value;
     }
 
-    /* -------------------------------------------------------
-     | Role helpers
-     * ------------------------------------------------------*/
+    public function setNameAttribute($value): void
+    {
+        $this->attributes['name'] = is_string($value) ? trim($value) : $value;
+    }
 
-    /** Exact role check (case-insensitive). */
+    /* Role helpers */
     public function hasRole(string $role): bool
     {
         return strtolower($this->role ?? '') === strtolower($role);
     }
 
-    /** Check against any of multiple roles. */
     public function hasAnyRole(array $roles): bool
     {
         $current = strtolower($this->role ?? '');
         foreach ($roles as $r) {
-            if ($current === strtolower($r)) {
-                return true;
-            }
+            if ($current === strtolower($r)) return true;
         }
         return false;
     }
 
-    /** Quick flags (for Blade conditionals, gates, etc.). */
-    public function getIsAdminAttribute(): bool
-    {
-        return $this->hasRole(self::ROLE_ADMIN);
-    }
-    public function getIsStaffAttribute(): bool
-    {
-        return $this->hasRole(self::ROLE_STAFF);
-    }
-    public function getIsManagerAttribute(): bool
-    {
-        return $this->hasRole(self::ROLE_MANAGER);
-    }
+    public function getIsAdminAttribute(): bool   { return $this->hasRole(self::ROLE_ADMIN); }
+    public function getIsStaffAttribute(): bool   { return $this->hasRole(self::ROLE_STAFF); }
+    public function getIsManagerAttribute(): bool { return $this->hasRole(self::ROLE_MANAGER); }
 
-    /** Example capability helper (treat admin as superuser). */
     public function canApproveAllocations(): bool
     {
         return $this->hasRole(self::ROLE_ADMIN);
     }
 
-    /* -------------------------------------------------------
-     | Scopes
-     * ------------------------------------------------------*/
-
-    /** Filter by a single role. */
+    /* Scopes */
     public function scopeRole($q, string $role)
     {
-        return $q->where('role', strtolower($role));
+        return $q->where($this->getTable().'.role', strtolower($role));
     }
 
-    /** Filter by any of the given roles. */
     public function scopeRoleIn($q, array $roles)
     {
         $lower = array_map(fn ($r) => strtolower($r), $roles);
-        return $q->whereIn('role', $lower);
+        return $q->whereIn($this->getTable().'.role', $lower);
     }
 
-    /* -------------------------------------------------------
-     | Accessors
-     * ------------------------------------------------------*/
+    public function scopeSearch($q, ?string $term)
+    {
+        if (!$term) return $q;
+        $t = strtolower(trim($term));
+        $table = $this->getTable();
 
-    /**
-     * Prefer Employee name if present; fall back to user name/email.
-     */
+        return $q->where(function ($w) use ($t, $table) {
+            $w->whereRaw("LOWER({$table}.name)  LIKE ?", ["%{$t}%"])
+              ->orWhereRaw("LOWER({$table}.email) LIKE ?", ["%{$t}%"]);
+        });
+    }
+
+    /* Accessors */
     public function getDisplayNameAttribute(): string
     {
         $emp = $this->relationLoaded('employee') ? $this->employee : $this->employee()->first();

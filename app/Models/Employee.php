@@ -2,17 +2,24 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Database\Eloquent\Model; // kept for phpdoc hints
+use Illuminate\Foundation\Auth\User as Authenticatable; // auth-ready base
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 
-class Employee extends Model
+class Employee extends Authenticatable
 {
-    use HasFactory;
+    use HasFactory, Notifiable;
 
     /**
-     * Allow mass assignment for fields you actually write from forms/controllers.
-     * (If your table also has phone/hire_date, they’re included below.)
+     * If your table name isn't the Laravel default "employees", keep this.
+     * (Shown for clarity.)
+     */
+    protected $table = 'employees';
+
+    /**
+     * Mass-assignable fields (adjust to your actual columns).
      */
     protected $fillable = [
         'user_id',
@@ -21,29 +28,32 @@ class Employee extends Model
         'position',
         'email',
         'username',
-        'password',     // only if you keep a separate employee password (optional)
+        'password',     // will be auto-hashed via casts
         'status',
         'avatar_path',
-        'phone',        // optional column (present in your DB per screenshot)
-        'hire_date',    // optional column (present in your DB per screenshot)
+        'phone',
+        'hire_date',
     ];
 
     /**
-     * Hide sensitive data when serializing to arrays/JSON.
+     * Hide sensitive data when serializing.
      */
     protected $hidden = [
         'password',
+        'remember_token',
     ];
 
     /**
-     * Casts for clean typing & dates.
+     * Type casting (uses Laravel's built-in "hashed" for passwords).
      */
     protected $casts = [
         'hire_date' => 'date',
+        'email_verified_at' => 'datetime',
+        'password' => 'hashed',
     ];
 
     /**
-     * Computed attributes automatically appended.
+     * Appended accessors.
      */
     protected $appends = [
         'avatar_url',
@@ -64,19 +74,18 @@ class Employee extends Model
      | Accessors
      * ----------------------------------------------------------------*/
 
-    /** Public URL for the stored avatar (works with `php artisan storage:link`). */
     public function getAvatarUrlAttribute(): ?string
     {
-        return $this->avatar_path ? asset('storage/' . ltrim($this->avatar_path, '/')) : null;
+        return $this->avatar_path
+            ? asset('storage/' . ltrim($this->avatar_path, '/'))
+            : null;
     }
 
-    /** Convenience: "First Last". */
     public function getFullNameAttribute(): string
     {
         return trim(($this->first_name ?? '') . ' ' . ($this->last_name ?? ''));
     }
 
-    /** Convenience: initials like "JM". */
     public function getInitialsAttribute(): string
     {
         $f = strtoupper(substr((string) $this->first_name, 0, 1));
@@ -85,38 +94,25 @@ class Employee extends Model
     }
 
     /* -----------------------------------------------------------------
-     | Mutators (normalizers)
+     | Modern normalizers (Attribute setters)
      * ----------------------------------------------------------------*/
 
-    /** Store email in lowercase for uniqueness & matching. */
-    public function setEmailAttribute($value): void
+    protected function email(): Attribute
     {
-        $this->attributes['email'] = is_string($value) ? strtolower(trim($value)) : $value;
+        return Attribute::make(
+            set: fn($value) => is_string($value) ? strtolower(trim($value)) : $value
+        );
     }
 
-    /** Store username in lowercase for uniqueness & matching. */
-    public function setUsernameAttribute($value): void
+    protected function username(): Attribute
     {
-        $this->attributes['username'] = is_string($value) ? strtolower(trim($value)) : $value;
-    }
-
-    /**
-     * Optional: hash employee.password if you keep a separate credential.
-     * Safe-guards against double-hashing by checking bcrypt prefix.
-     * (If your controller already hashes, you can remove this method.)
-     */
-    public function setPasswordAttribute($value): void
-    {
-        if (empty($value)) {
-            $this->attributes['password'] = null;
-            return;
-        }
-        $val = (string) $value;
-        $this->attributes['password'] = str_starts_with($val, '$2y$') ? $val : Hash::make($val);
+        return Attribute::make(
+            set: fn($value) => is_string($value) ? strtolower(trim($value)) : $value
+        );
     }
 
     /* -----------------------------------------------------------------
-     | Scopes (handy query helpers)
+     | Scopes
      * ----------------------------------------------------------------*/
 
     public function scopeActive($q)
@@ -129,13 +125,11 @@ class Employee extends Model
         return $q->where('status', 'inactive');
     }
 
-    /** Natural alphabetical order (first_name, then last_name). */
     public function scopeOrdered($q)
     {
         return $q->orderBy('first_name')->orderBy('last_name');
     }
 
-    /** Reusable search scope (matches your controller search fields). */
     public function scopeSearch($q, ?string $term)
     {
         $s = trim((string) $term);
