@@ -6,7 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+
+use App\Models\Production;
+use App\Models\Sale;
+use App\Models\ProductRecipe;
 
 class Product extends Model
 {
@@ -14,28 +19,32 @@ class Product extends Model
 
     protected $table = 'products';
 
-    /** Mass assignable columns (must match real DB columns) */
+    protected $primaryKey = 'id';
+    public $incrementing  = true;
+    protected $keyType    = 'int';
+
+    /** Columns expected from controller + your schema */
     protected $fillable = [
         // Identity
         'product_code',
         'product_name',
         'category',
-        'status',          // active|inactive|pending|on_sale
-        'unit',            // kg|pcs|lt
 
         // Pricing / costs
-        'unit_cost',       // standard/overhead cost (NOT BOM)
-        'default_price',
+        'unit_cost',
+        'price',            // prefer this if it exists
+        'default_price',    // controller may pass this
         'last_cost_date',
 
         // Inventory / demand
         'quantity',
         'forecasted_demand',
+        'current_inventory',
 
         // Shelf life / quality
         'shelf_life_days',
         'temp_requirements',
-        'storage_zone',    // chiller|freezer|ambient
+        'storage_zone',
 
         // Ops / scheduling
         'yield_rate',
@@ -43,49 +52,58 @@ class Product extends Model
         'lead_time_days',
         'min_run_qty',
         'max_run_qty',
-        'line_constraints',   // JSON
+        'line_constraints',
 
-        // Media (real column)
+        // Status / unit (controller uses these)
+        'status',           // enum: active, inactive, pending, on_sale
+        'unit',             // e.g. kg, pcs, lt
+
+        // Media
+        'image_disk',
         'image_path',
+        'image_medium_path',
+        'image_thumb_path',
+        'image_url',
 
         // Legacy/optional
         'production_date',
-        'selling_price',
-        'stock_status',
+        'stock_status',     // enum('in_stock','out_of_stock','low_stock') if present
     ];
 
-    /** Casts (dates, decimals, arrays) */
     protected $casts = [
+        'id'                  => 'integer',
         'deleted_at'          => 'datetime',
+        'created_at'          => 'datetime',
+        'updated_at'          => 'datetime',
         'last_cost_date'      => 'date',
         'production_date'     => 'date',
 
-        'quantity'            => 'decimal:3',
-        'unit_cost'           => 'decimal:2',
-        'selling_price'       => 'decimal:2',
-        'default_price'       => 'decimal:2',
-        'forecasted_demand'   => 'decimal:3',
+        'quantity'            => 'float',
+        'current_inventory'   => 'float',
+        'unit_cost'           => 'float',
+        'price'               => 'float',
+        'default_price'       => 'float',
+        'forecasted_demand'   => 'float',
 
         'shelf_life_days'     => 'integer',
-        'yield_rate'          => 'decimal:2',
-        'standard_batch_size' => 'decimal:3',
+        'yield_rate'          => 'float',
+        'standard_batch_size' => 'float',
         'lead_time_days'      => 'integer',
-        'min_run_qty'         => 'decimal:3',
-        'max_run_qty'         => 'decimal:3',
+        'min_run_qty'         => 'float',
+        'max_run_qty'         => 'float',
 
-        'line_constraints'    => 'array',  // stored as JSON
+        'line_constraints'    => 'array',
     ];
 
-    /** Computed attributes auto-appended to arrays/JSON */
     protected $appends = [
-        'price',                 // preferred selling price
-        'effective_unit_cost',   // unit_cost or BOM cost fallback
-        'gross_margin_pct',      // based on price vs effective cost
+        'effective_unit_cost',
+        'gross_margin_pct',
         'produced_qty_kg',
         'sold_qty_kg',
         'available_stock_kg',
-        'image_url',
-        'unit_material_cost',    // BOM cost per 1 unit
+        'image_url',         // accessor respects existing DB value
+        'unit_material_cost',
+        'display_name',
     ];
 
     /* ----------------------------------------------------------------------
@@ -93,28 +111,20 @@ class Product extends Model
      * ---------------------------------------------------------------------*/
     public function productions() { return $this->hasMany(Production::class); }
     public function sales()       { return $this->hasMany(Sale::class); }
-    public function recipes()
-{
-    return $this->hasMany(ProductRecipe::class)->with('material');
-}
+    public function recipes()     { return $this->hasMany(ProductRecipe::class)->with('material'); }
 
     /* ----------------------------------------------------------------------
-     | Accessors / Mutators (null-safe, view-friendly)
+     | Accessors / Mutators
      * ---------------------------------------------------------------------*/
 
-    /** Backward-compat: some blades referenced $product->name */
-    protected function name(): Attribute
+    protected function displayName(): Attribute
     {
-        return Attribute::get(fn () => $this->product_name);
+        return Attribute::get(function () {
+            $raw = $this->getAttributes();
+            return $raw['name'] ?? $this->product_name;
+        });
     }
 
-    /** Ensure unit always returns a sensible default */
-    protected function unit(): Attribute
-    {
-        return Attribute::get(fn ($value) => $value ?: 'kg');
-    }
-
-    /** Normalize line_constraints as JSON (accept array or JSON string) */
     protected function lineConstraints(): Attribute
     {
         return Attribute::make(
@@ -122,46 +132,43 @@ class Product extends Model
                 if (is_array($value)) return $value;
                 if (is_string($value) && $value !== '') {
                     $decoded = json_decode($value, true);
-                    return is_array($decoded) ? $decoded : $value; // keep as string if bad JSON; validator should catch
+                    return is_array($decoded) ? $decoded : $value;
                 }
                 return $value;
             }
         );
     }
 
-    /**
-     * LEGACY BRIDGE:
-     * Some old code may still read/write $product->image (nonexistent column).
-     * These accessors/mutators transparently map it to image_path.
-     */
+    /** Virtual "image" maps to image_path (for older views/forms) */
     protected function image(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->image_path,                      // reading "image" returns image_path
-            set: fn ($value) => ['image_path' => $value],         // writing "image" stores into image_path
+            get: fn () => $this->image_path,
+            set: fn ($value) => ['image_path' => $value],
         );
     }
 
-    /** Public URL for <img> tags */
+    /** Public URL for images; prefer DB `image_url` if present */
     public function getImageUrlAttribute(): string
     {
+        $raw = $this->getAttributes();
+        if (!empty($raw['image_url'])) {
+            return (string)$raw['image_url'];
+        }
+
         $path = $this->image_path ?: null;
         if ($path) {
-            $disk = config('filesystems.default', 'public');
+            $disk = $this->image_disk ?: config('filesystems.default', 'public');
             try {
                 return Storage::disk($disk)->url(ltrim($path, '/'));
             } catch (\Throwable $e) {
-                // Fallback if the disk isn't configured for URLs
                 return asset('storage/' . ltrim($path, '/'));
             }
         }
         return asset('images/default-product.png');
     }
 
-    /**
-     * BOM material cost per ONE unit (sum of qty * snapshot unit price).
-     * Uses loaded relation when available to avoid N+1.
-     */
+    /** BOM material cost per ONE unit (sum of qty * snapshot unit price) */
     public function getUnitMaterialCostAttribute(): float
     {
         $rows = $this->relationLoaded('recipes') ? $this->recipes : $this->recipes()->get();
@@ -169,7 +176,7 @@ class Product extends Model
         return round((float)$sum, 2);
     }
 
-    /** Effective unit cost: prefer declared unit_cost; else fallback to BOM cost. */
+    /** Effective unit cost: prefer declared unit_cost; else fallback to BOM cost */
     public function getEffectiveUnitCostAttribute(): float
     {
         $declared = $this->unit_cost !== null ? (float)$this->unit_cost : null;
@@ -179,8 +186,11 @@ class Product extends Model
     /** Preferred selling price for UI/Quick Sale */
     public function getPriceAttribute(): float
     {
-        $price = $this->default_price ?? $this->selling_price ?? null;
-        return (float) ($price !== null ? $price : $this->effective_unit_cost);
+        $raw = $this->getAttributes();
+        $p = $raw['price'] ?? $this->attributes['price'] ?? null;      // real column if present
+        $p = $p ?? ($this->attributes['default_price'] ?? null);        // controller fallback
+        $p = $p ?? ($this->attributes['selling_price'] ?? null);        // legacy (optional)
+        return (float) ($p !== null ? $p : $this->effective_unit_cost);
     }
 
     /** Gross margin percentage (price vs effective unit cost) */
@@ -200,8 +210,11 @@ class Product extends Model
 
     public function getSoldQtyKgAttribute(): float
     {
-        // If your sales table has quantity_kg, consider COALESCE at query time.
-        return (float) ($this->sales()->sum('quantity') ?? 0);
+        $sum = $this->sales()
+            ->selectRaw('COALESCE(SUM(quantity_kg),0) + COALESCE(SUM(quantity),0) as s')
+            ->value('s');
+
+        return (float) ($sum ?? 0);
     }
 
     public function getAvailableStockKgAttribute(): float
@@ -219,11 +232,11 @@ class Product extends Model
     }
 
     /* ----------------------------------------------------------------------
-     | Upload helpers (safe image replacement)
+     | Upload helpers
      * ---------------------------------------------------------------------*/
     public function setImageFromUpload(UploadedFile $file): void
     {
-        $path = $file->store('products', 'public'); // returns "products/xyz.jpg"
+        $path = $file->store('products', 'public');
         $this->replaceImagePath($path);
     }
 
@@ -238,12 +251,26 @@ class Product extends Model
     }
 
     /* ----------------------------------------------------------------------
-     | Model events (cleanup on update/forceDelete)
+     | Model events
      * ---------------------------------------------------------------------*/
     protected static function booted()
     {
+        static::saving(function (self $m) {
+            $has = fn (string $c) => Schema::hasColumn($m->getTable(), $c);
+
+            if ($has('quantity') && $m->quantity === null) {
+                $m->quantity = 0;
+            }
+            if ($has('forecasted_demand') && $m->forecasted_demand === null) {
+                $m->forecasted_demand = 0;
+            }
+            if ($has('stock_status') && empty($m->stock_status)) {
+                $m->stock_status = 'in_stock';
+            }
+        });
+
         static::updating(function (self $model) {
-            if ($model->isDirty('image_path')) {
+            if (Schema::hasColumn($model->getTable(), 'image_path') && $model->isDirty('image_path')) {
                 $old = $model->getOriginal('image_path');
                 if ($old && Storage::disk('public')->exists($old)) {
                     Storage::disk('public')->delete($old);
@@ -252,14 +279,26 @@ class Product extends Model
         });
 
         static::forceDeleted(function (self $model) {
-            if ($model->image_path && Storage::disk('public')->exists($model->image_path)) {
+            if (
+                Schema::hasColumn($model->getTable(), 'image_path') &&
+                $model->image_path &&
+                Storage::disk('public')->exists($model->image_path)
+            ) {
                 Storage::disk('public')->delete($model->image_path);
             }
         });
     }
 
     /* ----------------------------------------------------------------------
-     | Query scopes (used by index filters/sorts)
+     | Small helper for scopes (column exists?)
+     * ---------------------------------------------------------------------*/
+    protected static function has(string $column): bool
+    {
+        return Schema::hasColumn((new static)->getTable(), $column);
+    }
+
+    /* ----------------------------------------------------------------------
+     | Query scopes (match controller chain)
      * ---------------------------------------------------------------------*/
     public function scopeSearch($q, ?string $term)
     {
@@ -267,7 +306,9 @@ class Product extends Model
         $s = trim($term);
         return $q->where(function ($qq) use ($s) {
             $qq->where('product_name', 'like', "%{$s}%")
-               ->orWhere('product_code', 'like', "%{$s}%");
+               ->orWhere('product_code', 'like', "%{$s}%")
+               ->orWhere('category', 'like', "%{$s}%")
+               ->orWhere('name', 'like', "%{$s}%"); // optional 'name' column
         });
     }
 
@@ -277,10 +318,21 @@ class Product extends Model
         return $q->where('category', $category);
     }
 
-    public function scopeStatus($q, ?string $status)
+    /**
+     * Controller calls ->status(...).
+     * If 'status' column exists, use it; else fall back to 'stock_status'.
+     * Accepts string or array.
+     */
+    public function scopeStatus($q, $status)
     {
-        if (!$status) return $q;
-        return $q->where('status', $status);
+        if (empty($status)) return $q;
+
+        $col = self::has('status') ? 'status' : (self::has('stock_status') ? 'stock_status' : null);
+        if (!$col) return $q;
+
+        return is_array($status)
+            ? $q->whereIn($col, $status)
+            : $q->where($col, $status);
     }
 
     public function scopeSorted($q, ?string $sort)
@@ -288,23 +340,22 @@ class Product extends Model
         $map = [
             'name_asc'     => ['product_name', 'asc'],
             'name_desc'    => ['product_name', 'desc'],
+            'category'     => ['category', 'asc'],
             'stock_desc'   => ['quantity', 'desc'],
             'stock_asc'    => ['quantity', 'asc'],
             'cost_desc'    => ['unit_cost', 'desc'],
             'cost_asc'     => ['unit_cost', 'asc'],
             'updated_desc' => ['updated_at', 'desc'],
+            'recent'       => ['updated_at', 'desc'],
         ];
+
         if (!$sort || !isset($map[$sort])) {
-            return $q->latest('updated_at');
+            return $q->orderBy('product_name', 'asc');
         }
+
         [$col, $dir] = $map[$sort];
         return $q->orderBy($col, $dir);
     }
-
-    /** Handy extras for controllers or queries */
-    public function scopeActive($q)      { return $q->where('status', 'active'); }
-    public function scopeHasRecipe($q)   { return $q->whereHas('recipes'); }
-    public function scopeInCategory($q, ?string $c) { return $c ? $q->where('category', $c) : $q; }
 
     /* ----------------------------------------------------------------------
      | Convenience

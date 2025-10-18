@@ -1,4 +1,3 @@
-{{-- resources/views/layout/mainlayout.blade.php --}}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,6 +12,7 @@
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inria+Sans:wght@300;400;700&display=swap" rel="stylesheet">
 
+  {{-- Page-level head injections (favicons, meta, extra <style>) --}}
   @yield('head')
   @stack('head')
 
@@ -56,6 +56,7 @@
     .skip-link:focus{top:.5rem;outline:2px solid var(--accent-green)}
   </style>
 
+  {{-- Page-level CSS (e.g., auth views) --}}
   @yield('styles')
   @stack('styles')
 </head>
@@ -63,6 +64,7 @@
 <body class="chart-palette">
   <a href="#main" class="skip-link">Skip to content</a>
 
+  {{-- SIMPLE MODE: used by login/register. In those blades add: @section('simple', true) --}}
   @hasSection('simple')
     <main id="main" class="min-h-screen flex items-center justify-center p-6">
       @yield('content')
@@ -84,58 +86,24 @@
             </div>
             <div class="text-sm">
               <p class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</p>
-              <p class="text-xs text-gray-500">{{ Auth::check() && Auth::user()->role ? ucfirst(Auth::user()->role) : 'Admin' }}</p>
+              <p class="text-xs text-gray-500 capitalize">{{ Auth::check() && Auth::user()->role ? Auth::user()->role : 'Admin' }}</p>
             </div>
           </div>
         </div>
 
-        {{-- ===== Role-aware NAV (same map as the partial) ===== --}}
-        @php
-          $role = \Illuminate\Support\Str::of(Auth::user()->role ?? 'Admin')->ucfirst()->toString();
-          $allowed = [
-            'Admin'     => ['dashboard','production','sales','inventory','products','materials','employee','settings'],
-            'Sales'     => ['dashboard','sales','settings'],
-            'Inventory' => ['dashboard','inventory','materials','settings'],
-          ];
-          $modules = $allowed[$role] ?? [];
-          $can = fn(string $m) => in_array($m, $modules, true);
-        @endphp
-
+        <!-- Navigation -->
         <nav class="flex-1 mt-4 space-y-1 text-sm font-medium">
-          @if($can('dashboard'))
-            <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard*') ? 'nav-active' : '' }}">Dashboard</a>
-            <div class="mx-6 my-2 border-t" style="border-color:var(--line)"></div>
-          @endif
+          <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard*') ? 'nav-active' : '' }}">Dashboard</a>
+          <div class="mx-6 my-2 border-t" style="border-color:var(--line)"></div>
+          <a href="{{ route('production.index') }}" class="nav-link {{ request()->routeIs('production.*') ? 'nav-active' : '' }}">Production</a>
+          <a href="{{ route('sales.index') }}" class="nav-link {{ request()->routeIs('sales.*') ? 'nav-active' : '' }}">Sales</a>
+          <a href="{{ route('inventory.index') }}" class="nav-link {{ request()->routeIs('inventory.*') ? 'nav-active' : '' }}">Inventory</a>
+          <a href="{{ route('products.index') }}" class="nav-link {{ request()->routeIs('products.*') ? 'nav-active' : '' }}">Products</a>
+          <a href="{{ route('materials.index') }}" class="nav-link {{ request()->routeIs('materials.*') && !request()->routeIs('products.materials.*') ? 'nav-active' : '' }}">Materials</a>
+          <a href="{{ route('employee') }}" class="nav-link {{ request()->routeIs('employee*') || request()->routeIs('employees.*') ? 'nav-active' : '' }}">Employee</a>
+          <a href="{{ route('settings.index') }}" class="nav-link {{ request()->routeIs('settings.*') ? 'nav-active' : '' }}">Settings</a>
 
-          @if($can('production'))
-            <a href="{{ route('production.index') }}" class="nav-link {{ request()->routeIs('production.*') ? 'nav-active' : '' }}">Production</a>
-          @endif
-
-          @if($can('sales'))
-            <a href="{{ route('sales.index') }}" class="nav-link {{ request()->routeIs('sales.*') ? 'nav-active' : '' }}">Sales</a>
-          @endif
-
-          @if($can('inventory'))
-            <a href="{{ route('inventory.index') }}" class="nav-link {{ request()->routeIs('inventory.*') ? 'nav-active' : '' }}">Inventory</a>
-          @endif
-
-          @if($can('products'))
-            <a href="{{ route('products.index') }}" class="nav-link {{ request()->routeIs('products.*') ? 'nav-active' : '' }}">Products</a>
-          @endif
-
-          @if($can('materials'))
-            <a href="{{ route('materials.index') }}" class="nav-link {{ request()->routeIs('materials.*') && !request()->routeIs('products.materials.*') ? 'nav-active' : '' }}">Materials</a>
-          @endif
-
-          @if($can('employee'))
-            <a href="{{ route('employee') }}" class="nav-link {{ request()->routeIs('employee*') || request()->routeIs('employees.*') ? 'nav-active' : '' }}">Employee</a>
-          @endif
-
-          @if($can('settings'))
-            <a href="{{ route('settings.index') }}" class="nav-link {{ request()->routeIs('settings.*') ? 'nav-active' : '' }}">Settings</a>
-          @endif
-
-          @if(request()->routeIs('products.materials.*') && $can('products'))
+          @if(request()->routeIs('products.materials.*'))
             <div class="px-6 pt-2">
               <a href="{{ route('products.index') }}" class="text-xs" style="color:var(--accent-green)">← Back to Products</a>
             </div>
@@ -150,9 +118,7 @@
         <header class="header-bar px-6 py-4 flex justify-between items-center" role="banner">
           <div class="flex items-center gap-4">
             <button id="sidebarToggle" class="lg:hidden text-2xl" aria-label="Open sidebar">&#9776;</button>
-            <h1 class="text-xl font-bold tracking-wide text-gray-900">
-              @yield('page_title', 'Dashboard Overview')
-            </h1>
+            <h1 class="text-xl font-bold tracking-wide text-gray-900">Dashboard Overview</h1>
           </div>
 
           <div class="flex items-center gap-4">
@@ -178,7 +144,7 @@
                   <div class="text-xs text-gray-500">Logged in as</div>
                   <div class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</div>
                   @if(Auth::check() && Auth::user()->role)
-                    <div class="text-xs text-gray-500 capitalize">({{ ucfirst(Auth::user()->role) }})</div>
+                    <div class="text-xs text-gray-500 capitalize">({{ Auth::user()->role }})</div>
                   @endif
                 </div>
                 <form method="POST" action="{{ route('logout') }}">
@@ -201,24 +167,15 @@
     </div>
   @endif
 
+  {{-- Page-level scripts --}}
   @yield('scripts')
   @stack('scripts')
-  @stack('modals')
 
   <script>
     (function () {
       const byId = (id) => document.getElementById(id);
       function openDialog(dlg){ if(!dlg) return; try{ dlg.showModal(); }catch{ dlg.setAttribute('open','open'); } }
       function closeDialog(dlg){ if(!dlg) return; try{ dlg.close(); }catch{ dlg.removeAttribute('open'); } }
-
-      const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-      window.csrfFetch = (url, opts = {}) => {
-        const headers = new Headers(opts.headers || {});
-        if (!headers.has('X-Requested-With')) headers.set('X-Requested-With', 'XMLHttpRequest');
-        if (!headers.has('X-CSRF-TOKEN')) headers.set('X-CSRF-TOKEN', token || '');
-        if (!headers.has('Accept')) headers.set('Accept', 'application/json');
-        return fetch(url, { credentials: 'same-origin', ...opts, headers });
-      };
 
       document.addEventListener('click', (e) => {
         const openTarget = e.target.closest('[data-open]');
@@ -266,6 +223,7 @@
         else { document.body.classList.remove('dark-mode'); localStorage.setItem('theme','light'); }
       });
 
+      // Expose button classes if needed
       window.btnClasses = {
         primary:'btn btn-primary',
         secondaryGreen:'btn btn-secondary-green',

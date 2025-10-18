@@ -2,46 +2,67 @@
 
 namespace Database\Seeders;
 
+use App\Models\Employee;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use App\Models\User;
-use App\Models\Employee;
 
 class AdminUserSeeder extends Seeder
 {
+    /**
+     * Seed a guaranteed Master Admin user and a linked Employee record.
+     */
     public function run(): void
     {
-        $email    = Str::lower(env('ADMIN_EMAIL', 'admin@example.com'));
+        // .env overrides (safe defaults)
+        $email    = Str::lower(env('ADMIN_EMAIL', 'admin@genrev.test'));
         $username = Str::lower(env('ADMIN_USERNAME', 'admin'));
-        $password = env('ADMIN_PASSWORD', 'password123'); // hashed by User model cast
+        $plainPwd = env('ADMIN_PASSWORD', 'password123');
 
-        DB::transaction(function () use ($email, $username, $password) {
-            // Create or restore admin user
-            /** @var \App\Models\User $user */
-            $user = User::withTrashed()->where('email', $email)->first();
+        // Normalize role string; if your app uses constants you can swap here.
+        $adminRole = defined(User::class.'::ROLE_ADMIN')
+            ? constant(User::class.'::ROLE_ADMIN')
+            : 'Admin';
+
+        DB::transaction(function () use ($email, $username, $plainPwd, $adminRole) {
+
+            // --- Create or update the User (restore if soft-deleted)
+            $query = User::query();
+
+            // If the model uses SoftDeletes, allow restoring seamlessly
+            if (in_array('Illuminate\\Database\\Eloquent\\SoftDeletes', class_uses_recursive(User::class))) {
+                $query->withTrashed();
+            }
+
+            /** @var \App\Models\User|null $user */
+            $user = $query->whereRaw('LOWER(email) = ?', [$email])->first();
 
             if ($user) {
-                if ($user->trashed()) {
+                if (method_exists($user, 'trashed') && $user->trashed()) {
                     $user->restore();
                 }
-                $user->fill([
-                    'name'               => 'Master Admin',
-                    'password'           => $password,        // 'hashed' cast -> bcrypt
-                    'role'               => User::ROLE_ADMIN,
-                    'email_verified_at'  => now(),
-                ])->save();
+
+                $user->name              = 'Master Admin';
+                $user->email             = $email;
+                $user->password          = Hash::make($plainPwd); // never rely on casts here
+                $user->role              = $adminRole;
+                $user->email_verified_at = now();
+                $user->remember_token    = $user->remember_token ?: Str::random(60);
+                $user->save();
             } else {
                 $user = User::create([
                     'name'              => 'Master Admin',
                     'email'             => $email,
-                    'password'          => $password,         // 'hashed' cast -> bcrypt
-                    'role'              => User::ROLE_ADMIN,
+                    'password'          => Hash::make($plainPwd),
+                    'role'              => $adminRole,
                     'email_verified_at' => now(),
+                    'remember_token'    => Str::random(60),
                 ]);
             }
 
-            // Link or create Employee (search by email OR username)
+            // --- Link or create the Employee (match by email or username, case-insensitive)
             $employee = Employee::query()
                 ->whereRaw('LOWER(email) = ?', [$email])
                 ->orWhereRaw('LOWER(username) = ?', [$username])
@@ -52,6 +73,7 @@ class AdminUserSeeder extends Seeder
                 $employee->first_name = $employee->first_name ?: 'Master';
                 $employee->last_name  = $employee->last_name  ?: 'Admin';
                 $employee->username   = $employee->username   ?: $username;
+                $employee->email      = $employee->email      ?: $email;
                 $employee->status     = $employee->status     ?: 'active';
                 $employee->position   = $employee->position   ?: 'Administrator';
                 $employee->save();

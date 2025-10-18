@@ -69,6 +69,14 @@
   .chip-refunded{ background:#f59e0b26; color:#fde68a; border-color:#f59e0b66; }
   .chip-default{ background:#94a3b826; color:#e5e7eb; border-color:#94a3b866; }
 
+  /* Unit-type chip inside table */
+  .u-chip{
+    display:inline-flex; align-items:center; gap:.35rem;
+    padding:.16rem .45rem; border-radius:999px; font-size:.68rem; font-weight:600;
+    border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.10); color:#e6f4ea;
+    margin-left:.35rem;
+  }
+
   .flash { border-radius:12px; padding:.6rem .9rem; display:flex; justify-content:space-between; align-items:center; }
   .flash-success{ background:#047705; color:#fff; }
   .flash-error{ background:#dc2626; color:#fff; }
@@ -142,38 +150,64 @@
         <tbody>
           @forelse ($sales as $sale)
             @php
+              // status chip
               $status = strtolower($sale->status ?? '');
               $chipClass = match($status){
                 'paid' => 'chip-paid', 'pending' => 'chip-pending', 'completed' => 'chip-completed',
                 'cancelled' => 'chip-cancelled', 'refunded' => 'chip-refunded', default => 'chip-default',
               };
+
+              // robust product name
+              $pname = $sale->display_product
+                        ?? ($sale->product ?? optional($sale->productRef)->product_name ?? optional($sale->product)->product_name ?? '—');
+
+              // robust date
+              $dateVal = $sale->order_date ?? $sale->date ?? $sale->created_at ?? null;
+              $dateStr = $dateVal ? \Illuminate\Support\Carbon::parse($dateVal)->format('Y-m-d') : '—';
+
+              // robust quantity (kg or plain)
+              $qty = (float)($sale->quantity_kg ?? $sale->quantity ?? 0);
+
+              // robust pricing
+              $unit = (float)($sale->unit_price ?? $sale->price ?? 0);
+              $total = (float)($sale->total_price ?? $sale->total ?? ($qty * $unit));
+
+              // NEW: unit-type chip (per pack / per bag)
+              $uTypeRaw = $sale->unit_type ?? $sale->unit ?? null;
+              $uType    = in_array($uTypeRaw, ['pack','bag'], true) ? $uTypeRaw : null;
+
+              // invoice no
+              $invoice = $sale->invoice_number ?? $sale->order_number ?? ('INV-' . $sale->id);
             @endphp
             <tr>
               <td class="text-emerald-300 font-semibold cursor-pointer" onclick="openInvoiceModal({{ $sale->id }})">
-                {{ $sale->invoice_number ?? ('INV-' . $sale->id) }}
+                {{ $invoice }}
               </td>
-              <td>
-                {{ optional($sale->product)->product_name ?? ($sale->product ?? '—') }}
+              <td>{{ $pname }}</td>
+              <td>{{ $dateStr }}</td>
+              <td class="text-right">{{ is_numeric($qty) ? (strpos(number_format($qty,3),'000') !== false ? (int)$qty : number_format($qty,3)) : '0' }}</td>
+              <td class="text-right">
+                ₱{{ number_format($unit, 2) }}
+                @if($uType)
+                  <span class="u-chip">per {{ $uType }}</span>
+                @endif
               </td>
-              <td>{{ \Illuminate\Support\Carbon::parse($sale->date)->format('Y-m-d') }}</td>
-              <td class="text-right">{{ (int)$sale->quantity }}</td>
-              <td class="text-right">₱{{ number_format((float)$sale->price, 2) }}</td>
-              <td class="text-right">₱{{ number_format((float)($sale->total ?? ($sale->price * $sale->quantity)), 2) }}</td>
+              <td class="text-right">₱{{ number_format($total, 2) }}</td>
               <td>
                 <span class="chip {{ $chipClass }}">{{ ucfirst($status ?: 'Unknown') }}</span>
               </td>
               <td>
                 <div class="flex flex-wrap justify-center items-center gap-3">
                   {{-- Edit --}}
-                  <button onclick="openEditModal({{ $sale->id }})" title="Edit" class="text-indigo-300 hover:text-indigo-100">Edit</button>
+                  <button onclick="handleEdit({{ $sale->id }})" title="Edit" class="text-indigo-300 hover:text-indigo-100">Edit</button>
 
                   {{-- Receipt --}}
-                  <a href="{{ route('sales.receipt', ['id' => $sale->id]) }}" target="_blank" title="Receipt" class="text-emerald-300 hover:text-emerald-100">Receipt</a>
+                  <a href="{{ route('sales.receipt', $sale) }}" target="_blank" title="Receipt" class="text-emerald-300 hover:text-emerald-100">Receipt</a>
 
                   {{-- PDF --}}
-                  <a href="{{ route('sales.download', $sale->id) }}" title="Download PDF" class="text-yellow-300 hover:text-yellow-100">PDF</a>
+                  <a href="{{ route('sales.download', $sale) }}" title="Download PDF" class="text-yellow-300 hover:text-yellow-100">PDF</a>
 
-                  {{-- Refund --}}
+                  {{-- Refund (optional route) --}}
                   <form action="{{ route('sales.refund', $sale->id) }}" method="POST"
                         onsubmit="return confirm('Are you sure you want to refund this sale?');" class="inline">
                     @csrf
@@ -181,7 +215,7 @@
                   </form>
 
                   {{-- Delete --}}
-                  <form action="{{ route('sales.destroy', $sale->id) }}" method="POST"
+                  <form action="{{ route('sales.destroy', $sale) }}" method="POST"
                         onsubmit="return confirm('Delete this sale?');" class="inline">
                     @csrf @method('DELETE')
                     <button type="submit" title="Delete" class="text-rose-300 hover:text-rose-100">Delete</button>
@@ -232,27 +266,46 @@
   }
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
-  function openEditModal(id) {
-    fetch(`/sales/${id}/edit`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('edit-sale-id').value = data.id;
+  // Prefer global openEditModal(id) (from your modal partial). Fallback to API.
+  async function handleEdit(id){
+    if (typeof window.openEditModal === 'function') {
+      window.openEditModal(id);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/sales/${id}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!res.ok) throw new Error('Failed to load sale');
+      const data = await res.json();
 
-        const productSelect = document.getElementById('edit-product-id');
-        if (productSelect && data.product_id) productSelect.value = data.product_id;
+      // Minimal fallback population (IDs must match your edit modal inputs)
+      document.getElementById('edit-sale-id')?.setAttribute('value', data.id);
+      const prodSel = document.getElementById('edit-product-id');
+      if (prodSel && data.product_id) prodSel.value = String(data.product_id);
 
-        const iso = new Date(data.date).toISOString().slice(0,10);
-        document.getElementById('edit-date').value     = iso;
-        document.getElementById('edit-quantity').value = data.quantity;
-        document.getElementById('edit-price').value    = data.price;
-        document.getElementById('edit-status').value   = data.status;
+      const d = data.order_date || data.date || null;
+      const iso = d ? new Date(d).toISOString().slice(0,10) : '';
+      document.getElementById('edit-date')?.setAttribute('value', iso);
 
-        document.getElementById('editSaleForm').action = `/sales/${data.id}`;
+      const qty = (data.quantity_kg ?? data.quantity ?? 0);
+      document.getElementById('edit-quantity')?.setAttribute('value', qty);
 
-        editModal?.classList.remove('hidden');
-        editModal?.classList.add('flex');
-      });
+      const price = (data.unit_price ?? data.price ?? '');
+      document.getElementById('edit-price')?.setAttribute('value', price);
+
+      const status = (data.status ?? 'Completed');
+      const statusSel = document.getElementById('edit-status');
+      if (statusSel) statusSel.value = status;
+
+      const form = document.getElementById('editSaleForm');
+      if (form) form.action = `/sales/${data.id}`;
+
+      editModal?.classList.remove('hidden');
+      editModal?.classList.add('flex');
+    } catch (e) {
+      alert('Unable to open edit modal.');
+    }
   }
+
   function closeEditModal() {
     editModal?.classList.add('hidden');
     editModal?.classList.remove('flex');
@@ -314,7 +367,7 @@
     });
 
     qtyInput?.addEventListener('input', () => {
-      const val = parseInt(qtyInput.value || '0', 10);
+      const val = parseFloat(qtyInput.value || '0');
       if (available && val > available) {
         qtyInput.setCustomValidity('Quantity exceeds available stock (' + available + ').');
       } else {

@@ -20,7 +20,7 @@
     $cutoff = \Carbon\Carbon::now()->subDays(90);
     $byProduct = [];
     foreach ($sales as $s) {
-        $d = $s->order_date ?? $s->date;
+        $d = $s->order_date ?? $s->date ?? $s->created_at ?? null;
         if ($d && \Carbon\Carbon::parse($d)->lt($cutoff)) continue;
 
         $name = $s->display_product ?? ($s->product ?? optional($s->productRef)->product_name ?? 'Unknown');
@@ -63,6 +63,14 @@
   .table-wrap{ border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; }
   thead th{ background:#f9fafb; color:#374151; font-weight:700; }
   tbody td{ color:#111827; }
+
+  /* Unit type chip (per pack/bag) */
+  .u-chip{
+    display:inline-flex; align-items:center; gap:.35rem;
+    padding:.15rem .5rem; border-radius:999px; font-size:.7rem; font-weight:600;
+    border:1px solid #e5e7eb; background:#f8fafc; color:#334155;
+    margin-left:.4rem;
+  }
 </style>
 @endsection
 
@@ -116,10 +124,10 @@
       <h2 class="text-xl font-semibold">Sales</h2>
       <div class="flex flex-wrap items-center gap-3">
         <div class="relative">
-          <input id="salesSearch" type="text" placeholder="Search invoice / product / status…" class="w-64 input-light pr-8">
+          <input id="salesSearch" type="text" placeholder="Search invoice / product / status…" class="w-64 input-light pr-8" aria-label="Search sales">
           <span class="absolute right-3 top-2.5 text-gray-400">⌕</span>
         </div>
-        <input id="dateFilter" type="date" class="input-light">
+        <input id="dateFilter" type="date" class="input-light" aria-label="Filter by date">
         {{-- Primary = RED, Secondary = BLUE/GREEN (from mainlayout classes) --}}
         <button type="button" onclick="toggleAddSaleModal(true)" class="btn btn-primary">+ Add New Sale</button>
       </div>
@@ -143,19 +151,28 @@
           <tbody id="salesTableBody" class="divide-y divide-gray-200">
             @forelse($sales as $row)
               @php
-                $pname   = $row->display_product ?? ($row->product ?? optional($row->productRef)->product_name);
-                $date    = $row->order_date ?? $row->date;
-                $qty     = (float) ($row->quantity_kg ?? $row->quantity ?? 0);
-                $unit    = (float) ($row->unit_price ?? $row->price ?? 0);
-                $tot     = (float) ($row->total_price ?? $row->total ?? ($qty * $unit));
-                $invoice = $row->invoice_number ?? $row->order_number;
+                $pname    = $row->display_product ?? ($row->product ?? optional($row->productRef)->product_name);
+                $date     = $row->order_date ?? $row->date ?? $row->created_at ?? null;
+                $qty      = (float) ($row->quantity_kg ?? $row->quantity ?? 0);
+                $unit     = (float) ($row->unit_price ?? $row->price ?? 0);
+                $tot      = (float) ($row->total_price ?? $row->total ?? ($qty * $unit));
+                $invoice  = $row->invoice_number ?? $row->order_number;
+
+                // NEW: unit type label (prefer 'unit_type', fallback to 'unit')
+                $uTypeRaw = $row->unit_type ?? $row->unit ?? null;
+                $uType    = in_array($uTypeRaw, ['pack','bag'], true) ? $uTypeRaw : null; // normalize/sanitize
               @endphp
               <tr class="hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-3 whitespace-nowrap">{{ $invoice }}</td>
                 <td class="px-4 py-3">{{ $pname }}</td>
                 <td class="px-4 py-3">{{ $date ? \Carbon\Carbon::parse($date)->format('Y-m-d') : '' }}</td>
                 <td class="px-4 py-3 text-right">{{ number_format($qty, 3) }}</td>
-                <td class="px-4 py-3 text-right">₱ {{ number_format($unit, 2) }}</td>
+                <td class="px-4 py-3 text-right">
+                  ₱ {{ number_format($unit, 2) }}
+                  @if($uType)
+                    <span class="u-chip">per {{ $uType }}</span>
+                  @endif
+                </td>
                 <td class="px-4 py-3 text-right">₱ {{ number_format($tot, 2) }}</td>
                 <td class="px-4 py-3">
                   @php $cls = $statusColors[$row->status] ?? 'bg-gray-100 text-gray-800 border-gray-200'; @endphp
@@ -191,7 +208,7 @@
   </div>
 </div>
 
-{{-- Add Sale Modal (kept via partial, no style changes needed) --}}
+{{-- Add Sale Modal (kept via partial, includes unit_type + batch-aware pricing) --}}
 @include('sales.partials.add-sale-modal', [
   'products' => $products ?? null,
   'statusOptions' => $statusOptions ?? ['Pending','Completed','Cancelled','Paid'],
@@ -264,7 +281,7 @@
         columnWidth:'45%', borderRadius:8, borderRadiusApplication:'around',
         dataLabels:{position:'top'},
       }},
-      colors:[C_BLUE], // blue primary for bars
+      colors:[C_BLUE],
       dataLabels:{enabled:false},
       stroke:{show:false},
       series:[{name:'Revenue', data: totals}],
@@ -290,7 +307,7 @@
     const labels = @json($donutLabels);
     const values = @json($donutValues);
 
-    const colors = [C_RED, C_GREEN, C_YELLOW, C_BLUE, '#60a5fa', '#34d399']; // keep mix if >4 slices
+    const colors = [C_RED, C_GREEN, C_YELLOW, C_BLUE, '#60a5fa', '#34d399'];
 
     const chart = new ApexCharts(el, {
       chart:{type:'donut', height:340, foreColor:'#374151', background:'transparent'},

@@ -18,12 +18,11 @@ class SalesController extends Controller
     /** List sales + feed Add-Sale modal + dashboard KPIs & charts */
     public function index()
     {
-        // Build a safe date expression that only references existing columns
         [$dateExprForWhere, $ymExpr, $orderExpr] = $this->dateExpressions();
 
         $sales = Sale::with([
                 'productRef:id,product_name,shelf_life_days',
-                'production:id,product_id,batch_number,quantity,current_inventory,production_date,expiration_date'
+                'production:id,product_id,batch_number,quantity,current_inventory,production_date,expiration_date,unit_price_pack,unit_price_bag'
             ])
             ->orderByDesc(DB::raw($orderExpr))
             ->orderByDesc('id')
@@ -39,6 +38,7 @@ class SalesController extends Controller
             });
 
         $statusOptions = ['Pending','Completed','Cancelled','Paid'];
+        $unitTypeOptions = ['pack','bag']; // for UI
         $nextInvoice   = $this->peekNextInvoiceNumber();
 
         // ----- Dashboard data -----
@@ -58,7 +58,6 @@ class SalesController extends Controller
 
         [$donutLabels, $donutValues] = $this->getTopProductsRevenue(90);
 
-        // Safe fallbacks so charts render even with zero data
         if (empty($donutLabels) || array_sum($donutValues) <= 0) {
             $donutLabels = ['No Data'];
             $donutValues = [0];
@@ -69,10 +68,106 @@ class SalesController extends Controller
         }
 
         return view('sales.index', compact(
-            'sales','nextInvoice','products','statusOptions',
+            'sales','nextInvoice','products','statusOptions','unitTypeOptions',
             'chartMonths','chartTotals','annualRevenue','monthlyRevenue','orderCount',
             'donutLabels','donutValues'
         ));
+    }
+
+    /* ========================== Product-level Orders ========================== */
+
+    /** Orders for a specific product with filters (page) */
+    public function byProduct(Product $product, Request $request)
+    {
+        [$sales, $filters] = $this->filteredSalesQueryForProduct($product->id, $request);
+
+        return view('sales.by-product', [
+            'product'     => $product,
+            'sales'       => $sales,
+            'filters'     => $filters,
+            'statusOptions'   => ['Pending','Completed','Cancelled','Paid'],
+            'unitTypeOptions' => ['pack','bag'],
+        ]);
+    }
+
+    /** Optional AJAX endpoint returning the table partial */
+    public function byProductTable(Product $product, Request $request)
+    {
+        [$sales, $filters] = $this->filteredSalesQueryForProduct($product->id, $request);
+
+        $html = view('sales.partials.orders-table', [
+            'sales'   => $sales,
+            'product' => $product,
+            'filters' => $filters,
+        ])->render();
+
+        return response()->json(['ok' => true, 'html' => $html]);
+    }
+
+    /** Compose query + run for product-level filters */
+    protected function filteredSalesQueryForProduct(int $productId, Request $request): array
+    {
+        [$dateExpr] = [$this->dateExpressions()[0]];
+
+        $q = Sale::with([
+                'production:id,product_id,batch_number,production_date,expiration_date,unit_price_pack,unit_price_bag',
+            ])
+            ->where('product_id', $productId);
+
+        $filters = [
+            'status'         => $request->string('status')->toString() ?: null,
+            'unit_type'      => $request->string('unit_type')->toString() ?: null, // 'pack' | 'bag'
+            'batch_number'   => $request->string('batch_number')->toString() ?: null,
+            'has_production' => $request->filled('has_production') ? $request->boolean('has_production') : null, // true only, false only, or null
+            'date_from'      => $request->string('date_from')->toString() ?: null,
+            'date_to'        => $request->string('date_to')->toString() ?: null,
+            'q'              => $request->string('q')->toString() ?: null, // invoice/customer free text
+        ];
+
+        if ($filters['status']) {
+            $q->where('status', $filters['status']);
+        }
+
+        // Unit type filter only if we actually store it
+        $unitTypeColumn = $this->unitTypeColumn();
+        if ($filters['unit_type'] && $unitTypeColumn) {
+            $q->where($unitTypeColumn, $filters['unit_type']);
+        }
+
+        if ($filters['batch_number']) {
+            $q->whereHas('production', function ($sub) use ($filters) {
+                $sub->where('batch_number', 'like', '%' . $filters['batch_number'] . '%');
+            });
+        }
+
+        if ($filters['has_production'] !== null) {
+            if ($filters['has_production']) {
+                $q->whereNotNull('production_id');
+            } else {
+                $q->whereNull('production_id');
+            }
+        }
+
+        if ($filters['date_from']) {
+            $q->whereRaw("$dateExpr >= ?", [Carbon::parse($filters['date_from'])->toDateString()]);
+        }
+        if ($filters['date_to']) {
+            $q->whereRaw("$dateExpr <= ?", [Carbon::parse($filters['date_to'])->toDateString()]);
+        }
+
+        if ($filters['q']) {
+            $q->where(function ($sub) use ($filters) {
+                foreach (['invoice_number','order_number','customer_name'] as $col) {
+                    if (Schema::hasColumn('sales', $col)) {
+                        $sub->orWhere($col, 'like', '%' . $filters['q'] . '%');
+                    }
+                }
+            });
+        }
+
+        $sales = $q->orderByDesc('id')->get();
+
+        return [$sales, $filters];
     }
 
     /* ---------------- Invoice number helpers (atomic + fallback) ---------------- */
@@ -144,11 +239,11 @@ class SalesController extends Controller
         $validated = $request->validate([
             'product_id'      => ['required','integer','exists:products,id'],
             'production_id'   => ['nullable','integer','exists:productions,id'],
-            // accept either 'date' or 'order_date'; we'll normalize below
+            'unit_type'       => ['nullable','in:pack,bag'], // << per pack / per bag
             'date'            => ['nullable','date'],
             'order_date'      => ['nullable','date'],
             'quantity'        => ['required','numeric','min:0.001'],
-            'price'           => ['required','numeric','min:0'],
+            'price'           => ['nullable','numeric','min:0'], // nullable; we can auto-pick from batch
             'status'          => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
             'product'         => ['sometimes','nullable','string','max:150'],
             'production_date' => ['nullable','date'],
@@ -157,7 +252,6 @@ class SalesController extends Controller
             'customer_name'   => ['nullable','string','max:255'],
         ]);
 
-        // Normalize the sale date
         $inputDate = $validated['date'] ?? $validated['order_date'] ?? $request->input('order_date');
         if (!$inputDate) {
             return $this->respondValidationError($request, ['date' => 'Please provide a sale date.']);
@@ -176,29 +270,32 @@ class SalesController extends Controller
         $displayName = $validated['product'] ?? $product->product_name;
         $invoice     = $this->nextInvoiceNumber();
         $qty         = (float) $validated['quantity'];
-        $unit        = (float) $validated['price'];
-        $total       = round($qty * $unit, 2);
-        $status      = $validated['status'] ?? 'Completed';
+        $unitType    = $validated['unit_type'] ?? null;
 
-        $debugUuid   = (string) Str::uuid();
-        Log::info("[sales.store] START {$debugUuid}", ['request' => $request->all()]);
-
+        // Resolve batch if not provided
         $orderDateStr = $validated['date'];
         if (empty($resolvedProductionId)) {
             $resolved = $this->resolveProductionByProductAndDate((int)$product->id, $orderDateStr);
             $resolvedProductionId = $resolved ? $resolved->id : null;
         }
+        $batch = $resolvedProductionId ? Production::find($resolvedProductionId) : null;
+
+        // Compute unit price based on unit_type + batch defaults (fallback to provided price)
+        $unit = $this->determineUnitPrice($product, $batch, $unitType, $validated['price'] ?? null);
+        $total = round($qty * $unit, 2);
+        $status = $validated['status'] ?? 'Completed';
+
+        $debugUuid = (string) Str::uuid();
+        Log::info("[sales.store] START {$debugUuid}", ['request' => $request->all()]);
 
         try {
-            DB::transaction(function () use ($validated, $displayName, $invoice, $qty, $unit, $total, $status, $product, $resolvedProductionId, $debugUuid) {
-                // Start with mandatory fields
+            DB::transaction(function () use ($validated, $displayName, $invoice, $qty, $unit, $total, $status, $product, $resolvedProductionId, $unitType, $debugUuid) {
                 $payload = [
                     'product_id'    => (int) $validated['product_id'],
                     'production_id' => $resolvedProductionId,
                     'status'        => $status,
                 ];
 
-                // Map all possible fields, keep only those that exist in the table
                 $map = [
                     // identifiers
                     'order_number'    => $invoice,
@@ -211,13 +308,16 @@ class SalesController extends Controller
                     // name/desc
                     'product'         => $displayName,
 
-                    // numbers (set both if they exist)
+                    // numbers
                     'quantity_kg'     => $qty,
                     'quantity'        => $qty,
                     'unit_price'      => $unit,
                     'price'           => $unit,
                     'total_price'     => $total,
                     'total'           => $total,
+
+                    // unit type label (if column exists)
+                    $this->unitTypeColumn() => $unitType,
 
                     // optional meta
                     'customer_name'   => $validated['customer_name'] ?? null,
@@ -227,15 +327,13 @@ class SalesController extends Controller
                 ];
 
                 foreach ($map as $col => $val) {
-                    if (Schema::hasColumn('sales', $col)) {
+                    if ($col && Schema::hasColumn('sales', $col)) {
                         $payload[$col] = $val;
                     }
                 }
 
                 Log::info("[sales.store] PAYLOAD {$debugUuid}", $payload);
-
                 $sale = Sale::create($payload);
-
                 Log::info("[sales.store] CREATED {$debugUuid}", ['id' => $sale->id]);
 
                 $this->recomputeProductBalance((int)$product->id);
@@ -264,14 +362,14 @@ class SalesController extends Controller
     {
         $sale->load([
             'productRef:id,product_name,shelf_life_days,unit_cost',
-            'production:id,product_id,batch_number,production_date,expiration_date',
+            'production:id,product_id,batch_number,production_date,expiration_date,unit_price_pack,unit_price_bag',
         ]);
 
         $products = Product::orderBy('product_name')->get(['id','product_name','unit_cost','shelf_life_days']);
 
         $batches = Production::where('product_id', $sale->product_id)
             ->orderByDesc('production_date')->orderByDesc('id')
-            ->get(['id','batch_number','production_date','expiration_date']);
+            ->get(['id','batch_number','production_date','expiration_date','unit_price_pack','unit_price_bag']);
 
         $productionDate = $sale->production_date ?: ($sale->production->production_date ?? null);
         $expirationDate = $sale->expiration_date ?: ($sale->production->expiration_date ?? null);
@@ -283,9 +381,10 @@ class SalesController extends Controller
         }
 
         $statusOptions = ['Pending','Completed','Cancelled','Paid'];
+        $unitTypeOptions = ['pack','bag'];
 
         return view('sales.edit', compact(
-            'sale','products','batches','productionDate','expirationDate','statusOptions'
+            'sale','products','batches','productionDate','expirationDate','statusOptions','unitTypeOptions'
         ));
     }
 
@@ -294,11 +393,11 @@ class SalesController extends Controller
         $validated = $request->validate([
             'product_id'      => ['required','integer','exists:products,id'],
             'production_id'   => ['nullable','integer','exists:productions,id'],
-            // accept either 'date' or 'order_date'; we'll normalize below
+            'unit_type'       => ['nullable','in:pack,bag'],
             'date'            => ['nullable','date'],
             'order_date'      => ['nullable','date'],
             'quantity'        => ['required','numeric','min:0.001'],
-            'price'           => ['required','numeric','min:0'],
+            'price'           => ['nullable','numeric','min:0'],
             'status'          => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
             'product'         => ['sometimes','nullable','string','max:150'],
             'production_date' => ['nullable','date'],
@@ -307,7 +406,6 @@ class SalesController extends Controller
             'customer_name'   => ['nullable','string','max:255'],
         ]);
 
-        // Normalize the sale date
         $inputDate = $validated['date'] ?? $validated['order_date'] ?? $request->input('order_date');
         if (!$inputDate) {
             return $this->respondValidationError($request, ['date' => 'Please provide a sale date.']);
@@ -323,24 +421,28 @@ class SalesController extends Controller
         }
 
         $oldProductId = (int)$sale->product_id;
-        $product     = Product::select('id','product_name','shelf_life_days')->findOrFail($validated['product_id']);
-        $displayName = $validated['product'] ?? $product->product_name;
-        $qty         = (float) $validated['quantity'];
-        $unit        = (float) $validated['price'];
-        $total       = round($qty * $unit, 2);
-        $status      = $validated['status'] ?? ($sale->status ?: 'Completed');
-
-        $debugUuid   = (string) Str::uuid();
-        Log::info("[sales.update] START {$debugUuid}", ['request' => $request->all(), 'sale_id' => $sale->id]);
+        $product      = Product::select('id','product_name','shelf_life_days')->findOrFail($validated['product_id']);
+        $displayName  = $validated['product'] ?? $product->product_name;
+        $qty          = (float) $validated['quantity'];
+        $unitType     = $validated['unit_type'] ?? $this->readUnitTypeFromSale($sale);
 
         $orderDateStr = $validated['date'];
         if (empty($resolvedProductionId)) {
             $resolved = $this->resolveProductionByProductAndDate((int)$product->id, $orderDateStr);
             $resolvedProductionId = $resolved ? $resolved->id : null;
         }
+        $batch = $resolvedProductionId ? Production::find($resolvedProductionId) : null;
+
+        // Compute (or keep) unit price
+        $unit  = $this->determineUnitPrice($product, $batch, $unitType, $validated['price'] ?? null, $fallbackCurrent = $this->inferCurrentUnitPrice($sale));
+        $total = round($qty * $unit, 2);
+        $status = $validated['status'] ?? ($sale->status ?: 'Completed');
+
+        $debugUuid = (string) Str::uuid();
+        Log::info("[sales.update] START {$debugUuid}", ['request' => $request->all(), 'sale_id' => $sale->id]);
 
         try {
-            DB::transaction(function () use ($sale, $validated, $displayName, $qty, $unit, $total, $status, $resolvedProductionId, $debugUuid) {
+            DB::transaction(function () use ($sale, $validated, $displayName, $qty, $unit, $total, $status, $resolvedProductionId, $unitType, $debugUuid) {
                 $payload = [
                     'product_id'    => (int) $validated['product_id'],
                     'production_id' => $resolvedProductionId,
@@ -357,6 +459,7 @@ class SalesController extends Controller
                     'price'           => $unit,
                     'total_price'     => $total,
                     'total'           => $total,
+                    $this->unitTypeColumn() => $unitType,
                     'customer_name'   => $validated['customer_name'] ?? null,
                     'notes'           => $validated['notes'] ?? null,
                     'production_date' => $validated['production_date'] ?? null,
@@ -364,13 +467,12 @@ class SalesController extends Controller
                 ];
 
                 foreach ($map as $col => $val) {
-                    if (Schema::hasColumn('sales', $col)) {
+                    if ($col && Schema::hasColumn('sales', $col)) {
                         $payload[$col] = $val;
                     }
                 }
 
                 Log::info("[sales.update] PAYLOAD {$debugUuid}", $payload);
-
                 $sale->update($payload);
             });
 
@@ -423,6 +525,7 @@ class SalesController extends Controller
             'product_id'    => ['required','integer','exists:products,id'],
             'quantity'      => ['nullable','numeric','min:0.001'],
             'price'         => ['nullable','numeric','min:0'],
+            'unit_type'     => ['nullable','in:pack,bag'], // << quick add respects unit type
             'production_id' => ['nullable','integer','exists:productions,id'],
             'date'          => ['nullable','date'],
             'order_date'    => ['nullable','date'],
@@ -430,25 +533,31 @@ class SalesController extends Controller
 
         $product   = Product::findOrFail((int)$validated['product_id']);
         $quantity  = (float)($validated['quantity'] ?? 1);
-        $price     = (float)($validated['price'] ?? ($product->price ?? $product->default_price ?? $product->unit_cost ?? 0));
         $dateInput = $validated['date'] ?? $validated['order_date'] ?? now()->toDateString();
         $date      = Carbon::parse($dateInput)->toDateString();
+        $unitType  = $validated['unit_type'] ?? null;
 
+        // Prefer provided batch; fallback to latest
         $batch = null;
         if (!empty($validated['production_id'])) {
-            $b = Production::select('id','product_id')->findOrFail($validated['production_id']);
+            $b = Production::select('id','product_id','unit_price_pack','unit_price_bag')->findOrFail($validated['production_id']);
             if ((int)$b->product_id === (int)$product->id) $batch = $b;
         }
         if (!$batch) {
             $batch = Production::where('product_id', $product->id)
-                ->orderByDesc('production_date')->orderByDesc('id')->first();
+                ->orderByDesc('production_date')->orderByDesc('id')
+                ->first(['id','product_id','unit_price_pack','unit_price_bag','production_date']);
         }
+
+        // Compute unit price according to unit_type & batch; if none, fall back to given price or product defaults
+        $unit  = $this->determineUnitPrice($product, $batch, $unitType, $validated['price'] ?? null);
+        $total = round($quantity * $unit, 2);
 
         $invoice   = $this->nextInvoiceNumber();
         $debugUuid = (string) Str::uuid();
         Log::info("[sales.quickStore] START {$debugUuid}", ['request' => $request->all()]);
 
-        DB::transaction(function () use ($product, $quantity, $price, $date, $batch, $invoice, $debugUuid) {
+        DB::transaction(function () use ($product, $quantity, $unit, $total, $date, $batch, $unitType, $invoice, $debugUuid) {
             $payload = [
                 'product_id'    => $product->id,
                 'production_id' => $batch ? $batch->id : null,
@@ -463,15 +572,16 @@ class SalesController extends Controller
                 'product'         => $product->product_name,
                 'quantity_kg'     => $quantity,
                 'quantity'        => $quantity,
-                'unit_price'      => $price,
-                'price'           => $price,
-                'total_price'     => round($quantity * $price, 2),
-                'total'           => round($quantity * $price, 2),
+                'unit_price'      => $unit,
+                'price'           => $unit,
+                'total_price'     => $total,
+                'total'           => $total,
                 'production_date' => $date,
+                $this->unitTypeColumn() => $unitType,
             ];
 
             foreach ($map as $col => $val) {
-                if (Schema::hasColumn('sales', $col)) {
+                if ($col && Schema::hasColumn('sales', $col)) {
                     $payload[$col] = $val;
                 }
             }
@@ -513,7 +623,7 @@ class SalesController extends Controller
     {
         $sale->load([
             'productRef:id,product_name,shelf_life_days',
-            'production:id,product_id,batch_number,production_date,expiration_date',
+            'production:id,product_id,batch_number,production_date,expiration_date,unit_price_pack,unit_price_bag',
         ]);
 
         $production = $this->resolveProductionFor($sale);
@@ -529,7 +639,7 @@ class SalesController extends Controller
     {
         $sale->load([
             'productRef:id,product_name,shelf_life_days',
-            'production:id,product_id,batch_number,production_date,expiration_date',
+            'production:id,product_id,batch_number,production_date,expiration_date,unit_price_pack,unit_price_bag',
         ]);
 
         $production = $this->resolveProductionFor($sale);
@@ -550,7 +660,6 @@ class SalesController extends Controller
 
     /* ----------------------------- Dashboard helpers ----------------------------- */
 
-    /** Return [labels(M), totals] for last N months; auto-detects columns. */
     protected function getMonthlyRevenueSeries(int $n = 12): array
     {
         $n = max(1, $n);
@@ -565,7 +674,7 @@ class SalesController extends Controller
         }
 
         [$dateExpr, $ymExpr] = $this->dateExpressions();
-        $sumExpr = $this->buildRevenueSumExpr();  // <-- dynamic sum
+        $sumExpr = $this->buildRevenueSumExpr();
 
         $rows = Sale::query()
             ->selectRaw("$ymExpr AS ym, $sumExpr AS total")
@@ -585,7 +694,6 @@ class SalesController extends Controller
         return [$labels, $totals];
     }
 
-    /** Sum revenue in range; auto-detects columns. */
     protected function sumRevenueBetween(string $from, string $to): float
     {
         [$dateExpr] = [$this->dateExpressions()[0]];
@@ -597,13 +705,11 @@ class SalesController extends Controller
             ->value('total') ?? 0);
     }
 
-    /** Top product revenue; auto-detects columns and only selects what exists. */
     protected function getTopProductsRevenue(int $days = 90): array
     {
         $cutoff = Carbon::now()->subDays(max(1, $days))->startOfDay();
         [$dateExpr] = [$this->dateExpressions()[0]];
 
-        // Build select list based on real columns
         $selects = ['id','product_id','product'];
         foreach (['quantity_kg','quantity','unit_price','price','total_price','total','order_date','date'] as $col) {
             if (Schema::hasColumn('sales', $col)) $selects[] = $col;
@@ -613,7 +719,6 @@ class SalesController extends Controller
             ->whereRaw("$dateExpr >= ?", [$cutoff->toDateString()])
             ->get($selects);
 
-        // Resolve numeric columns
         $cols   = $this->salesNumericColumns();
         $qtyCol = $cols['qty'];
         $unitCol= $cols['unit'];
@@ -639,73 +744,71 @@ class SalesController extends Controller
         return [array_keys($top), array_map('floatval', array_values($top))];
     }
 
-    /** Driver-safe & column-safe date expressions */
-    protected function dateExpressions(): array
+    /* ----------------------------- Unit / Pricing helpers ----------------------------- */
+
+    /** Which column holds unit type, if any (prefer 'unit_type', fallback 'unit'). */
+    protected function unitTypeColumn(): ?string
     {
-        $hasOrder = Schema::hasColumn('sales','order_date');
-        $hasDate  = Schema::hasColumn('sales','date');
-
-        if ($hasOrder && $hasDate) {
-            $coalesce = "COALESCE(order_date, `date`)";
-        } elseif ($hasOrder) {
-            $coalesce = "order_date";
-        } elseif ($hasDate) {
-            $coalesce = "`date`";
-        } else {
-            // absolute fallback to created_at if neither exists
-            $coalesce = "created_at";
-        }
-
-        $driver = DB::getDriverName();
-        if ($driver === 'sqlite') {
-            $dateExpr = "DATE($coalesce)";
-            $ymExpr   = "strftime('%Y-%m', $coalesce)";
-        } else {
-            $dateExpr = "DATE($coalesce)";
-            $ymExpr   = "DATE_FORMAT($coalesce, '%Y-%m')";
-        }
-
-        // For ORDER BY in index()
-        $orderExpr = $coalesce;
-
-        return [$dateExpr, $ymExpr, $orderExpr];
+        if (Schema::hasColumn('sales','unit_type')) return 'unit_type';
+        if (Schema::hasColumn('sales','unit')) return 'unit'; // some schemas use this
+        return null;
     }
 
-    /** Build a SUM(...) expression that matches existing sales columns. */
-    protected function buildRevenueSumExpr(): string
+    /** Read current sale unit type from row if possible. */
+    protected function readUnitTypeFromSale(Sale $sale): ?string
     {
-        $cols   = $this->salesNumericColumns();
-        $qtyCol = $cols['qty'];   // quantity_kg OR quantity OR null
-        $unitCol= $cols['unit'];  // unit_price OR price OR null
-        $totCol = $cols['total']; // total_price OR total OR null
-
-        // If a total column exists, prefer it; else compute qty*unit if both exist; else 0.
-        if ($totCol) {
-            $qtyPart  = $qtyCol  ? "COALESCE($qtyCol,0)"  : "0";
-            $unitPart = $unitCol ? "COALESCE($unitCol,0)" : "0";
-            return "SUM(COALESCE($totCol, ($qtyPart * $unitPart), 0))";
-        }
-
-        if ($qtyCol && $unitCol) {
-            return "SUM(COALESCE(COALESCE($qtyCol,0) * COALESCE($unitCol,0), 0))";
-        }
-
-        return "SUM(0)"; // ultra-safe fallback
+        $col = $this->unitTypeColumn();
+        return $col ? ($sale->{$col} ?? null) : null;
     }
 
-    /** Figure out which numeric columns exist in sales table. */
-    protected function salesNumericColumns(): array
+    /**
+     * Decide unit price from (unit_type + batch), with safe fallbacks:
+     * 1) If override given, use override.
+     * 2) If unit_type == 'pack' and batch has unit_price_pack, use it.
+     * 3) If unit_type == 'bag'  and batch has unit_price_bag,  use it.
+     * 4) If unit_type omitted: prefer batch->unit_price_pack (if exists), else batch->unit_price_bag.
+     * 5) Else fallback to product->price/defaults or 0.
+     */
+    protected function determineUnitPrice(Product $product, ?Production $batch, ?string $unitType, ?float $override, ?float $fallbackCurrent = null): float
     {
-        $total = Schema::hasColumn('sales','total_price') ? 'total_price'
-               : (Schema::hasColumn('sales','total') ? 'total' : null);
+        if ($override !== null) return (float)$override;
 
-        $qty   = Schema::hasColumn('sales','quantity_kg') ? 'quantity_kg'
-               : (Schema::hasColumn('sales','quantity') ? 'quantity' : null);
+        if ($batch) {
+            if ($unitType === 'pack' && isset($batch->unit_price_pack) && is_numeric($batch->unit_price_pack)) {
+                return (float)$batch->unit_price_pack;
+            }
+            if ($unitType === 'bag' && isset($batch->unit_price_bag) && is_numeric($batch->unit_price_bag)) {
+                return (float)$batch->unit_price_bag;
+            }
+            // no unit type provided; try pack then bag
+            if (isset($batch->unit_price_pack) && is_numeric($batch->unit_price_pack)) {
+                return (float)$batch->unit_price_pack;
+            }
+            if (isset($batch->unit_price_bag) && is_numeric($batch->unit_price_bag)) {
+                return (float)$batch->unit_price_bag;
+            }
+        }
 
-        $unit  = Schema::hasColumn('sales','unit_price') ? 'unit_price'
-               : (Schema::hasColumn('sales','price') ? 'price' : null);
+        if ($fallbackCurrent !== null) return (float)$fallbackCurrent;
 
-        return ['total' => $total, 'qty' => $qty, 'unit' => $unit];
+        // product defaults
+        $candidates = ['price','default_price','unit_cost'];
+        foreach ($candidates as $c) {
+            if (isset($product->{$c}) && is_numeric($product->{$c})) {
+                return (float)$product->{$c};
+            }
+        }
+        return 0.0;
+    }
+
+    /** If the sale already has a numeric unit price column, read it to preserve if user didn’t change. */
+    protected function inferCurrentUnitPrice(Sale $sale): ?float
+    {
+        $unitCol = Schema::hasColumn('sales','unit_price') ? 'unit_price'
+                : (Schema::hasColumn('sales','price') ? 'price' : null);
+        if (!$unitCol) return null;
+        $val = $sale->{$unitCol};
+        return is_numeric($val) ? (float)$val : null;
     }
 
     /* ----------------------------- Misc helpers ----------------------------- */
@@ -722,7 +825,6 @@ class SalesController extends Controller
     {
         $produced = (float) Production::where('product_id', $productId)->sum('quantity');
 
-        // dynamic qty column
         $qtyCol = Schema::hasColumn('sales','quantity_kg') ? 'quantity_kg'
                : (Schema::hasColumn('sales','quantity') ? 'quantity' : null);
 
@@ -821,6 +923,12 @@ class SalesController extends Controller
             $daysLeft = Carbon::parse($expiry)->diffInDays(now(), false) * -1;
         }
 
+        // Human label for unit type
+        $unitTypeCol = $this->unitTypeColumn();
+        $unitTypeVal = $unitTypeCol ? ($sale->{$unitTypeCol} ?? null) : null;
+        $unitTypeLabel = $unitTypeVal === 'bag' ? 'bag'
+                         : ($unitTypeVal === 'pack' ? 'pack' : null);
+
         return [
             'invoice'         => $invoiceNo,
             'display_product' => $sale->display_product
@@ -828,6 +936,7 @@ class SalesController extends Controller
             'order_date'      => $orderDate,
             'quantity'        => $qty,
             'unit_price'      => $unit,
+            'unit_type_label' => $unitTypeLabel,   // << show “per pack” / “per bag”
             'total'           => $total,
             'status'          => $sale->status ?? 'Completed',
             'customer_name'   => $sale->customer_name ?? null,
@@ -845,5 +954,70 @@ class SalesController extends Controller
         $shelfLifeDays = (int)$shelfLifeDays;
         if ($shelfLifeDays <= 0) return null;
         return Carbon::parse($productionDate)->addDays($shelfLifeDays)->toDateString();
+    }
+
+    /* ----------------------------- SQL helpers ----------------------------- */
+
+    protected function dateExpressions(): array
+    {
+        $hasOrder = Schema::hasColumn('sales','order_date');
+        $hasDate  = Schema::hasColumn('sales','date');
+
+        if ($hasOrder && $hasDate) {
+            $coalesce = "COALESCE(order_date, `date`)";
+        } elseif ($hasOrder) {
+            $coalesce = "order_date";
+        } elseif ($hasDate) {
+            $coalesce = "`date`";
+        } else {
+            $coalesce = "created_at";
+        }
+
+        $driver = DB::getDriverName();
+        if ($driver === 'sqlite') {
+            $dateExpr = "DATE($coalesce)";
+            $ymExpr   = "strftime('%Y-%m', $coalesce)";
+        } else {
+            $dateExpr = "DATE($coalesce)";
+            $ymExpr   = "DATE_FORMAT($coalesce, '%Y-%m')";
+        }
+
+        $orderExpr = $coalesce;
+
+        return [$dateExpr, $ymExpr, $orderExpr];
+    }
+
+    protected function buildRevenueSumExpr(): string
+    {
+        $cols   = $this->salesNumericColumns();
+        $qtyCol = $cols['qty'];
+        $unitCol= $cols['unit'];
+        $totCol = $cols['total'];
+
+        if ($totCol) {
+            $qtyPart  = $qtyCol  ? "COALESCE($qtyCol,0)"  : "0";
+            $unitPart = $unitCol ? "COALESCE($unitCol,0)" : "0";
+            return "SUM(COALESCE($totCol, ($qtyPart * $unitPart), 0))";
+        }
+
+        if ($qtyCol && $unitCol) {
+            return "SUM(COALESCE(COALESCE($qtyCol,0) * COALESCE($unitCol,0), 0))";
+        }
+
+        return "SUM(0)";
+    }
+
+    protected function salesNumericColumns(): array
+    {
+        $total = Schema::hasColumn('sales','total_price') ? 'total_price'
+               : (Schema::hasColumn('sales','total') ? 'total' : null);
+
+        $qty   = Schema::hasColumn('sales','quantity_kg') ? 'quantity_kg'
+               : (Schema::hasColumn('sales','quantity') ? 'quantity' : null);
+
+        $unit  = Schema::hasColumn('sales','unit_price') ? 'unit_price'
+               : (Schema::hasColumn('sales','price') ? 'price' : null);
+
+        return ['total' => $total, 'qty' => $qty, 'unit' => $unit];
     }
 }

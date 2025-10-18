@@ -1,6 +1,25 @@
-{{-- resources/views/partials/sidebar.blade.php — 3D Neon Glass Sidebar --}}
-{{-- Requirements: Tailwind loaded; optional custom vars: --}}
-{{-- :root { --surface:#0B0F10; --card:#11161A; --line:rgba(255,255,255,.08); } --}}
+{{-- resources/views/partials/sidebar.blade.php — 3D Neon Glass Sidebar (role-aware) --}}
+{{-- Requires Tailwind; optional custom vars:
+   :root { --surface:#0B0F10; --card:#11161A; --line:rgba(255,255,255,.08); } --}}
+
+@php
+  use Illuminate\Support\Str;
+
+  $role = Str::ucfirst(Auth::user()->role ?? 'Admin');
+
+  // ✅ Final allowlist per role
+  $allowed = [
+    'Admin'     => ['dashboard','materials','production','sales','inventory','products','reports','settings','employee'],
+    'Sales'     => ['dashboard','sales','settings'],
+    'Inventory' => ['dashboard','inventory','materials','settings'],
+  ];
+
+  $modules = $allowed[$role] ?? [];
+  $can = fn(string $m) => in_array($m, $modules, true);
+
+  // Active-link helper
+  $link = fn($r) => request()->routeIs($r) ? 'active' : '';
+@endphp
 
 <aside x-data="sidebar()" class="group fixed inset-y-0 left-0 z-40 w-64 lg:w-72 p-3">
   <div class="relative h-full">
@@ -20,71 +39,103 @@
       </div>
 
       <ul class="space-y-1 text-sm">
-        @php $link = fn($r) => request()->routeIs($r) ? 'active' : ''; @endphp
-
         {{-- Dashboard --}}
-        <li>
-          <a href="{{ route('dashboard') }}" class="sb-link {{ $link('dashboard') }}">
-            @svg('heroicon-o-home', 'h-5 w-5')
-            <span>Dashboard</span>
-          </a>
-        </li>
+        @if($can('dashboard'))
+          <li>
+            <a href="{{ route('dashboard') }}" class="sb-link {{ $link('dashboard*') }}">
+              @svg('heroicon-o-home', 'h-5 w-5')
+              <span>Dashboard</span>
+            </a>
+          </li>
+        @endif
 
-        {{-- Materials Group --}}
-        <li>
-          <button @click="toggle('materials')" class="sb-link justify-between">
-            <span class="inline-flex items-center gap-3">
-              @svg('heroicon-o-squares-2x2', 'h-5 w-5')
-              <span>Materials</span>
-            </span>
-            <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180' : open['materials'] }" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.108l3.71-3.878a.75.75 0 011.08 1.04l-4.24 4.43a.75.75 0 01-1.08 0l-4.24-4.43a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
-          </button>
-          <div x-show="open['materials']" x-collapse class="ml-2 mt-1 space-y-1 pl-4 border-l border-white/10">
-            <a href="{{ route('materials.index') }}" class="sb-sublink {{ $link('materials.index') }}">List</a>
-            <a href="{{ route('materials.create') }}" class="sb-sublink {{ $link('materials.create') }}">Add Material</a>
-            <a href="{{ route('recipes.index') }}" class="sb-sublink {{ $link('recipes.*') }}">Recipes</a>
-          </div>
-        </li>
+        {{-- Materials (Inventory + Admin) --}}
+        @if($can('materials'))
+          <li>
+            <button @click="toggle('materials')" class="sb-link justify-between">
+              <span class="inline-flex items-center gap-3">
+                @svg('heroicon-o-squares-2x2', 'h-5 w-5')
+                <span>Materials</span>
+              </span>
+              <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180' : open['materials'] }" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.108l3.71-3.878a.75.75 0 011.08 1.04l-4.24 4.43a.75.75 0 01-1.08 0l-4.24-4.43a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+            </button>
+            <div x-show="open['materials']" x-collapse class="ml-2 mt-1 space-y-1 pl-4 border-l border-white/10">
+              <a href="{{ route('materials.index') }}" class="sb-sublink {{ $link('materials.index') }}">List</a>
+              <a href="{{ route('materials.create') }}" class="sb-sublink {{ $link('materials.create') }}">Add Material</a>
+              <a href="{{ route('recipes.index') }}" class="sb-sublink {{ $link('recipes.*') }}">Recipes</a>
+            </div>
+          </li>
+        @endif
 
-        {{-- Production --}}
-        <li>
-          <a href="{{ route('production.index') }}" class="sb-link {{ $link('production.*') }}">
-            @svg('heroicon-o-cog-6-tooth', 'h-5 w-5')
-            <span>Production</span>
-          </a>
-        </li>
+        {{-- Production (Admin only) --}}
+        @if($can('production'))
+          <li>
+            <a href="{{ route('production.index') }}" class="sb-link {{ $link('production.*') }}">
+              @svg('heroicon-o-cog-6-tooth', 'h-5 w-5')
+              <span>Production</span>
+            </a>
+          </li>
+        @endif
 
-        {{-- Sales --}}
-        <li>
-          <a href="{{ route('sales.index') }}" class="sb-link {{ $link('sales.*') }}">
-            @svg('heroicon-o-banknotes', 'h-5 w-5')
-            <span>Sales</span>
-          </a>
-        </li>
+        {{-- Sales (Sales + Admin) --}}
+        @if($can('sales'))
+          <li>
+            <a href="{{ route('sales.index') }}" class="sb-link {{ $link('sales.*') }}">
+              @svg('heroicon-o-banknotes', 'h-5 w-5')
+              <span>Sales</span>
+            </a>
+          </li>
+        @endif
 
-        {{-- Inventory --}}
-        <li>
-          <a href="{{ route('inventory.index') }}" class="sb-link {{ $link('inventory.*') }}">
-            @svg('heroicon-o-archive-box', 'h-5 w-5')
-            <span>Inventory</span>
-          </a>
-        </li>
+        {{-- Inventory (Inventory + Admin) --}}
+        @if($can('inventory'))
+          <li>
+            <a href="{{ route('inventory.index') }}" class="sb-link {{ $link('inventory.*') }}">
+              @svg('heroicon-o-archive-box', 'h-5 w-5')
+              <span>Inventory</span>
+            </a>
+          </li>
+        @endif
 
-        {{-- Reports --}}
-        <li>
-          <a href="{{ route('reports.index') }}" class="sb-link {{ $link('reports.*') }}">
-            @svg('heroicon-o-chart-bar', 'h-5 w-5')
-            <span>Reports</span>
-          </a>
-        </li>
+        {{-- Products (Admin only) --}}
+        @if($can('products'))
+          <li>
+            <a href="{{ route('products.index') }}" class="sb-link {{ $link('products.*') }}">
+              @svg('heroicon-o-cube', 'h-5 w-5')
+              <span>Products</span>
+            </a>
+          </li>
+        @endif
 
-        {{-- Settings --}}
-        <li class="pt-2 mt-4 border-t border-white/10">
-          <a href="{{ route('settings.index') }}" class="sb-link {{ $link('settings.*') }}">
-            @svg('heroicon-o-cog-8-tooth', 'h-5 w-5')
-            <span>Settings</span>
-          </a>
-        </li>
+        {{-- Reports (Admin only) --}}
+        @if($can('reports'))
+          <li>
+            <a href="{{ route('reports.index') }}" class="sb-link {{ $link('reports.*') }}">
+              @svg('heroicon-o-chart-bar', 'h-5 w-5')
+              <span>Reports</span>
+            </a>
+          </li>
+        @endif
+
+        {{-- Employee (Admin only) --}}
+        @if($can('employee'))
+          <li>
+            <a href="{{ route('employee') }}" class="sb-link {{ $link('employees.*') }}">
+              @svg('heroicon-o-user-group', 'h-5 w-5')
+              <span>Employee</span>
+            </a>
+          </li>
+        @endif
+
+        {{-- Settings (everyone) --}}
+        @if($can('settings'))
+          <li class="pt-2 mt-4 border-t border-white/10">
+            <a href="{{ route('settings.index') }}" class="sb-link {{ $link('settings.*') }}">
+              @svg('heroicon-o-cog-8-tooth', 'h-5 w-5')
+              <span>Settings</span>
+            </a>
+          </li>
+        @endif
       </ul>
 
       <!-- floating highlight -->
@@ -111,7 +162,10 @@
     const state = JSON.parse(localStorage.getItem(key) || '{}');
     return {
       open: { materials: !!state.materials },
-      toggle(section){ this.open[section] = !this.open[section]; localStorage.setItem(key, JSON.stringify(this.open)); }
+      toggle(section){
+        this.open[section] = !this.open[section];
+        localStorage.setItem(key, JSON.stringify(this.open));
+      }
     }
   }
 </script>

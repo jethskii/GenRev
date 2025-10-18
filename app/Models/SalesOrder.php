@@ -92,6 +92,14 @@ class SalesOrder extends Model
         return $query->whereIn('status', [self::STATUS_PENDING, self::STATUS_COMPLETED]);
     }
 
+    /** Orders that have at least one item with problems (under-allocated, expired/near-expiry, or negative remaining). */
+    public function scopeProblematic($query)
+    {
+        return $query->whereHas('items', function ($q) {
+            $q->problematic();
+        });
+    }
+
     /* --------------------------- Attribute Accessors ------------------------- */
 
     /**

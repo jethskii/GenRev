@@ -9,11 +9,11 @@ use App\Models\Employee;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Database\QueryException;
-use Symfony\Component\HttpFoundation\Response;
 
 class AuthController extends Controller
 {
@@ -55,7 +55,8 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $data = $request->validate([
-            'email'    => ['required', 'string'], // may be email or username
+            // May be an email or a username; keep it as string
+            'email'    => ['required', 'string'],
             'password' => ['required', 'string'],
             'remember' => ['sometimes', 'boolean'],
         ]);
@@ -81,15 +82,18 @@ class AuthController extends Controller
 
             if (str_contains($raw, '@')) {
                 // Email login (case-insensitive)
-                $credentials = ['email' => Str::lower($raw), 'password' => $data['password']];
+                $credentials = [
+                    'email'    => Str::lower($raw),
+                    'password' => $data['password'],
+                ];
             } else {
                 // Username login via employees.username -> users.email
                 $employee = Employee::query()
                     ->whereRaw('LOWER(username) = ?', [$identifier])
                     ->first();
 
-                // Optional: block disabled employees (if you use a status column)
-                if ($employee && isset($employee->status) && strtolower((string)$employee->status) === 'disabled') {
+                // Optional: block disabled employees if you track status
+                if ($employee && isset($employee->status) && strtolower((string) $employee->status) === 'disabled') {
                     RateLimiter::hit($throttleKey, $decaySeconds);
                     return back()
                         ->withInput($request->only('email', 'remember'))
@@ -99,7 +103,10 @@ class AuthController extends Controller
                 if ($employee?->user_id) {
                     $user = User::find($employee->user_id);
                     if ($user) {
-                        $credentials = ['email' => Str::lower($user->email), 'password' => $data['password']];
+                        $credentials = [
+                            'email'    => Str::lower($user->email),
+                            'password' => $data['password'],
+                        ];
                     }
                 }
             }
@@ -108,13 +115,14 @@ class AuthController extends Controller
                 RateLimiter::clear($throttleKey);
                 $request->session()->regenerate();
 
-                // Optional: update last_login_at if you have it
-                if (method_exists(Auth::user(), 'forceFill')) {
-                    try {
-                        Auth::user()->forceFill(['last_login_at' => now()])->save();
-                    } catch (\Throwable $e) {
-                        // ignore if column doesn't exist
+                // Optional: update last_login_at if you have the column
+                try {
+                    $authUser = Auth::user();
+                    if ($authUser && method_exists($authUser, 'forceFill')) {
+                        $authUser->forceFill(['last_login_at' => now()])->save();
                     }
+                } catch (\Throwable $e) {
+                    // ignore if column doesn't exist
                 }
 
                 return redirect()->intended(route('dashboard'));
@@ -131,7 +139,7 @@ class AuthController extends Controller
                 return back()
                     ->withInput($request->only('email', 'remember'))
                     ->withErrors(['email' =>
-                        "A required table is missing (users or employees). Run your migrations and clear caches."]);
+                        'A required table is missing (users or employees). Run your migrations and clear caches.']);
             }
             throw $e; // bubble up other DB errors
         }
@@ -140,14 +148,14 @@ class AuthController extends Controller
     /**
      * Register a User and link (or create) an Employee.
      * - Accepts either first_name/last_name or a single "name" to split.
-     * - Enforces roles: admin | sales | inventory (per your UI).
+     * - Enforces roles: admin | sales | inventory.
      */
     public function register(Request $request)
     {
         // Allow single "name" field; auto-split into first/last
         $fullName = trim((string) $request->input('name', ''));
-        $first = $request->input('first_name');
-        $last  = $request->input('last_name');
+        $first    = $request->input('first_name');
+        $last     = $request->input('last_name');
 
         if (!$first || !$last) {
             [$firstAuto, $lastAuto] = $this->splitName($fullName);
@@ -162,7 +170,7 @@ class AuthController extends Controller
             'username' => $request->input('username') ?: $request->input('email'),
         ]);
 
-        // Dynamically resolve the actual users table (supports AUTH_TABLE override and custom User::getTable())
+        // Dynamically resolve the actual users table (supports User::getTable())
         $usersTable = $this->usersTable();
 
         $validated = $request->validate([
@@ -181,12 +189,12 @@ class AuthController extends Controller
                 $email    = Str::lower($validated['email']);
                 $username = Str::lower($validated['username']);
 
-                // Create auth user (your User model may hash via a "hashed" cast; if not, add a mutator)
+                // Create auth user (make sure password is hashed here)
                 /** @var \App\Models\User $user */
                 $user = User::create([
                     'name'     => trim(($validated['first_name'] ?? '') . ' ' . ($validated['last_name'] ?? '')),
                     'email'    => $email,
-                    'password' => $validated['password'], // relies on User model hashing (mutator or 'hashed' cast)
+                    'password' => Hash::make($validated['password']),
                     'role'     => Str::lower($validated['role']),
                 ]);
 
@@ -220,8 +228,8 @@ class AuthController extends Controller
                 return back()
                     ->withInput($request->except('password', 'password_confirmation'))
                     ->withErrors(['email' =>
-                        "A required table is missing. Ensure your auth and employees tables exist, then run:\n".
-                        "php artisan migrate --force\n".
+                        "A required table is missing. Ensure your auth and employees tables exist, then run:\n" .
+                        "php artisan migrate --force\n" .
                         "php artisan config:clear && php artisan cache:clear && php artisan optimize:clear"]);
             }
 
@@ -251,8 +259,9 @@ class AuthController extends Controller
 
     private function throttleKey(string $ip, string $identifier, string $ua = ''): string
     {
-        // A tiny normalization on UA to avoid excessively long keys
-        $uaKey = substr(hash('xxh3', $ua ?: 'na'), 0, 10);
+        // Use xxh3 if available (PHP 8.3+), otherwise fallback to sha256
+        $algo = \in_array('xxh3', hash_algos(), true) ? 'xxh3' : 'sha256';
+        $uaKey = substr(hash($algo, $ua ?: 'na'), 0, 10);
         return "{$ip}|auth|{$identifier}|{$uaKey}";
     }
 
@@ -261,14 +270,15 @@ class AuthController extends Controller
         if ($seconds >= 60) {
             $mins = (int) floor($seconds / 60);
             $secs = $seconds % 60;
-            return "Too many attempts. Try again in {$mins} minute".($mins === 1 ? '' : 's').($secs ? " and {$secs} second".($secs === 1 ? '' : 's') : '').".";
+            return "Too many attempts. Try again in {$mins} minute" . ($mins === 1 ? '' : 's') .
+                ($secs ? " and {$secs} second" . ($secs === 1 ? '' : 's') : '') . '.';
         }
-        return "Too many attempts. Try again in {$seconds} second".($seconds === 1 ? '' : 's').".";
+        return "Too many attempts. Try again in {$seconds} second" . ($seconds === 1 ? '' : 's') . '.';
     }
 
     /**
      * Resolve the actual users table name the app should use.
-     * - Honors User::getTable() (which you made env-driven via AUTH_TABLE)
+     * - Honors User::getTable()
      * - Falls back to 'users'
      */
     private function usersTable(): string

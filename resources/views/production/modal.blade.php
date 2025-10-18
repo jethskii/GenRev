@@ -8,7 +8,7 @@
     <button type="button" onclick="closeAddModal()" class="absolute top-2 right-4 text-2xl font-bold hover:text-red-400">&times;</button>
     <h3 class="text-xl font-semibold mb-4">Add Production</h3>
 
-    <form id="go_form" method="POST" enctype="multipart/form-data" class="space-y-4">
+    <form id="go_form" action="{{ route('production.store') }}" method="POST" enctype="multipart/form-data" class="space-y-4">
       @csrf
 
       {{-- Product selector / New product toggle --}}
@@ -19,7 +19,7 @@
       </div>
 
       {{-- Existing product select --}}
-      <select id="go_product_id"
+      <select id="go_product_id" name="product_id"
               class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
               required>
         <option value="" selected disabled>— Select product —</option>
@@ -38,19 +38,19 @@
       <div id="go_new_wrap" class="hidden space-y-3">
         <div>
           <label class="block text-sm mb-1">New Product Name</label>
-          <input id="go_new_name" name="new_product_name" type="text"
+          <input id="go_new_name" name="product_name" type="text"
                  class="w-full rounded-xl bg-white/10 border border-white/10 px-3 py-2">
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-sm mb-1">Category (optional)</label>
-            <input id="go_new_category" name="new_category" type="text"
+            <input id="go_new_category" name="category" type="text"
                    placeholder="Beef, Pork, Chicken…"
                    class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2">
           </div>
           <div>
             <label class="block text-sm mb-1">Shelf Life (days)</label>
-            <input id="go_new_shelf" name="new_shelf_life" type="number" min="1" max="365"
+            <input id="go_new_shelf" name="shelf_life_days" type="number" min="1" max="365"
                    class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2" value="7">
           </div>
         </div>
@@ -81,27 +81,32 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="block text-sm mb-1">Forecasted Demand (kg)</label>
-          <input id="go_fc" name="forecasted_demand" type="number" step="any"
+          <input id="go_fc" name="forecasted_demand" type="number" step="0.01" min="0"
                  class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2">
         </div>
         <div>
           <label class="block text-sm mb-1">Produced Quantity (kg)</label>
-          <input id="go_prod_qty" name="produced_qty_kg" type="number" step="any"
+          {{-- Controller expects INT for current_inventory/quantity --}}
+          <input id="go_prod_qty" name="current_inventory" type="number" step="1" min="1"
                  class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2" required>
         </div>
       </div>
 
-      {{-- Cost + Price --}}
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
+      {{-- Cost + Prices --}}
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="sm:col-span-1">
           <label class="block text-sm mb-1">Unit Cost (₱)</label>
-          <input id="go_cost" name="unit_cost" type="number" step="any"
-                 class="w-full rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-white/90" placeholder="auto"
-                 >
+          <input id="go_cost" name="unit_cost" type="number" step="0.01" min="0"
+                 class="w-full rounded-xl bg-white/10 border border-white/10 px-3 py-2 text-white/90" placeholder="auto">
         </div>
         <div>
-          <label class="block text-sm mb-1">Unit Price (₱)</label>
-          <input id="go_price" name="unit_price" type="number" step="any"
+          <label class="block text-sm mb-1">Price per Pack (₱)</label>
+          <input id="go_price_pack" name="unit_price_pack" type="number" step="0.01" min="0"
+                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm mb-1">Price per Bag (₱)</label>
+          <input id="go_price_bag" name="unit_price_bag" type="number" step="0.01" min="0"
                  class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2">
         </div>
       </div>
@@ -121,7 +126,7 @@
         </div>
       </div>
 
-      {{-- Optional Sale on create --}}
+      {{-- Optional Sale on create (kept; backend ignores unknown fields) --}}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="block text-sm mb-1">Order Date</label>
@@ -130,8 +135,8 @@
         </div>
         <div>
           <label class="block text-sm mb-1">Order Quantity (kg)</label>
-          <input id="go_order_qty" name="order_quantity_kg" type="number" step="any"
-                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2" required>
+          <input id="go_order_qty" name="order_quantity_kg" type="number" step="0.01" min="0"
+                 class="w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2">
         </div>
       </div>
 
@@ -184,10 +189,14 @@ function setTodayDefaults(){
   $('#go_order_date').value = `${y}-${m}-${day}`;
 }
 function resetGO(){
-  ['go_fc','go_prod_qty','go_cost','go_price','go_prod_date','go_exp_date','go_order_date','go_order_qty','go_new_name','go_new_category','go_new_shelf']
-  .forEach(id => { const el = $('#'+id); if(el){ el.value = ''; } });
+  [
+    'go_fc','go_prod_qty','go_cost',
+    'go_price_pack','go_price_bag',
+    'go_prod_date','go_exp_date','go_order_date','go_order_qty',
+    'go_new_name','go_new_category','go_new_shelf'
+  ].forEach(id => { const el = $('#'+id); if(el){ el.value = ''; } });
   $('#go_new_shelf')?.setAttribute('value','7');
-  $('#go_product_id').selectedIndex = 0;
+  if ($('#go_product_id')) $('#go_product_id').selectedIndex = 0;
   $('#go_preview').src = `{{ asset('images/default-product.png') }}`;
   setModeExisting(); // default
 }
@@ -195,18 +204,17 @@ function resetGO(){
 function setModeNew(){
   $('#go_new_wrap').classList.remove('hidden');
   $('#go_product_id').setAttribute('disabled', 'disabled');
+  $('#go_product_id').removeAttribute('required');
   $('#go_toggle_new').textContent = '← Use existing product';
-  // Action → new product endpoint
-  $('#go_form').action = `{{ route('production.storeOrder.new') }}`;
+  // Require new product fields
   $('#go_new_name').required = true;
 }
 function setModeExisting(){
   $('#go_new_wrap').classList.add('hidden');
   $('#go_product_id').removeAttribute('disabled');
+  $('#go_product_id').setAttribute('required','required');
   $('#go_toggle_new').textContent = '+ Add new product';
   $('#go_new_name').required = false;
-  // Action will be set when a product is chosen
-  $('#go_form').action = '';
 }
 
 // Toggle
@@ -214,22 +222,23 @@ $('#go_toggle_new')?.addEventListener('click', () => {
   if ($('#go_new_wrap').classList.contains('hidden')) setModeNew(); else setModeExisting();
 });
 
-// Existing product change → set action + autofill + preview + auto-expiry
+// Existing product change → autofill + preview + auto-expiry
 $('#go_product_id')?.addEventListener('change', async (e) => {
   const opt = e.target.selectedOptions[0]; if (!opt) return;
-
-  // set form action to existing product endpoint
-  const url = `{{ url('/production') }}/${encodeURIComponent(opt.value)}/order`;
-  $('#go_form').action = url;
 
   // preview image (if any)
   const img = opt.dataset.img;
   $('#go_preview').src = img && img.length ? img : `{{ asset('images/default-product.png') }}`;
 
-  // defaults
-  $('#go_price').value = Number(opt.dataset.price || 0).toFixed(2);
+  // optional default price used as a convenient starting point
+  const price = Number(opt.dataset.price || 0);
+  if (!isNaN(price)) {
+    // If you have separate defaults, you can split them; for now set both
+    $('#go_price_pack').value = price.toFixed(2);
+    $('#go_price_bag').value  = price.toFixed(2);
+  }
 
-  // fetch more info by name (unit cost, forecast)
+  // fetch more info by name (unit cost, forecast) from controller
   try{
     const res = await fetch(`{{ url('/production/info') }}/${encodeURIComponent(opt.dataset.name)}`);
     if (res.ok){

@@ -41,6 +41,14 @@
     .chip-warn { background:#fffbeb; border-color:#fcd34d; color:#92400e; }   /* amber/yellow */
     .chip-bad  { background:#fef2f2; border-color:#fecaca; color:#991b1b; }   /* red */
 
+    /* Unit-type chip */
+    .u-chip{
+      display:inline-flex; align-items:center; gap:.35rem;
+      padding:.18rem .5rem; border-radius:999px; font-size:.7rem; font-weight:600;
+      border:1px solid #e5e7eb; background:#f8fafc; color:#334155;
+      margin-left:.4rem;
+    }
+
     /* Buttons: align with layout (red primary; optional ghost) */
     .btn { font-weight:600; border-radius:.75rem; padding:.55rem 1rem; border:1px solid transparent; }
     .btn:disabled{ opacity:.6; cursor:not-allowed; }
@@ -63,6 +71,12 @@
 @endsection
 
 @section('content')
+@php
+  // Determine unit type from the sale row (prefer 'unit_type', fallback to 'unit')
+  $unitTypeRaw = $sale->unit_type ?? $sale->unit ?? null;
+  $unitType = in_array($unitTypeRaw, ['pack','bag'], true) ? $unitTypeRaw : null;
+@endphp
+
 <div class="wrap">
   <div class="card">
     {{-- Header --}}
@@ -107,7 +121,12 @@
     </div>
     <div class="kv">
       <div class="muted">Unit Price</div>
-      <div class="mono">₱{{ number_format((float)($meta['unit_price'] ?? 0), 2) }}</div>
+      <div class="mono">
+        ₱{{ number_format((float)($meta['unit_price'] ?? 0), 2) }}
+        @if($unitType)
+          <span class="u-chip">per {{ $unitType }}</span>
+        @endif
+      </div>
     </div>
 
     <div class="sep"></div>

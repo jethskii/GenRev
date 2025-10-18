@@ -1,5 +1,16 @@
 @php
     /** @var \App\Models\SalesOrderItem $item */
+    // Derive unit type (for display + validations): 'pack' | 'bag' | null
+    $unitType = $item->unit_type ?? $item->unit ?? null;
+    $unitType = in_array($unitType, ['pack','bag'], true) ? $unitType : null;
+
+    // Helper: format qty based on unit type (whole for pack/bag, 3dp otherwise)
+    $fmtQty = function($n) use ($unitType) {
+        $n = (float) $n;
+        return $unitType ? number_format($n, 0) : number_format($n, 3);
+    };
+
+    $unitLabel = $unitType ? ($unitType === 'pack' ? 'pack(s)' : 'bag(s)') : 'kg';
 @endphp
 
 {{-- Batch Allocations – Liquid/Glass card --}}
@@ -11,15 +22,21 @@
         <div class="flex flex-wrap items-center gap-2 text-sm">
             <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
                 Needed:
-                <span class="font-semibold text-yellow-300">{{ $item->quantity }}</span>
+                <span class="font-semibold text-yellow-300">
+                    {{ $fmtQty($item->quantity) }} <span class="opacity-75">/{{ $unitLabel }}</span>
+                </span>
             </span>
             <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
                 Allocated:
-                <span class="font-semibold text-emerald-300">{{ $item->allocated_qty }}</span>
+                <span class="font-semibold text-emerald-300">
+                    {{ $fmtQty($item->allocated_qty) }} <span class="opacity-75">/{{ $unitLabel }}</span>
+                </span>
             </span>
             <span class="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
                 Remaining:
-                <span class="font-semibold text-sky-300">{{ $item->remaining_qty }}</span>
+                <span class="font-semibold text-sky-300">
+                    {{ $fmtQty($item->remaining_qty) }} <span class="opacity-75">/{{ $unitLabel }}</span>
+                </span>
             </span>
         </div>
     </div>
@@ -34,7 +51,7 @@
                     <th class="px-4 py-2 text-left font-medium">Produced</th>
                     <th class="px-4 py-2 text-left font-medium">Expiry</th>
                     <th class="px-4 py-2 text-left font-medium">Days Left</th>
-                    <th class="px-4 py-2 text-right font-medium">Allocated Qty</th>
+                    <th class="px-4 py-2 text-right font-medium">Allocated Qty ({{ $unitLabel }})</th>
                     <th class="px-4 py-2 text-left font-medium">Lock</th>
                     <th class="px-4 py-2 text-left font-medium">Approved By</th>
                     <th class="px-4 py-2 text-right font-medium">Actions</th>
@@ -53,7 +70,7 @@
                         <td class="px-4 py-2">{{ optional($batch?->produced_at)->format('Y-m-d') }}</td>
                         <td class="px-4 py-2">{{ optional($batch?->expiry_date)->format('Y-m-d') }}</td>
                         <td class="px-4 py-2 {{ $daysClass }}">{{ $daysLeft ?? '—' }}</td>
-                        <td class="px-4 py-2 text-right">{{ number_format($allocation->allocated_qty) }}</td>
+                        <td class="px-4 py-2 text-right">{{ $fmtQty($allocation->allocated_qty) }}</td>
                         <td class="px-4 py-2">
                             @if($allocation->locked_by_admin)
                                 <span class="inline-flex items-center rounded-full bg-emerald-600/20 text-emerald-300 border border-emerald-700/40 px-2 py-0.5 text-xs">Locked</span>
@@ -94,6 +111,7 @@
                                     data-item-id="{{ $allocation->order_item_id }}"
                                     data-product-id="{{ $item->product_id }}"
                                     data-current-qty="{{ $allocation->allocated_qty }}"
+                                    data-unit-type="{{ $unitType ?? '' }}"
                                 >Reallocate</button>
                                 @endcan
 
@@ -122,16 +140,16 @@
 </div>
 
 {{-- Reallocate Modal – Liquid/Glass --}}
-<div id="reallocate-modal" class="hidden fixed inset-0 z-50">
+<div id="reallocate-modal" class="hidden fixed inset-0 z-50" aria-modal="true" role="dialog" aria-labelledby="reallocTitle">
     {{-- Backdrop --}}
-    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" data-close-modal></div>
+    <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" data-close-modal aria-hidden="true"></div>
 
     {{-- Modal box --}}
     <div class="relative mx-auto mt-24 w-[95%] max-w-5xl rounded-2xl border border-white/10
                 bg-gradient-to-br from-[#1F1E1E]/95 to-[#001C00]/85 text-white shadow-2xl">
         <div class="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-            <h3 class="text-lg font-semibold" style="text-shadow:-1px 1px 0 #047705">Reallocate to Another Batch</h3>
-            <button type="button" class="grid h-9 w-9 place-items-center rounded-full border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition" data-close-modal>✖</button>
+            <h3 id="reallocTitle" class="text-lg font-semibold" style="text-shadow:-1px 1px 0 #047705">Reallocate to Another Batch</h3>
+            <button type="button" class="grid h-9 w-9 place-items-center rounded-full border border-white/10 text-white/80 hover:text-white hover:bg-white/10 transition" data-close-modal aria-label="Close">✖</button>
         </div>
 
         <form id="reallocate-form" method="POST" class="px-6 py-5">
@@ -153,8 +171,19 @@
             {{-- Inputs --}}
             <div class="mt-4 grid gap-3 md:grid-cols-3">
                 <div>
-                    <label class="block text-sm text-white/80 mb-1">Move Quantity</label>
-                    <input type="number" min="1" class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-white outline-none focus:border-[#047705] focus:ring-2 focus:ring-[#047705]/30" id="move_qty_input" placeholder="e.g. 10">
+                    <label class="block text-sm text-white/80 mb-1">
+                        Move Quantity
+                        <span id="unitBadge" class="ml-1 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[.7rem] align-middle">
+                            {{ $unitLabel }}
+                        </span>
+                    </label>
+                    <input
+                        type="number"
+                        id="move_qty_input"
+                        class="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-white outline-none focus:border-[#047705] focus:ring-2 focus:ring-[#047705]/30"
+                        placeholder="e.g. {{ $unitType ? '10' : '5.000' }}"
+                        @if($unitType) step="1" min="1" @else step="0.001" min="0.001" @endif
+                    >
                     <small id="move_qty_hint" class="text-white/70"></small>
                 </div>
                 <div class="md:col-span-2">
@@ -187,18 +216,35 @@
     const qtyInput   = document.getElementById('move_qty_input');
     const reasonIn   = document.getElementById('move_reason_input');
     const qtyHint    = document.getElementById('move_qty_hint');
+    const unitBadge  = document.getElementById('unitBadge');
 
     let currentAllocationId = null;
     let currentMaxQty = null;
+    let currentUnitType = null; // 'pack' | 'bag' | ''
 
     // open modal
     document.querySelectorAll('[data-reallocate]').forEach(btn => {
         btn.addEventListener('click', () => {
             currentAllocationId = btn.dataset.allocationId;
-            currentMaxQty       = parseInt(btn.dataset.currentQty || '0', 10);
+            currentMaxQty       = parseFloat(btn.dataset.currentQty || '0');
+            currentUnitType     = (btn.dataset.unitType || '').trim();
 
-            qtyInput.value = currentMaxQty;
-            qtyHint.textContent = `Max you can move: ${currentMaxQty}`;
+            // Adjust step/min and badge label depending on unit type
+            if (currentUnitType === 'pack' || currentUnitType === 'bag') {
+                qtyInput.setAttribute('step','1');
+                qtyInput.setAttribute('min','1');
+                unitBadge.textContent = currentUnitType === 'pack' ? 'pack(s)' : 'bag(s)';
+                qtyInput.placeholder = 'e.g. 10';
+            } else {
+                qtyInput.setAttribute('step','0.001');
+                qtyInput.setAttribute('min','0.001');
+                unitBadge.textContent = 'kg';
+                qtyInput.placeholder = 'e.g. 5.000';
+            }
+
+            // Initialize with max and hint
+            qtyInput.value = (currentUnitType ? Math.floor(currentMaxQty) : Number(currentMaxQty).toFixed(3));
+            qtyHint.textContent = `Max you can move: ${currentUnitType ? Math.floor(currentMaxQty) : Number(currentMaxQty).toFixed(3)}`;
             toBatchId.value = '';
             reasonIn.value  = '';
 
@@ -224,6 +270,11 @@
         btn.addEventListener('click', () => modal.classList.add('hidden'));
     });
 
+    // Esc to close
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') modal.classList.add('hidden');
+    });
+
     // submit → mirror inputs into hidden
     form.addEventListener('submit', (e) => {
         if (!toBatchId.value) {
@@ -231,8 +282,11 @@
             alert('Please select a destination batch.');
             return;
         }
-        const move = parseInt(qtyInput.value || '0', 10);
-        if (!move || move < 1 || move > currentMaxQty) {
+        const raw = qtyInput.value || '0';
+        const move = currentUnitType ? parseInt(raw, 10) : parseFloat(raw);
+        const max  = currentUnitType ? Math.floor(currentMaxQty) : parseFloat(currentMaxQty);
+
+        if (!move || move < (currentUnitType ? 1 : 0.001) || move > max) {
             e.preventDefault();
             alert('Invalid quantity to move.');
             return;
@@ -257,9 +311,12 @@
             }
 
             tableBody.innerHTML = data.map(b => {
-                const free  = Math.max(0, (b.qty_available ?? 0) - (b.qty_reserved ?? 0));
-                const days  = b.days_to_expiry ?? '';
-                const color = days === '' ? '' : (days < 2 ? 'text-red-400' : (days < 6 ? 'text-yellow-300' : 'text-emerald-300'));
+                const freeRaw = Math.max(0, (parseFloat(b.qty_available ?? 0) - parseFloat(b.qty_reserved ?? 0)));
+                const free    = (currentUnitType ? Math.floor(freeRaw) : freeRaw);
+                const days    = b.days_to_expiry ?? '';
+                const color   = days === '' ? '' : (days < 2 ? 'text-red-400' : (days < 6 ? 'text-yellow-300' : 'text-emerald-300'));
+
+                const fmtFree = currentUnitType ? free.toLocaleString() : Number(free).toFixed(3);
 
                 return `
                     <tr class="cursor-pointer hover:bg-white/5 transition" data-pick-batch data-id="${b.id}">
@@ -268,7 +325,7 @@
                         <td class="px-3 py-2">${(b.produced_at ?? '').slice(0,10)}</td>
                         <td class="px-3 py-2">${(b.expiry_date ?? '').slice(0,10)}</td>
                         <td class="px-3 py-2 ${color}">${days}</td>
-                        <td class="px-3 py-2 text-right">${free.toLocaleString()}</td>
+                        <td class="px-3 py-2 text-right">${fmtFree}</td>
                         <td class="px-3 py-2">
                             <span class="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-xs">Pick</span>
                         </td>

@@ -2,17 +2,33 @@
 
 namespace App\Models;
 
+use App\Services\InventoryService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use App\Services\InventoryService;
+use Illuminate\Support\Carbon;
 
 class Sale extends Model
 {
     use SoftDeletes;
 
     protected $table = 'sales';
+
+    /** Simple statuses (keep in sync with DB + UI) */
+    public const STATUS_PENDING   = 'Pending';
+    public const STATUS_COMPLETED = 'Completed';
+    public const STATUS_CANCELLED = 'Cancelled';
+    public const STATUS_PAID      = 'Paid';
+
+    /** Useful list for validation/UI */
+    public const STATUSES = [
+        self::STATUS_PENDING,
+        self::STATUS_COMPLETED,
+        self::STATUS_CANCELLED,
+        self::STATUS_PAID,
+    ];
 
     /**
      * While debugging you can swap to:
@@ -64,7 +80,13 @@ class Sale extends Model
     ];
 
     // Make these derived fields visible in JSON (API responses)
-    protected $appends = ['display_product', 'sale_date'];
+    protected $appends = [
+        'display_product',
+        'sale_date',
+        'is_paid',
+        'total_value',     // add a direct accessor for API use
+        'invoice',         // unified invoice/order number
+    ];
 
     /* ----------------------------- Relationships ----------------------------- */
 
@@ -81,13 +103,51 @@ class Sale extends Model
 
     public function allocations()
     {
-        // If you have a concrete BatchAllocation model, you can add a "use" at top.
+        // If you have a concrete BatchAllocation model, confirm the FK ('sale_id') matches your schema.
         return $this->hasMany(\App\Models\BatchAllocation::class);
     }
 
     public function audits()
     {
         return $this->hasMany(\App\Models\SaleAudit::class);
+    }
+
+    /* -------------------------------- Scopes --------------------------------- */
+
+    public function scopeStatus($q, string $status)
+    {
+        return $q->where('status', $status);
+    }
+
+    public function scopePaid($q)
+    {
+        return $q->where('status', self::STATUS_PAID);
+    }
+
+    public function scopeOpen($q)
+    {
+        return $q->whereIn('status', [self::STATUS_PENDING, self::STATUS_COMPLETED]);
+    }
+
+    public function scopeDateBetween($q, ?string $from, ?string $to)
+    {
+        $col = Schema::hasColumn($this->getTable(), 'order_date') ? 'order_date' : 'date';
+        if ($from) $q->whereDate($col, '>=', $from);
+        if ($to)   $q->whereDate($col, '<=', $to);
+        return $q;
+    }
+
+    public function scopeSearch($q, ?string $term)
+    {
+        if (!$term) return $q;
+        $term = trim($term);
+        return $q->where(function ($qq) use ($term) {
+            $qq->where('order_number', 'like', "%{$term}%")
+               ->orWhere('invoice_number', 'like', "%{$term}%")
+               ->orWhere('customer_name', 'like', "%{$term}%")
+               ->orWhere('product', 'like', "%{$term}%")
+               ->orWhere('notes', 'like', "%{$term}%");
+        });
     }
 
     /* ---------------------------- Unified Accessors --------------------------- */
@@ -104,12 +164,18 @@ class Sale extends Model
         return (float) ($this->unit_price ?? $this->price ?? 0);
     }
 
-    /** Total value (computed if not stored) */
+    /** Total value (computed if not stored) – method */
     public function totalValue(): float
     {
         if (!is_null($this->total_price ?? null)) return (float) $this->total_price;
         if (!is_null($this->total ?? null))       return (float) $this->total;
         return round($this->qtyKg() * $this->unitPriceValue(), 2);
+    }
+
+    /** Total value – accessor (so it's in $appends) */
+    public function getTotalValueAttribute(): float
+    {
+        return $this->totalValue();
     }
 
     /** Display product: prefer legacy string, fallback to relation */
@@ -125,7 +191,25 @@ class Sale extends Model
         return $this->order_date ?? $this->date ?? null;
     }
 
+    /** Unified invoice/order number for display */
+    public function getInvoiceAttribute(): string
+    {
+        return $this->order_number ?: ($this->invoice_number ?: '');
+    }
+
+    /** Convenience boolean */
+    public function getIsPaidAttribute(): bool
+    {
+        return ($this->status ?? '') === self::STATUS_PAID;
+    }
+
     /* ------------------------------- Mutators -------------------------------- */
+
+    public function setOrderDateAttribute($value): void
+    {
+        // Accept strings/Carbon and normalize
+        $this->attributes['order_date'] = $value ? Carbon::parse($value) : null;
+    }
 
     public function setQuantityKgAttribute($value): void
     {
@@ -193,8 +277,30 @@ class Sale extends Model
 
     protected static function booted()
     {
-        // Before create: ensure a total exists (write to whichever columns are present)
+        // Before create: defaults + ensure a total exists + invoice/order number
         static::creating(function (self $m) {
+            // Default status
+            if (!filled($m->status) || !in_array($m->status, self::STATUSES, true)) {
+                $m->status = self::STATUS_COMPLETED;
+            }
+
+            // Default date
+            if (!filled($m->order_date) && filled($m->date)) {
+                $m->order_date = Carbon::parse($m->date);
+            }
+            if (!filled($m->order_date)) {
+                $m->order_date = now();
+            }
+
+            // Generate readable numbers if missing
+            if (!filled($m->order_number) && Schema::hasColumn($m->getTable(), 'order_number')) {
+                $m->order_number = static::generateInvoiceNumber();
+            }
+            if (!filled($m->invoice_number) && Schema::hasColumn($m->getTable(), 'invoice_number')) {
+                $m->invoice_number = $m->order_number ?: static::generateInvoiceNumber();
+            }
+
+            // Ensure totals exist (write to whichever columns are present)
             $qty  = $m->quantity_kg ?? $m->quantity ?? 0;
             $unit = $m->unit_price  ?? $m->price    ?? 0;
             $computed = round((float)$qty * (float)$unit, 2);
@@ -208,7 +314,7 @@ class Sale extends Model
 
         // After created → apply sale impact
         static::created(function (self $m) {
-            App::make(InventoryService::class)->applySale($m);
+            static::withInventory(fn (InventoryService $svc) => $svc->applySale($m));
         });
 
         // On update: revert old sale impact first if core fields changed
@@ -219,31 +325,111 @@ class Sale extends Model
             );
             if (!empty($dirty)) {
                 $orig = (new self())->forceFill($m->getOriginal());
-                App::make(InventoryService::class)->undoSale($orig);
+                static::withInventory(fn (InventoryService $svc) => $svc->undoSale($orig));
             }
         });
 
         static::updated(function (self $m) {
             if ($m->wasChanged(['product_id','production_id','quantity_kg','quantity'])) {
-                App::make(InventoryService::class)->applySale($m);
+                static::withInventory(fn (InventoryService $svc) => $svc->applySale($m));
             }
         });
 
         // Soft delete: return inventory
         static::deleted(function (self $m) {
-            App::make(InventoryService::class)->undoSale($m);
+            static::withInventory(fn (InventoryService $svc) => $svc->undoSale($m));
         });
 
         // Restore: deduct again
         static::restored(function (self $m) {
-            App::make(InventoryService::class)->applySale($m);
+            static::withInventory(fn (InventoryService $svc) => $svc->applySale($m));
         });
 
         // Always keep cached product balance in sync
         static::saved(function (self $m) {
             if ($m->product_id) {
-                App::make(InventoryService::class)->recomputeProductBalance((int) $m->product_id);
+                static::withInventory(fn (InventoryService $svc) => $svc->recomputeProductBalance((int) $m->product_id));
             }
         });
+    }
+
+    /**
+     * Generates a human-friendly unique invoice number:
+     * INV-YYYYMMDD-### (sequence per day, with DB-safe increment).
+     * If "invoice_sequences" does not exist, falls back to scanning "sales".
+     */
+    public static function generateInvoiceNumber(): string
+    {
+        $ymd = now()->format('Ymd');
+        $prefix = 'INV-' . $ymd . '-';
+
+        // Use dedicated sequence table if available
+        if (Schema::hasTable('invoice_sequences')) {
+            try {
+                return DB::transaction(function () use ($ymd, $prefix) {
+                    $row = DB::table('invoice_sequences')
+                        ->where('date_key', $ymd)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$row) {
+                        DB::table('invoice_sequences')->insert([
+                            'date_key'   => $ymd,
+                            'last_seq'   => 1,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                        $seq = 1;
+                    } else {
+                        $seq = (int) $row->last_seq + 1;
+                        DB::table('invoice_sequences')
+                            ->where('date_key', $ymd)
+                            ->update([
+                                'last_seq'   => $seq,
+                                'updated_at' => now(),
+                            ]);
+                    }
+
+                    return $prefix . str_pad((string) $seq, 3, '0', STR_PAD_LEFT);
+                }, 3);
+            } catch (\Throwable $e) {
+                // fall through to MAX()-based fallback
+            }
+        }
+
+        // Fallback: scan existing sales for today and increment the tail
+        $dateCol   = Schema::hasColumn('sales', 'order_date') ? 'order_date' : (Schema::hasColumn('sales', 'date') ? 'date' : null);
+        $numberCol = Schema::hasColumn('sales', 'invoice_number') ? 'invoice_number' : (Schema::hasColumn('sales', 'order_number') ? 'order_number' : null);
+
+        $maxToday = null;
+        if ($dateCol && $numberCol) {
+            $maxToday = static::query()
+                ->whereDate($dateCol, Carbon::now()->toDateString())
+                ->where($numberCol, 'like', $prefix . '%')
+                ->max($numberCol);
+        }
+
+        $next = 1;
+        if ($maxToday) {
+            $tail = substr((string) $maxToday, strlen($prefix));
+            $next = (ctype_digit($tail) ? (int) $tail : 0) + 1;
+        }
+
+        return $prefix . str_pad((string) $next, 3, '0', STR_PAD_LEFT);
+    }
+
+    /* ----------------------------- Internal utils ---------------------------- */
+
+    /**
+     * Run a closure if InventoryService is bound; prevents errors in tests or
+     * environments where inventory logic is not registered.
+     */
+    protected static function withInventory(\Closure $fn): void
+    {
+        if (App::bound(InventoryService::class)) {
+            /** @var InventoryService $svc */
+            $svc = App::make(InventoryService::class);
+            $fn($svc);
+        }
     }
 }

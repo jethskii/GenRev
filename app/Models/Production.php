@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Product;
+use App\Models\Sale;
 
 class Production extends Model
 {
@@ -14,18 +16,20 @@ class Production extends Model
 
     protected $table = 'productions';
 
-    /** Primary key expectations (explicit for clarity) */
+    /** Primary key */
     protected $primaryKey = 'id';
     public $incrementing  = true;
     protected $keyType    = 'int';
 
-    /** Mass assignable fields (match your columns) */
+    /** Mass assignable (mirror table columns) */
     protected $fillable = [
         'product_id',
         'batch_number',
         'forecasted_demand',
         'current_inventory',
         'unit_cost',
+        'unit_price_pack',
+        'unit_price_bag',
         'production_date',
         'expiration_date',
         'quantity',
@@ -35,22 +39,24 @@ class Production extends Model
         'image_thumb_path',
     ];
 
-    /**
-     * Casts:
-     * - Use float for numeric arithmetic in PHP (DB stores DECIMAL/INT).
-     * - Dates are real Carbon instances.
-     */
+    /** Casts */
     protected $casts = [
+        'id'                => 'integer',
+        'product_id'        => 'integer',
         'production_date'   => 'date',
         'expiration_date'   => 'date',
-        'forecasted_demand' => 'float',  // DB: DECIMAL(10,2)
-        'current_inventory' => 'float',  // DB: INT(11) NOT NULL
-        'unit_cost'         => 'float',  // DB: DECIMAL(10,2)
-        'quantity'          => 'float',  // DB: INT(11) NOT NULL
+        'forecasted_demand' => 'float',
+        'unit_cost'         => 'float',
+        'unit_price_pack'   => 'float',
+        'unit_price_bag'    => 'float',
+        'current_inventory' => 'integer',
+        'quantity'          => 'integer',
         'deleted_at'        => 'datetime',
+        'created_at'        => 'datetime',
+        'updated_at'        => 'datetime',
     ];
 
-    /** Appended accessors for UI */
+    /** Virtuals for UI */
     protected $appends = [
         'remaining_qty',
         'is_expired',
@@ -83,16 +89,22 @@ class Production extends Model
         return $q->orderByDesc('production_date')->orderByDesc('id');
     }
 
-    public function scopeLowStock($q, float $threshold = 5.0)
+    public function scopeLowStock($q, int $threshold = 5)
     {
         return $q->where('current_inventory', '<=', $threshold);
     }
 
+    public function scopeExpired($q)
+    {
+        return $q->whereNotNull('expiration_date')
+                 ->where('expiration_date', '<', Carbon::today()->toDateString());
+    }
+
     /* ============================ Accessors ============================ */
 
-    public function getRemainingQtyAttribute(): float
+    public function getRemainingQtyAttribute(): int
     {
-        return (float) ($this->current_inventory ?? 0);
+        return (int) ($this->current_inventory ?? 0);
     }
 
     public function getIsExpiredAttribute(): bool
@@ -115,13 +127,12 @@ class Production extends Model
 
     public function getImageUrlAttribute(): string
     {
-        // Prefer production's own image; fall back to product image; then default
+        // Prefer production image; fallback to product image; then default
         if (!empty($this->image_path)) {
             $disk = $this->image_disk ?: 'public';
             try {
                 return Storage::disk($disk)->url(ltrim($this->image_path, '/'));
             } catch (\Throwable $e) {
-                // If disk isn't configured, fall back to public/storage convention
                 return asset('storage/' . ltrim($this->image_path, '/'));
             }
         }
@@ -167,28 +178,37 @@ class Production extends Model
     {
         // Normalize & ensure NOT NULL numeric fields before save
         static::saving(function (self $m) {
-            // Coerce to numbers (avoid null for NOT NULL columns)
-            $m->quantity          = is_numeric($m->quantity) ? (float)$m->quantity : 0.0;
-            $m->current_inventory = is_numeric($m->current_inventory) ? (float)$m->current_inventory : null;
+            // Coerce to numbers (avoid null for NOT NULL cols)
+            $m->quantity          = is_numeric($m->quantity) ? (int)$m->quantity : 0;
+            $m->current_inventory = is_numeric($m->current_inventory) ? (int)$m->current_inventory : null;
             $m->unit_cost         = is_numeric($m->unit_cost) ? (float)$m->unit_cost : 0.0;
             $m->forecasted_demand = is_numeric($m->forecasted_demand) ? (float)$m->forecasted_demand : 0.0;
 
-            // Clamp negatives to 0
-            if ($m->quantity < 0)          $m->quantity = 0.0;
-            if (($m->current_inventory ?? 0) < 0) $m->current_inventory = 0.0;
-            if ($m->unit_cost < 0)         $m->unit_cost = 0.0;
+            // Optional price fields default to 0 if missing/negative
+            $m->unit_price_pack = is_numeric($m->unit_price_pack) ? max(0.0, (float)$m->unit_price_pack) : 0.0;
+            $m->unit_price_bag  = is_numeric($m->unit_price_bag)  ? max(0.0, (float)$m->unit_price_bag)  : 0.0;
+
+            // Clamp negatives
+            if ($m->quantity < 0) $m->quantity = 0;
+            if (($m->current_inventory ?? 0) < 0) $m->current_inventory = 0;
+            if ($m->unit_cost < 0) $m->unit_cost = 0.0;
 
             // On create, if current_inventory missing, default to quantity
             if ($m->exists === false && ($m->current_inventory === null || $m->current_inventory === '')) {
-                $m->current_inventory = (float) $m->quantity;
+                $m->current_inventory = (int) $m->quantity;
             }
 
-            // Ensure we have a production_date (DB is NOT NULL): fallback to today if missing
+            // Default disk
+            if (empty($m->image_disk)) {
+                $m->image_disk = 'public';
+            }
+
+            // Ensure production_date (NOT NULL in DB)
             if (empty($m->production_date)) {
                 $m->production_date = Carbon::today();
             }
 
-            // Auto-calc expiration if missing but we know production_date and have shelf life
+            // Auto-calc expiration if missing but we know shelf life
             if (empty($m->expiration_date) && !empty($m->production_date)) {
                 $days = null;
 
@@ -227,7 +247,12 @@ class Production extends Model
     protected function recomputeProductBalanceInternal(int $productId): void
     {
         $produced = (float) static::where('product_id', $productId)->sum('quantity');
-        $sold     = (float) Sale::where('product_id', $productId)->sum('quantity');
+
+        // Sold: prefer new schema quantity_kg, fall back to legacy quantity
+        $sold = (float) Sale::where('product_id', $productId)
+            ->selectRaw('COALESCE(SUM(quantity_kg),0) + COALESCE(SUM(quantity),0) as s')
+            ->value('s');
+
         $balance  = max(0.0, $produced - $sold);
         $latestProdDate = static::where('product_id', $productId)->max('production_date');
 

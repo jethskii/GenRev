@@ -107,7 +107,7 @@
     </div>
 </div>
 
-{{-- Add Production Modal (light) --}}
+{{-- Add Production Modal (updated) --}}
 <div id="addModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/40">
   <div class="w-full max-w-2xl mx-4 rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
     <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200">
@@ -118,8 +118,8 @@
     <form id="ajaxProdForm" action="{{ route('production.store') }}" method="POST" enctype="multipart/form-data" class="px-5 py-4 space-y-4">
       @csrf
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="md:col-span-2">
           <label class="block text-sm text-gray-600 mb-1">Product</label>
 
           {{-- existing product --}}
@@ -142,6 +142,14 @@
         </div>
       </div>
 
+      {{-- Shelf life only matters when creating a new product --}}
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 new-only hidden" id="shelfRow">
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">Shelf Life (days)</label>
+          <input type="number" min="1" max="365" id="shelf_life_days" name="shelf_life_days" value="7" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label class="block text-sm text-gray-600 mb-1">Batch Number</label>
@@ -160,15 +168,28 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label class="block text-sm text-gray-600 mb-1">Produced Qty (kg)</label>
-          <input type="number" step="0.001" min="0.001" id="current_inventory" name="current_inventory" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" required>
+          {{-- INT to match controller/model --}}
+          <input type="number" step="1" min="1" id="current_inventory" name="current_inventory" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" required>
         </div>
         <div>
           <label class="block text-sm text-gray-600 mb-1">Forecasted Demand</label>
-          <input type="number" step="0.001" min="0" id="forecasted_demand" name="forecasted_demand" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
+          <input type="number" step="0.01" min="0" id="forecasted_demand" name="forecasted_demand" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
         </div>
         <div>
           <label class="block text-sm text-gray-600 mb-1">Unit Cost</label>
           <input type="number" step="0.01" min="0" id="unit_cost" name="unit_cost" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
+        </div>
+      </div>
+
+      {{-- Prices per pack/bag --}}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">Price per Pack (₱)</label>
+          <input type="number" step="0.01" min="0" id="unit_price_pack" name="unit_price_pack" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
+        </div>
+        <div>
+          <label class="block text-sm text-gray-600 mb-1">Price per Bag (₱)</label>
+          <input type="number" step="0.01" min="0" id="unit_price_bag" name="unit_price_bag" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
         </div>
       </div>
 
@@ -202,7 +223,7 @@
 {{-- Sales Quick-Add Modal (unchanged include) --}}
 @includeIf('sales.partials.sale-modal')
 
-{{-- Scripts (logic retained, colors aligned) --}}
+{{-- Scripts --}}
 <script>
 (function(){
   document.addEventListener('DOMContentLoaded', () => {
@@ -213,6 +234,7 @@
     const productIdSel = document.getElementById('product_id');
     const productName  = document.getElementById('product_name');
     const toggleNewBtn = document.getElementById('toggleNewBtn');
+    const shelfRow     = document.getElementById('shelfRow');
     const batchInput   = document.getElementById('batch_number');
 
     // image elements
@@ -246,7 +268,7 @@
 
     function ensureBatchNumber() {
         if (!batchInput || batchInput.value) return;
-        // keep typed value
+        // keep typed value if present
     }
 
     function resetModalFields() {
@@ -254,6 +276,7 @@
         hidePreview();
         productIdSel.classList.remove('hidden');
         productName.classList.add('hidden');
+        shelfRow.classList.add('hidden');
         toggleNewBtn.textContent = '+ Add new product';
         batchInput.value = '';
         const now = new Date();
@@ -264,6 +287,7 @@
     toggleNewBtn.addEventListener('click', () => {
         productIdSel.classList.toggle('hidden');
         productName.classList.toggle('hidden');
+        shelfRow.classList.toggle('hidden');
         if (productName.classList.contains('hidden')) {
             toggleNewBtn.textContent = '+ Add new product';
             productName.value = '';
@@ -421,7 +445,7 @@
         btn.addEventListener('click', () => {
             const category = btn.dataset.category;
             const sort = sortSelect ? sortSelect.value : 'urgency';
-            fetch(`{{ route('production.filter') }}?category=${encodeURIComponent(category)}&sort=${encodeURIComponent(sort)}`)
+            fetch(`{{ route('production.filter') }}?category=${encodeURIComponent(category)}&sort=${encodeURIComponent(sort) }`)
                 .then(res => res.json())
                 .then(data => { document.getElementById('product-container').innerHTML = data.html; })
                 .catch(console.error);
@@ -430,7 +454,7 @@
     const clear = document.querySelector('.clear-filter');
     if (clear) clear.addEventListener('click', () => {
         const sort = sortSelect ? sortSelect.value : 'urgency';
-        fetch(`{{ route('production.filter') }}?sort=${encodeURIComponent(sort)}`)
+        fetch(`{{ route('production.filter') }}?sort=${encodeURIComponent(sort) }`)
             .then(res => res.json())
             .then(data => { document.getElementById('product-container').innerHTML = data.html; })
             .catch(console.error);

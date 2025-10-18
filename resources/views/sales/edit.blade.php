@@ -99,14 +99,16 @@
 
 @section('content')
 @php
-  /** $sale, $products, $batches, $statusOptions, $productionDate, $expirationDate
-   * are provided by SalesController@editView ( equivalent)
-   */
-  $invoice = $sale->invoice_number ?? $sale->order_number ?? '—';
+  /** $sale, $products, $batches, $statusOptions, $productionDate, $expirationDate provided by controller */
+  $invoice   = $sale->invoice_number ?? $sale->order_number ?? '—';
   $initOrder = \Carbon\Carbon::parse($sale->order_date ?? $sale->date)->toDateString();
   $qtyInit   = (float) ($sale->quantity_kg ?? $sale->quantity ?? 0);
   $unitInit  = (float) ($sale->unit_price ?? $sale->price ?? 0);
   $totInit   = (float) ($sale->total_price ?? $sale->total ?? ($qtyInit*$unitInit));
+
+  // NEW: determine initial unit type ("pack" / "bag" / null)
+  $unitTypeInit = $sale->unit_type ?? $sale->unit ?? null;
+  $unitTypeInit = in_array($unitTypeInit, ['pack','bag'], true) ? $unitTypeInit : '';
 @endphp
 
 <div class="liquid-wrap py-8 px-6">
@@ -216,17 +218,37 @@
           </div>
 
           <div>
-            <label class="label">Unit Price</label>
+            <label class="label">Unit Price
+              <span class="help block">Shown price can be “per pack” or “per bag”.</span>
+            </label>
             <input type="number" step="0.01" min="0" name="price" id="price" class="liquid-input"
                    value="{{ number_format($unitInit, 2, '.', '') }}" data-initial="{{ number_format($unitInit, 2, '.', '') }}">
             <div class="help mt-1" id="availHelp"></div>
             @error('price')<div class="help text-rose-300 mt-1">{{ $message }}</div>@enderror
           </div>
 
+          {{-- NEW: Unit Type (per pack / per bag) --}}
+          <div>
+            <label class="label">Unit Type</label>
+            <select name="unit_type" id="unit_type" class="liquid-input" data-initial="{{ $unitTypeInit }}">
+              <option value="">— None —</option>
+              <option value="pack" {{ $unitTypeInit === 'pack' ? 'selected' : '' }}>Per pack</option>
+              <option value="bag"  {{ $unitTypeInit === 'bag'  ? 'selected' : '' }}>Per bag</option>
+            </select>
+            <div class="help mt-1">If set, receipts and lists will show “per pack” / “per bag”.</div>
+            @error('unit_type')<div class="help text-rose-300 mt-1">{{ $message }}</div>@enderror
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        {{-- Computed total --}}
+        <div class="grid-2">
           <div>
             <label class="label">Total</label>
             <input type="text" id="total_display" class="liquid-input" value="₱ {{ number_format($totInit, 2) }}" disabled>
           </div>
+          <div></div>
         </div>
 
         <div class="divider"></div>
@@ -286,6 +308,7 @@
     const expDateEl    = document.getElementById('expiration_date');
     const qtyEl        = document.getElementById('quantity');
     const priceEl      = document.getElementById('price');
+    const unitTypeEl   = document.getElementById('unit_type');
     const totalEl      = document.getElementById('total_display');
     const availHelp    = document.getElementById('availHelp');
     const changeLogEl  = document.getElementById('change_log');
@@ -330,7 +353,11 @@
     }
 
     /* ---------- Change Log ---------- */
-    const trackIds = ['product_id','production_id','status','order_date','production_date','expiration_date','quantity','price','customer_name','notes'];
+    const trackIds = [
+      'product_id','production_id','status','order_date',
+      'production_date','expiration_date','quantity','price','unit_type',
+      'customer_name','notes'
+    ];
     const niceName = {
       product_id: 'Product',
       production_id: 'Batch',
@@ -340,6 +367,7 @@
       expiration_date: 'Expiration Date',
       quantity: 'Quantity (kg)',
       price: 'Unit Price',
+      unit_type: 'Unit Type',
       customer_name: 'Customer',
       notes: 'Notes'
     };
@@ -353,6 +381,11 @@
           if (!v) return '';
           const opt = el.options[el.selectedIndex];
           return (opt?.text || '').trim();
+        }
+        if (id === 'unit_type') {
+          const v = el.value || '';
+          if (!v) return '';
+          return v === 'pack' ? 'Per pack' : (v === 'bag' ? 'Per bag' : v);
         }
         return el.value || '';
       }
@@ -373,6 +406,10 @@
           if (!init || init === '0') return '';
           const opt = Array.from(el.options).find(o => String(o.value) === String(init));
           return opt ? opt.text : '';
+        }
+        if (id === 'unit_type') {
+          if (!init) return '';
+          return init === 'pack' ? 'Per pack' : (init === 'bag' ? 'Per bag' : init);
         }
       }
       if (id === 'quantity') return fmt(init || '0', 3);
@@ -467,6 +504,7 @@
           }
         }
         if (typeof data?.available === 'number'){
+          // if you want a max cap, add: qtyEl.setAttribute('max', data.available);
           availHelp.textContent = `Available: ${fmt(data.available,3)} kg`;
         }
       }catch(e){
@@ -502,6 +540,7 @@
     batchSel?.addEventListener('change', onBatchChange);
     qtyEl?.addEventListener('input', () => { computeTotal(); renderChanges(); });
     priceEl?.addEventListener('input', () => { computeTotal(); renderChanges(); });
+    unitTypeEl?.addEventListener('change', renderChanges);
     prodDateEl?.addEventListener('change', () => {
       const shelf = getSelectedShelfLife();
       if (shelf > 0 && prodDateEl.value){

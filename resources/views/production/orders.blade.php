@@ -106,6 +106,8 @@
           <th class="py-3 px-4">Forecasted</th>
           <th class="py-3 px-4">Produced</th>
           <th class="py-3 px-4">Unit Cost</th>
+          <th class="py-3 px-4">Price/Pack</th>
+          <th class="py-3 px-4">Price/Bag</th>
           <th class="py-3 px-4">Prod. Date</th>
           <th class="py-3 px-4">Expiry</th>
           <th class="py-3 px-4">Actions</th>
@@ -113,11 +115,13 @@
       </thead>
       <tbody>
         @forelse ($orders as $o)
-          <tr>
+          <tr id="order-row-{{ $o->id }}">
             <td class="py-3 px-4 font-mono text-xs">{{ $o->batch_number }}</td>
-            <td class="py-3 px-4">{{ (float)$o->forecasted_demand }} kg</td>
-            <td class="py-3 px-4">{{ (float)($o->quantity ?? $o->current_inventory) }} kg</td>
+            <td class="py-3 px-4">{{ number_format((float)$o->forecasted_demand, 3) }} kg</td>
+            <td class="py-3 px-4">{{ number_format((float)($o->quantity ?? $o->current_inventory), 3) }} kg</td>
             <td class="py-3 px-4">₱{{ number_format((float)$o->unit_cost, 2) }}</td>
+            <td class="py-3 px-4">₱{{ number_format((float)($o->unit_price_pack ?? 0), 2) }}</td>
+            <td class="py-3 px-4">₱{{ number_format((float)($o->unit_price_bag  ?? 0), 2) }}</td>
             <td class="py-3 px-4">{{ \Carbon\Carbon::parse($o->production_date)->format('M d, Y') }}</td>
             <td class="py-3 px-4">
               {{ $o->expiration_date ? \Carbon\Carbon::parse($o->expiration_date)->format('M d, Y') : '—' }}
@@ -134,14 +138,14 @@
             </td>
           </tr>
         @empty
-          <tr><td colspan="7" class="py-4 text-center text-[color:var(--muted)]">No production orders yet.</td></tr>
+          <tr><td colspan="9" class="py-4 text-center text-[color:var(--muted)]">No production orders yet.</td></tr>
         @endforelse
       </tbody>
     </table>
   </div>
 </div>
 
-{{-- Add Order Modal (light) --}}
+{{-- Add Order Modal (updated) --}}
 <div id="addOrderModal" class="fixed inset-0 z-[9999] hidden">
   <div class="absolute inset-0 bg-black/40" onclick="closeOrderModal()" aria-hidden="true"></div>
 
@@ -151,10 +155,12 @@
 
     <h3 id="modalTitle" class="text-xl font-semibold mb-4">Add Order ({{ $product->product_name }})</h3>
 
-    {{-- IMPORTANT: controller expects POST to production.orders.store with product_id hidden --}}
+    {{-- Controller expects POST to production.orders.store --}}
     <form id="addOrderForm" action="{{ route('production.orders.store') }}" method="POST" class="space-y-3">
       @csrf
       <input type="hidden" id="po_product_id" name="product_id" value="{{ (int) $product->id }}">
+      {{-- Hidden field that mirrors the readonly preview so expiration_date is submitted --}}
+      <input type="hidden" id="po_expiration_date" name="expiration_date" value="{{ old('expiration_date', $defaultExpiry ?? '') }}">
 
       {{-- Product select + quick add --}}
       <div>
@@ -184,11 +190,11 @@
             </div>
             <div>
               <label class="label">Unit Cost (₱)</label>
-              <input id="po_new_cost" type="number" step="any" min="0" class="input" />
+              <input id="po_new_cost" type="number" step="0.01" min="0" class="input" />
             </div>
             <div>
               <label class="label">Shelf Life (days)</label>
-              <input id="po_new_shelf" type="number" min="0" class="input" value="7" />
+              <input id="po_new_shelf" type="number" min="1" class="input" value="7" />
             </div>
           </div>
           <div class="mt-3 flex items-center gap-2">
@@ -209,28 +215,33 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label class="label">Forecasted Demand (kg)</label>
-          <input id="po_fc" name="forecasted_demand" type="number" step="any" class="input"
+          <input id="po_fc" name="forecasted_demand" type="number" step="0.01" min="0" class="input"
                  value="{{ old('forecasted_demand', (float)($product->forecasted_demand ?? 0)) }}">
         </div>
         <div>
           <label class="label">Produced Quantity (kg)</label>
-          <input id="po_prod_qty" name="quantity" type="number" step="any" required class="input"
+          {{-- Controller validate: quantity --}}
+          <input id="po_prod_qty" name="quantity" type="number" step="1" min="1" required class="input"
                  value="{{ old('quantity') }}">
         </div>
       </div>
 
-      {{-- Unit Cost / Unit Price --}}
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {{-- Unit Cost / Prices --}}
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
           <label class="label">Unit Cost (₱)</label>
-          <input id="po_cost" name="unit_cost" type="number" step="any" required class="input"
+          <input id="po_cost" name="unit_cost" type="number" step="0.01" min="0" required class="input"
                  value="{{ old('unit_cost', (float)($product->unit_cost ?? 0)) }}">
         </div>
         <div>
-          <label class="label">Unit Price (₱)</label>
-          <input id="po_price" name="unit_price" type="number" step="any" class="input"
-                 value="{{ old('unit_price', (float)($defaultUnitPrice ?? $product->default_price ?? 0)) }}">
-          <p class="help mt-1">Leave blank to use latest sale/product price.</p>
+          <label class="label">Price per Pack (₱)</label>
+          <input id="po_price_pack" name="unit_price_pack" type="number" step="0.01" min="0" class="input"
+                 value="{{ old('unit_price_pack') }}">
+        </div>
+        <div>
+          <label class="label">Price per Bag (₱)</label>
+          <input id="po_price_bag" name="unit_price_bag" type="number" step="0.01" min="0" class="input"
+                 value="{{ old('unit_price_bag') }}">
         </div>
       </div>
 
@@ -258,7 +269,7 @@
       </div>
       <div>
         <label class="label">Order Quantity (kg)</label>
-        <input id="po_order_qty" name="order_quantity_kg" type="number" step="any" class="input"
+        <input id="po_order_qty" name="order_quantity_kg" type="number" step="0.01" class="input"
                value="{{ old('order_quantity_kg') }}">
       </div>
       <div>
@@ -309,16 +320,19 @@
     $$('#addOrderBtn')?.addEventListener('click', openOrderModal);
   });
 
-  // Expiry preview from production date + shelf life
+  // Expiry preview from production date + shelf life (also keeps hidden name=expiration_date in sync)
   function syncExpiryPreview(){
     const shelf = {{ (int)($product->shelf_life_days ?? 7) }};
     const prod  = $$('#po_prod_date');
     const expPv = $$('#po_exp_preview');
+    const expHidden = $$('#po_expiration_date');
     if(!prod || !expPv || !prod.value) return;
     const d = new Date(prod.value);
     d.setDate(d.getDate() + shelf);
-    expPv.value = d.toISOString().slice(0,10);
+    const iso = d.toISOString().slice(0,10);
+    expPv.value = iso;
     expPv.min   = prod.value;
+    if (expHidden) expHidden.value = iso;
   }
   document.addEventListener('change', e => {
     if (e.target && e.target.id === 'po_prod_date') syncExpiryPreview();
@@ -330,8 +344,11 @@
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(info => {
         if ($$('#po_cost')  && !$$('#po_cost').value)  $$('#po_cost').value  = Number(info.unit_cost ?? 0).toFixed(2);
-        if ($$('#po_price') && !$$('#po_price').value) $$('#po_price').value = Number(info.default_price ?? 0).toFixed(2);
         if ($$('#po_fc')    && !$$('#po_fc').value)    $$('#po_fc').value    = Number(info.forecasted_demand ?? 0);
+        // If you later add per-pack/bag defaults to Product, seed them here
+        // Example:
+        // if ($$('#po_price_pack') && !$$('#po_price_pack').value) $$('#po_price_pack').value = Number(info.default_price_pack ?? 0).toFixed(2);
+        // if ($$('#po_price_bag')  && !$$('#po_price_bag').value)  $$('#po_price_bag').value  = Number(info.default_price_bag  ?? 0).toFixed(2);
       })
       .catch(() => {});
   }

@@ -138,24 +138,53 @@
         </div>
       </div>
 
-      <!-- Nav -->
+            <!-- Nav (role-aware) -->
       <nav class="flex-1 mt-4 space-y-1 text-sm font-medium">
         @php
-          $routes = [
-            'dashboard'  => 'Dashboard',
-            'production' => 'Production',
-            'sales'      => 'Sales',
-            'inventory'  => 'Inventory',
-            'materials'  => 'Materials',
-            'employee'   => 'Employee',
-            'settings'   => 'Settings',
+          use Illuminate\Support\Str;
+
+          // Normalize role (stored lowercase in DB)
+          $role = Str::ucfirst(Auth::user()->role ?? 'Admin');
+
+          // Allowlist per role
+          $allowed = [
+            'Admin'     => ['dashboard','production','sales','inventory','materials','settings'],
+            'Sales'     => ['dashboard','sales','settings'],
+            'Inventory' => ['dashboard','inventory','materials','settings'],
           ];
+
+          // Menu map: label + route name + active patterns
+          $menu = [
+            'dashboard'  => ['label' => 'Dashboard',  'route' => 'dashboard',        'active' => ['dashboard*']],
+            'production' => ['label' => 'Production', 'route' => 'production.index', 'active' => ['production.*']],
+            'sales'      => ['label' => 'Sales',      'route' => 'sales',            'active' => ['sales*','sales.*']],
+            'inventory'  => ['label' => 'Inventory',  'route' => 'inventory',        'active' => ['inventory*','inventory.*']],
+            'materials'  => ['label' => 'Materials',  'route' => 'materials',        'active' => ['materials*','materials.*','products.materials.*']],
+            'settings'   => ['label' => 'Settings',   'route' => 'settings.index',   'active' => ['settings*','settings.*']],
+          ];
+
+          $modules = $allowed[$role] ?? [];
+
+          $isActive = function(array $patterns): bool {
+            foreach ($patterns as $p) if (request()->routeIs($p)) return true;
+            return false;
+          };
         @endphp
-        @foreach($routes as $route => $label)
-          <a href="{{ route($route) }}"
-             class="side-link {{ request()->routeIs($route.'*') ? 'side-link--active' : '' }}">
-            {{ $label }}
+
+        @foreach ($modules as $key)
+          @php
+            $item = $menu[$key];
+            $active = $isActive($item['active']) ? 'side-link--active' : '';
+          @endphp
+
+          <a href="{{ route($item['route']) }}" class="side-link {{ $active }}">
+            {{ $item['label'] }}
           </a>
+
+          {{-- Optional divider after Dashboard --}}
+          @if($key === 'dashboard')
+            <div class="mx-6 my-2 border-t" style="border-color:var(--line)"></div>
+          @endif
         @endforeach
       </nav>
 
