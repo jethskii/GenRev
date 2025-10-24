@@ -1,40 +1,75 @@
-{{-- resources/views/partials/sidebar.blade.php — 3D Neon Glass Sidebar (role-aware) --}}
-{{-- Requires Tailwind; optional custom vars:
-   :root { --surface:#0B0F10; --card:#11161A; --line:rgba(255,255,255,.08); } --}}
+{{-- resources/views/partials/sidebar.blade.php — Role-aware sidebar (light-theme safe) --}}
+{{-- Works with Tailwind CDN (no @apply). --}}
 
 @php
-  use Illuminate\Support\Str;
+  $user = Auth::user();
 
-  $role = Str::ucfirst(Auth::user()->role ?? 'Admin');
+  // =========================
+  // Robust role normalization
+  // =========================
+  // Accepts: Masters Admin, Master Admin, Admin, Administrator, Super Admin, etc.
+  // Falls back safely to 'sales' when unknown/empty.
+  $rawOriginal = (string) ($user->role ?? '');
+  $rawLower    = strtolower(trim($rawOriginal));
+  // Strip non-letters to be tolerant of spaces/hyphens/etc.
+  $norm        = preg_replace('/[^a-z]/', '', $rawLower);
 
-  // ✅ Final allowlist per role
-  $allowed = [
-    'Admin'     => ['dashboard','materials','production','sales','inventory','products','reports','settings','employee'],
-    'Sales'     => ['dashboard','sales','settings'],
-    'Inventory' => ['dashboard','inventory','materials','settings'],
+  $role = match (true) {
+      // Any admin-ish value => 'masters admin'
+      $norm === 'mastersadmin',
+      $norm === 'masteradmin',
+      $norm === 'admin',
+      $norm === 'administrator',
+      $norm === 'superadmin',
+      $norm === 'superadministrator',
+      str_contains($norm, 'admin') => 'masters admin',
+
+      // Exact supported roles
+      $norm === 'productionmanager' => 'production manager',
+      $norm === 'inventory'         => 'inventory',
+      $norm === 'sales'             => 'sales',
+
+      // Keep your previous simple fallback
+      default => ($rawLower ?: 'sales'),
+  };
+
+  // Allowlist per role
+  $map = [
+      'masters admin'      => ['dashboard','materials','production','sales','inventory','products','reports','settings','employee'],
+      'production manager' => ['dashboard','production','products','settings'],
+      'sales'              => ['dashboard','sales','settings'],
+      'inventory'          => ['dashboard','inventory','materials','settings'],
   ];
 
-  $modules = $allowed[$role] ?? [];
+  $modules = $map[$role] ?? ['dashboard','settings']; // safe minimum
   $can = fn(string $m) => in_array($m, $modules, true);
 
-  // Active-link helper
-  $link = fn($r) => request()->routeIs($r) ? 'active' : '';
+  // Active helper accepts string or array
+  $link = function ($patterns) {
+      foreach ((array) $patterns as $p) if (request()->routeIs($p)) return 'active';
+      return '';
+  };
+
+  $roleLabel = \Illuminate\Support\Str::headline($role);
 @endphp
 
-<aside x-data="sidebar()" class="group fixed inset-y-0 left-0 z-40 w-64 lg:w-72 p-3">
+<aside x-data="{ open: { materials: true }, toggle(s){ this.open[s] = !this.open[s]; } }"
+       class="group fixed inset-y-0 left-0 z-40 w-64 lg:w-72 p-3">
   <div class="relative h-full">
-    <!-- 3D rail -->
-    <div class="absolute inset-0 rounded-3xl bg-gradient-to-br from-white/8 via-white/5 to-white/3 backdrop-blur-xl border border-white/10 shadow-[0_10px_30px_rgba(0,0,0,.45),inset_0_1px_0_rgba(255,255,255,.08)] [perspective:1000px]"></div>
-
-    <!-- Glow edges -->
-    <div class="pointer-events-none absolute -inset-0.5 rounded-3xl opacity-40 blur-2xl bg-[radial-gradient(80%_80%_at_20%_10%,#34f3d4,transparent),radial-gradient(80%_80%_at_80%_90%,#7cfc9f,transparent)]"></div>
+    <!-- Light panel -->
+    <div class="absolute inset-0 rounded-3xl bg-white border border-slate-200 shadow-lg"></div>
 
     <nav class="relative h-full overflow-y-auto rounded-3xl p-4">
       <div class="mb-4 flex items-center gap-3">
-        <div class="h-10 w-10 rounded-2xl bg-gradient-to-br from-emerald-400/90 to-cyan-400/90 shadow-[0_10px_25px_rgba(56,255,203,.35)]"></div>
-        <div>
-          <div class="text-white font-semibold leading-5">GenRev Admin</div>
-          <div class="text-[11px] text-white/60">Production Dashboard</div>
+        <div class="h-10 w-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-400 shadow-md"></div>
+        <div class="min-w-0">
+          <div class="text-slate-900 font-semibold leading-5 truncate">GenRev Admin</div>
+          <div class="text-[11px] text-slate-500 flex items-center gap-2">
+            <span class="truncate">Production Dashboard</span>
+            <span class="inline-flex items-center rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600 bg-slate-50">
+              {{ $roleLabel }}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -42,8 +77,7 @@
         {{-- Dashboard --}}
         @if($can('dashboard'))
           <li>
-            <a href="{{ route('dashboard') }}" class="sb-link {{ $link('dashboard*') }}">
-              @svg('heroicon-o-home', 'h-5 w-5')
+            <a href="{{ route('dashboard') }}" class="sb-link {{ $link(['dashboard','dashboard*']) }}">
               <span>Dashboard</span>
             </a>
           </li>
@@ -52,56 +86,49 @@
         {{-- Materials (Inventory + Admin) --}}
         @if($can('materials'))
           <li>
-            <button @click="toggle('materials')" class="sb-link justify-between">
-              <span class="inline-flex items-center gap-3">
-                @svg('heroicon-o-squares-2x2', 'h-5 w-5')
-                <span>Materials</span>
-              </span>
+            <button @click="toggle('materials')" type="button" class="sb-link justify-between">
+              <span class="inline-flex items-center gap-3"><span>Materials</span></span>
               <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180' : open['materials'] }" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.108l3.71-3.878a.75.75 0 011.08 1.04l-4.24 4.43a.75.75 0 01-1.08 0l-4.24-4.43a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
             </button>
-            <div x-show="open['materials']" x-collapse class="ml-2 mt-1 space-y-1 pl-4 border-l border-white/10">
-              <a href="{{ route('materials.index') }}" class="sb-sublink {{ $link('materials.index') }}">List</a>
+            <div x-show="open['materials']" x-collapse class="ml-2 mt-1 space-y-1 pl-4 border-l border-slate-200">
+              <a href="{{ route('materials.index') }}"  class="sb-sublink {{ $link('materials.index') }}">List</a>
               <a href="{{ route('materials.create') }}" class="sb-sublink {{ $link('materials.create') }}">Add Material</a>
-              <a href="{{ route('recipes.index') }}" class="sb-sublink {{ $link('recipes.*') }}">Recipes</a>
+              <a href="{{ route('recipes.index') }}"   class="sb-sublink {{ $link('recipes.*') }}">Recipes</a>
             </div>
           </li>
         @endif
 
-        {{-- Production (Admin only) --}}
+        {{-- Production (Admin + Production Manager) --}}
         @if($can('production'))
           <li>
             <a href="{{ route('production.index') }}" class="sb-link {{ $link('production.*') }}">
-              @svg('heroicon-o-cog-6-tooth', 'h-5 w-5')
               <span>Production</span>
             </a>
           </li>
         @endif
 
-        {{-- Sales (Sales + Admin) --}}
+        {{-- Sales --}}
         @if($can('sales'))
           <li>
             <a href="{{ route('sales.index') }}" class="sb-link {{ $link('sales.*') }}">
-              @svg('heroicon-o-banknotes', 'h-5 w-5')
               <span>Sales</span>
             </a>
           </li>
         @endif
 
-        {{-- Inventory (Inventory + Admin) --}}
+        {{-- Inventory --}}
         @if($can('inventory'))
           <li>
             <a href="{{ route('inventory.index') }}" class="sb-link {{ $link('inventory.*') }}">
-              @svg('heroicon-o-archive-box', 'h-5 w-5')
               <span>Inventory</span>
             </a>
           </li>
         @endif
 
-        {{-- Products (Admin only) --}}
+        {{-- Products (Admin + Production Manager) --}}
         @if($can('products'))
           <li>
             <a href="{{ route('products.index') }}" class="sb-link {{ $link('products.*') }}">
-              @svg('heroicon-o-cube', 'h-5 w-5')
               <span>Products</span>
             </a>
           </li>
@@ -111,7 +138,6 @@
         @if($can('reports'))
           <li>
             <a href="{{ route('reports.index') }}" class="sb-link {{ $link('reports.*') }}">
-              @svg('heroicon-o-chart-bar', 'h-5 w-5')
               <span>Reports</span>
             </a>
           </li>
@@ -120,52 +146,44 @@
         {{-- Employee (Admin only) --}}
         @if($can('employee'))
           <li>
-            <a href="{{ route('employee') }}" class="sb-link {{ $link('employees.*') }}">
-              @svg('heroicon-o-user-group', 'h-5 w-5')
+            <a href="{{ route('employees.index') }}" class="sb-link {{ $link('employees.*') }}">
               <span>Employee</span>
             </a>
           </li>
         @endif
 
-        {{-- Settings (everyone) --}}
+        {{-- Settings --}}
         @if($can('settings'))
-          <li class="pt-2 mt-4 border-t border-white/10">
+          <li class="pt-2 mt-4 border-t border-slate-200">
             <a href="{{ route('settings.index') }}" class="sb-link {{ $link('settings.*') }}">
-              @svg('heroicon-o-cog-8-tooth', 'h-5 w-5')
               <span>Settings</span>
             </a>
           </li>
         @endif
       </ul>
-
-      <!-- floating highlight -->
-      <div class="pointer-events-none absolute inset-x-6 bottom-6 rounded-2xl h-14 bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-transparent blur-2xl"></div>
     </nav>
   </div>
 
-  <!-- neon rim -->
-  <div class="absolute inset-0 rounded-3xl ring-1 ring-white/15 group-hover:ring-white/25 transition"></div>
+  <div class="absolute inset-0 rounded-3xl ring-1 ring-slate-200/70"></div>
 </aside>
 
-{{-- Styles --}}
 <style>
-  .sb-link{ @apply relative flex items-center gap-3 px-3 py-2 rounded-xl text-white/85 hover:text-white bg-white/0 hover:bg-white/5 border border-transparent hover:border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,.06),0_8px_20px_rgba(0,0,0,.25)] transition; }
-  .sb-link.active{ @apply text-white bg-gradient-to-br from-emerald-400/15 to-cyan-400/10 border-white/15 shadow-[0_10px_30px_rgba(56,255,203,.12),inset_0_1px_0_rgba(255,255,255,.08)]; }
-  .sb-sublink{ @apply block px-3 py-1.5 rounded-lg text-white/75 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10 transition; }
-  .sb-sublink.active{ @apply text-white bg-white/5 border-white/10; }
-</style>
-
-{{-- Alpine tiny controller (persist open state) --}}
-<script>
-  function sidebar(){
-    const key='sidebar-open';
-    const state = JSON.parse(localStorage.getItem(key) || '{}');
-    return {
-      open: { materials: !!state.materials },
-      toggle(section){
-        this.open[section] = !this.open[section];
-        localStorage.setItem(key, JSON.stringify(this.open));
-      }
-    }
+  .sb-link{
+    position:relative; display:flex; align-items:center; gap:.75rem;
+    padding:.5rem .75rem; border-radius:.75rem;
+    color:rgba(15,23,42,.92); text-decoration:none; background:transparent; border:1px solid transparent;
+    transition:all .15s ease;
   }
-</script>
+  .sb-link:hover{ background:rgba(2,6,23,.04); border-color:rgba(2,6,23,.06); }
+  .sb-link.active{
+    color:rgb(15,23,42);
+    background:linear-gradient(to bottom right, rgba(16,185,129,.12), rgba(34,211,238,.10));
+    border-color:rgba(2,6,23,.08);
+  }
+  .sb-sublink{
+    display:block; padding:.375rem .75rem; border-radius:.5rem;
+    color:rgba(30,41,59,.85); text-decoration:none; border:1px solid transparent; transition:all .15s ease;
+  }
+  .sb-sublink:hover{ background:rgba(2,6,23,.04); border-color:rgba(2,6,23,.06); }
+  .sb-sublink.active{ background:rgba(16,185,129,.10); border-color:rgba(2,6,23,.08); color:rgb(15,23,42); }
+</style>

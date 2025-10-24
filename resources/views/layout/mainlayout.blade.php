@@ -70,6 +70,37 @@
   @else
     <div class="flex min-h-screen overflow-hidden">
       <!-- Sidebar -->
+      @php
+        $user = Auth::user();
+
+        // Resolve modules (prefer model method; fallback so links NEVER vanish)
+        $modules = [];
+        if ($user) {
+            $modules = method_exists($user, 'allowedModules') ? (array) ($user->allowedModules() ?? []) : [];
+            if (empty($modules)) {
+                $role = \Illuminate\Support\Str::lower((string) ($user->role ?? ''));
+                $fallback = [
+                  'masters admin'      => ['dashboard','materials','production','sales','inventory','products','employee','settings'],
+                  'production manager' => ['dashboard','production','products','settings'],
+                  'sales'              => ['dashboard','sales','settings'],
+                  'inventory'          => ['dashboard','inventory','materials','products','settings'],
+                ];
+                $modules = $fallback[$role] ?? ['dashboard','settings'];
+            }
+        } else {
+            $modules = ['dashboard'];
+        }
+
+        $can  = fn(string $m) => in_array($m, $modules, true);
+        $isOn = fn($patterns) => request()->routeIs(...(array)$patterns);
+        $cls  = fn($patterns) => $isOn($patterns) ? 'nav-active' : '';
+        $aria = fn($patterns) => $isOn($patterns) ? 'aria-current=page' : '';
+
+        $roleLabel = \Illuminate\Support\Str::headline(
+          \Illuminate\Support\Str::lower((string) ($user->role ?? 'masters admin'))
+        );
+      @endphp
+
       <aside id="sidebar" class="w-64 sidebar flex-shrink-0 flex flex-col" aria-label="Primary">
         <div class="px-6 py-5 text-2xl font-bold tracking-wide border-b" style="border-color:var(--line)">
           <span style="font-family:'Kalam',cursive">GenRev</span>
@@ -84,55 +115,44 @@
             </div>
             <div class="text-sm">
               <p class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</p>
-              <p class="text-xs text-gray-500">{{ Auth::check() && Auth::user()->role ? ucfirst(Auth::user()->role) : 'Admin' }}</p>
+              <p class="text-xs text-gray-500">{{ $roleLabel }}</p>
             </div>
           </div>
         </div>
 
-        {{-- ===== Role-aware NAV (same map as the partial) ===== --}}
-        @php
-          $role = \Illuminate\Support\Str::of(Auth::user()->role ?? 'Admin')->ucfirst()->toString();
-          $allowed = [
-            'Admin'     => ['dashboard','production','sales','inventory','products','materials','employee','settings'],
-            'Sales'     => ['dashboard','sales','settings'],
-            'Inventory' => ['dashboard','inventory','materials','settings'],
-          ];
-          $modules = $allowed[$role] ?? [];
-          $can = fn(string $m) => in_array($m, $modules, true);
-        @endphp
-
-        <nav class="flex-1 mt-4 space-y-1 text-sm font-medium">
+        {{-- ===== Role-aware NAV (with fallback) ===== --}}
+        <nav class="flex-1 mt-4 space-y-1 text-sm font-medium" role="navigation">
           @if($can('dashboard'))
-            <a href="{{ route('dashboard') }}" class="nav-link {{ request()->routeIs('dashboard*') ? 'nav-active' : '' }}">Dashboard</a>
+            <a href="{{ route('dashboard') }}" class="nav-link {{ $cls(['dashboard','dashboard*']) }}" {{ $aria(['dashboard','dashboard*']) }}>Dashboard</a>
             <div class="mx-6 my-2 border-t" style="border-color:var(--line)"></div>
           @endif
 
           @if($can('production'))
-            <a href="{{ route('production.index') }}" class="nav-link {{ request()->routeIs('production.*') ? 'nav-active' : '' }}">Production</a>
+            <a href="{{ route('production.index') }}" class="nav-link {{ $cls('production.*') }}" {{ $aria('production.*') }}>Production</a>
           @endif
 
           @if($can('sales'))
-            <a href="{{ route('sales.index') }}" class="nav-link {{ request()->routeIs('sales.*') ? 'nav-active' : '' }}">Sales</a>
+            <a href="{{ route('sales.index') }}" class="nav-link {{ $cls('sales.*') }}" {{ $aria('sales.*') }}>Sales</a>
           @endif
 
           @if($can('inventory'))
-            <a href="{{ route('inventory.index') }}" class="nav-link {{ request()->routeIs('inventory.*') ? 'nav-active' : '' }}">Inventory</a>
+            <a href="{{ route('inventory.index') }}" class="nav-link {{ $cls('inventory.*') }}" {{ $aria('inventory.*') }}>Inventory</a>
           @endif
 
           @if($can('products'))
-            <a href="{{ route('products.index') }}" class="nav-link {{ request()->routeIs('products.*') ? 'nav-active' : '' }}">Products</a>
+            <a href="{{ route('products.index') }}" class="nav-link {{ $cls('products.*') }}" {{ $aria('products.*') }}>Products</a>
           @endif
 
           @if($can('materials'))
-            <a href="{{ route('materials.index') }}" class="nav-link {{ request()->routeIs('materials.*') && !request()->routeIs('products.materials.*') ? 'nav-active' : '' }}">Materials</a>
+            <a href="{{ route('materials.index') }}" class="nav-link {{ $cls('materials.*') }}" {{ $aria('materials.*') }}>Materials</a>
           @endif
 
           @if($can('employee'))
-            <a href="{{ route('employee') }}" class="nav-link {{ request()->routeIs('employee*') || request()->routeIs('employees.*') ? 'nav-active' : '' }}">Employee</a>
+            <a href="{{ route('employees.index') }}" class="nav-link {{ $cls('employees.*') }}" {{ $aria('employees.*') }}>Employee</a>
           @endif
 
           @if($can('settings'))
-            <a href="{{ route('settings.index') }}" class="nav-link {{ request()->routeIs('settings.*') ? 'nav-active' : '' }}">Settings</a>
+            <a href="{{ route('settings.index') }}" class="nav-link {{ $cls('settings.*') }}" {{ $aria('settings.*') }}>Settings</a>
           @endif
 
           @if(request()->routeIs('products.materials.*') && $can('products'))
@@ -160,7 +180,7 @@
             <div class="relative" title="Toggle Light/Dark Mode">
               <label class="inline-flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" id="themeToggle" class="sr-only" aria-label="Toggle theme">
-                <span class="px-3 py-1 rounded-full text-sm font-medium border"
+                <span id="themeLabel" class="px-3 py-1 rounded-full text-sm font-medium border"
                       style="border-color:var(--line); color:#111827; background:#f9fafb">Light</span>
               </label>
             </div>
@@ -178,7 +198,7 @@
                   <div class="text-xs text-gray-500">Logged in as</div>
                   <div class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</div>
                   @if(Auth::check() && Auth::user()->role)
-                    <div class="text-xs text-gray-500 capitalize">({{ ucfirst(Auth::user()->role) }})</div>
+                    <div class="text-xs text-gray-500">{{ $roleLabel }}</div>
                   @endif
                 </div>
                 <form method="POST" action="{{ route('logout') }}">
@@ -257,13 +277,19 @@
       byId('sidebarToggle')?.addEventListener('click', () => sidebar?.classList.add('open'));
       byId('sidebarClose')?.addEventListener('click',  () => sidebar?.classList.remove('open'));
 
-      // Theme toggle (persist)
+      // Theme toggle (persist + label)
       const themeToggle = byId('themeToggle');
+      const themeLabel = byId('themeLabel');
+      const setLabel = () => themeLabel && (themeLabel.textContent = document.body.classList.contains('dark-mode') ? 'Dark' : 'Light');
+
       const saved = localStorage.getItem('theme');
       if (saved === 'dark'){ document.body.classList.add('dark-mode'); themeToggle && (themeToggle.checked = true); }
+      setLabel();
+
       themeToggle?.addEventListener('change', function(){
         if (this.checked){ document.body.classList.add('dark-mode'); localStorage.setItem('theme','dark'); }
         else { document.body.classList.remove('dark-mode'); localStorage.setItem('theme','light'); }
+        setLabel();
       });
 
       window.btnClasses = {

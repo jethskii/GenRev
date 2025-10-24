@@ -12,107 +12,32 @@
   <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inria+Sans:wght@300;400;700&display=swap" rel="stylesheet">
 
   <style>
-    /* ===================== Light Theme Tokens ===================== */
     :root{
-      /* Page + Surfaces */
-      --page:#f7f8fb;            /* off-white */
-      --nav:#ffffff;             /* white navbar */
-      --card:#ffffff;            /* white cards */
-      --line:#e5e7eb;            /* light border */
-      --shadow:0 8px 20px rgba(17,24,39,.06);
-
-      /* Text */
-      --ink:#111827;             /* primary text */
-      --muted:#6b7280;           /* secondary text */
-
-      /* Brand accents (spec) */
-      --red:#ef4444;             /* primary */
-      --green:#10b981;           /* secondary */
-      --blue:#2563eb;            /* secondary */
-      --yellow:#f59e0b;          /* charts */
-
-      /* Subtles */
-      --hover:#f3f4f6;           /* hover bg */
-      --chip:#f9fafb;            /* chip bg */
+      --page:#f7f8fb; --nav:#ffffff; --card:#ffffff; --line:#e5e7eb; --shadow:0 8px 20px rgba(17,24,39,.06);
+      --ink:#111827; --muted:#6b7280;
+      --red:#ef4444; --green:#10b981; --blue:#2563eb; --yellow:#f59e0b;
+      --hover:#f3f4f6; --chip:#f9fafb;
     }
-
-    body{
-      background:var(--page);
-      color:var(--ink);
-      font-family:'Inria Sans',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
-      min-height:100vh; overflow-x:hidden;
-    }
-
-    /* ---- Layout shells ---- */
-    .nav-surface{
-      background:var(--nav);
-      border-bottom:1px solid var(--line);
-      box-shadow:var(--shadow);
-    }
-    .sidebar{
-      background:#ffffff;
-      border-right:1px solid var(--line);
-    }
-    .card{
-      background:var(--card);
-      border:1px solid var(--line);
-      border-radius:16px;
-      box-shadow:var(--shadow);
-    }
-
-    /* ---- Sidebar links ---- */
-    .side-link{
-      display:block; padding:.75rem 1.25rem; border-radius:999px 0 0 999px; transition:.16s;
-      color:var(--ink);
-    }
+    body{ background:var(--page); color:var(--ink); font-family:'Inria Sans',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; min-height:100vh; overflow-x:hidden; }
+    .nav-surface{ background:var(--nav); border-bottom:1px solid var(--line); box-shadow:var(--shadow); }
+    .sidebar{ background:#ffffff; border-right:1px solid var(--line); }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); }
+    .side-link{ display:block; padding:.75rem 1.25rem; border-radius:999px 0 0 999px; transition:.16s; color:var(--ink); }
     .side-link:hover{ background:var(--hover); }
-    .side-link--active{
-      background:linear-gradient(90deg, rgba(16,185,129,.12) 0%, rgba(16,185,129,.10) 100%);
-      border-left:3px solid var(--green);
-      font-weight:700;
-    }
-
-    /* ---- Buttons ---- */
-    .btn{ display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
-          padding:.65rem 1rem; border-radius:12px; border:1px solid transparent; font-weight:700; }
-    .btn-primary{ background:var(--red); color:#fff; border-color:var(--red); }
-    .btn-primary:hover{ filter:brightness(.97); }
-    .btn-ghost{ background:#fff; border:1px solid var(--line); color:var(--ink); }
-    .btn-ghost:hover{ background:var(--hover); }
+    .side-link--active{ background:linear-gradient(90deg, rgba(16,185,129,.12) 0%, rgba(16,185,129,.10) 100%); border-left:3px solid var(--green); font-weight:700; }
+    .btn{ display:inline-flex; align-items:center; justify-content:center; gap:.5rem; padding:.65rem 1rem; border-radius:12px; border:1px solid transparent; font-weight:700; }
+    .btn-primary{ background:var(--red); color:#fff; border-color:var(--red); } .btn-primary:hover{ filter:brightness(.97); }
+    .btn-ghost{ background:#fff; border:1px solid var(--line); color:var(--ink); } .btn-ghost:hover{ background:var(--hover); }
     .btn-green{ background:var(--green); color:#fff; border-color:var(--green); }
     .btn-blue{ background:var(--blue); color:#fff; border-color:var(--blue); }
-
-    /* ---- Inputs ---- */
-    .input{
-      width:100%; padding:.65rem .9rem; border-radius:12px;
-      background:#fff; border:1px solid var(--line); color:var(--ink);
-      transition:border-color .15s, box-shadow .15s, transform .12s;
-    }
-    .input::placeholder{ color:#9ca3af; }
-    .input:hover{ border-color:#e2e8f0; }
+    .input{ width:100%; padding:.65rem .9rem; border-radius:12px; background:#fff; border:1px solid var(--line); color:var(--ink); transition:border-color .15s, box-shadow .15s, transform .12s; }
+    .input::placeholder{ color:#9ca3af; } .input:hover{ border-color:#e2e8f0; }
     .input:focus{ outline:0; border-color:#93c5fd; box-shadow:0 0 0 2px rgba(37,99,235,.18); transform:translateY(-1px); }
-
-    /* ---- Chips / Badges ---- */
-    .chip{
-      display:inline-flex; align-items:center; gap:.4rem;
-      padding:.32rem .6rem; border-radius:999px; font-size:.72rem; font-weight:700;
-      background:var(--chip); border:1px solid var(--line); color:var(--ink);
-    }
-
-    /* ---- Tables ---- */
+    .chip{ display:inline-flex; align-items:center; gap:.4rem; padding:.32rem .6rem; border-radius:999px; font-size:.72rem; font-weight:700; background:var(--chip); border:1px solid var(--line); color:var(--ink); }
     table{ border-collapse:separate; border-spacing:0; width:100%; }
-    thead th{
-      background:#f9fafb; color:#374151; font-weight:800;
-      border-bottom:1px solid var(--line);
-    }
-    tbody td{ color:var(--ink); }
-    tbody tr:nth-child(even){ background:#fafafa; }
-    tbody tr:hover{ background:var(--hover); }
-    th, td{ border-color:var(--line)!important; }
-
-    /* ---- Brand mark ---- */
-    .brand-title{ font-family:'Kalam',cursive; letter-spacing:.02em; color:var(--ink); }
-    .muted{ color:var(--muted); }
+    thead th{ background:#f9fafb; color:#374151; font-weight:800; border-bottom:1px solid var(--line); }
+    tbody td{ color:var(--ink); } tbody tr:nth-child(even){ background:#fafafa; } tbody tr:hover{ background:var(--hover); } th, td{ border-color:var(--line)!important; }
+    .brand-title{ font-family:'Kalam',cursive; letter-spacing:.02em; color:var(--ink); } .muted{ color:var(--muted); }
   </style>
 </head>
 <body>
@@ -133,37 +58,49 @@
           </div>
           <div class="text-sm">
             <p class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</p>
-            <p class="text-xs muted capitalize">{{ Auth::check() && Auth::user()->role ? Auth::user()->role : 'Admin' }}</p>
+            <p class="text-xs muted">
+              {{-- Prefer model accessor if present --}}
+              {{ Auth::check() && method_exists(Auth::user(), 'getRoleLabelAttribute')
+                    ? (Auth::user()->role_label ?? 'User')
+                    : (\Illuminate\Support\Str::headline(\Illuminate\Support\Str::lower((string) (Auth::user()->role ?? 'user')))) }}
+            </p>
           </div>
         </div>
       </div>
 
-            <!-- Nav (role-aware) -->
+      <!-- Nav (role-aware) -->
       <nav class="flex-1 mt-4 space-y-1 text-sm font-medium">
         @php
-          use Illuminate\Support\Str;
+          // 1) Pull from model's allowlist (single source of truth)
+          $modules = [];
+          if (Auth::check() && method_exists(Auth::user(), 'allowedModules')) {
+              $modules = (array) (Auth::user()->allowedModules() ?? []);
+          }
 
-          // Normalize role (stored lowercase in DB)
-          $role = Str::ucfirst(Auth::user()->role ?? 'Admin');
+          // 2) Safe fallback by role (so links never vanish)
+          if (empty($modules)) {
+            $role = \Illuminate\Support\Str::lower((string) (Auth::user()->role ?? ''));
+            $fallback = [
+              'masters admin'      => ['dashboard','materials','production','sales','inventory','products','reports','settings','employee'],
+              'production manager' => ['dashboard','production','products','settings'],
+              'sales'              => ['dashboard','sales','settings'],
+              'inventory'          => ['dashboard','inventory','materials','settings'],
+            ];
+            $modules = $fallback[$role] ?? ['dashboard','settings'];
+          }
 
-          // Allowlist per role
-          $allowed = [
-            'Admin'     => ['dashboard','production','sales','inventory','materials','settings'],
-            'Sales'     => ['dashboard','sales','settings'],
-            'Inventory' => ['dashboard','inventory','materials','settings'],
-          ];
-
-          // Menu map: label + route name + active patterns
+          // 3) Route map: label + route name + active patterns
           $menu = [
-            'dashboard'  => ['label' => 'Dashboard',  'route' => 'dashboard',        'active' => ['dashboard*']],
-            'production' => ['label' => 'Production', 'route' => 'production.index', 'active' => ['production.*']],
-            'sales'      => ['label' => 'Sales',      'route' => 'sales',            'active' => ['sales*','sales.*']],
-            'inventory'  => ['label' => 'Inventory',  'route' => 'inventory',        'active' => ['inventory*','inventory.*']],
-            'materials'  => ['label' => 'Materials',  'route' => 'materials',        'active' => ['materials*','materials.*','products.materials.*']],
-            'settings'   => ['label' => 'Settings',   'route' => 'settings.index',   'active' => ['settings*','settings.*']],
+            'dashboard'  => ['label'=>'Dashboard',  'route'=>'dashboard',           'active'=>['dashboard*']],
+            'production' => ['label'=>'Production', 'route'=>'production.index',    'active'=>['production.*']],
+            'sales'      => ['label'=>'Sales',      'route'=>'sales',               'active'=>['sales*','sales.*']],
+            'inventory'  => ['label'=>'Inventory',  'route'=>'inventory',           'active'=>['inventory*','inventory.*']],
+            'materials'  => ['label'=>'Materials',  'route'=>'materials',           'active'=>['materials*','materials.*','products.materials.*']],
+            'products'   => ['label'=>'Products',   'route'=>'products.index',      'active'=>['products*','products.*']],
+            'reports'    => ['label'=>'Reports',    'route'=>'reports.index',       'active'=>['reports*','reports.*']],
+            'employee'   => ['label'=>'Employee',   'route'=>'employees.index',     'active'=>['employees*','employees.*']],
+            'settings'   => ['label'=>'Settings',   'route'=>'settings.index',      'active'=>['settings*','settings.*']],
           ];
-
-          $modules = $allowed[$role] ?? [];
 
           $isActive = function(array $patterns): bool {
             foreach ($patterns as $p) if (request()->routeIs($p)) return true;
@@ -173,15 +110,13 @@
 
         @foreach ($modules as $key)
           @php
+            if (!isset($menu[$key])) continue;                  // unknown key
             $item = $menu[$key];
+            if (!\Illuminate\Support\Facades\Route::has($item['route'])) continue; // missing named route
             $active = $isActive($item['active']) ? 'side-link--active' : '';
           @endphp
+          <a href="{{ route($item['route']) }}" class="side-link {{ $active }}">{{ $item['label'] }}</a>
 
-          <a href="{{ route($item['route']) }}" class="side-link {{ $active }}">
-            {{ $item['label'] }}
-          </a>
-
-          {{-- Optional divider after Dashboard --}}
           @if($key === 'dashboard')
             <div class="mx-6 my-2 border-t" style="border-color:var(--line)"></div>
           @endif
@@ -193,7 +128,6 @@
 
     <!-- Main -->
     <div class="flex flex-col flex-1 overflow-hidden">
-
       <!-- Top Nav -->
       <header class="nav-surface px-6 py-4 flex justify-between items-center">
         <div class="flex items-center gap-4">
@@ -202,7 +136,6 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-4">
-          <!-- Master 3D toggle -->
           <label class="flex items-center gap-2 text-xs">
             <input id="toggle3D" type="checkbox" checked class="sr-only">
             <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">
@@ -227,6 +160,8 @@
 
       <!-- Content -->
       <main class="flex-1 overflow-y-auto p-8">
+        {{-- ===== your existing dashboard content stays as-is below ===== --}}
+
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
           {{-- Metrics Cards --}}
@@ -493,7 +428,7 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 
-  <!-- Simple Bar “3D” faces plugin (works with light theme) -->
+  <!-- Simple Bar “3D” faces plugin -->
   <script>
     const Bar3DPlugin = {
       id: 'bar3d',
@@ -532,20 +467,15 @@
           if (!isFinite(h) || h === 0) return;
 
           const dx = depth, dy = lift;
-
           const poly = (pts, fill, stroke) => {
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].y);
+            ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
             for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
-            ctx.closePath();
-            ctx.fillStyle = fill; ctx.fill();
+            ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
             if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
           };
-
           const top = [{x, y},{x:x+dx, y:y+dy},{x:x+dx+w, y:y+dy},{x:x+w, y}];
           const side = [{x:x+w, y},{x:x+w+dx, y:y+dy},{x:x+w+dx, y:y+dy+h},{x:x+w, y:y+h}];
 
-          // draw faces
           ctx.save(); ctx.shadowColor='rgba(0,0,0,.12)'; ctx.shadowBlur=6; ctx.shadowOffsetY=3;
           poly(top, topFill, topStroke); ctx.restore();
           poly(side, sideFill, sideStroke);
@@ -561,29 +491,19 @@
       const sidebar = document.getElementById('sidebar');
       document.getElementById('sidebarToggle')?.addEventListener('click', ()=> sidebar?.classList.toggle('!-translate-x-full'));
       document.getElementById('sidebarClose')?.addEventListener('click',  ()=> sidebar?.classList.add('!-translate-x-full'));
-      // ensure default desktop visible
       sidebar?.classList.remove('!-translate-x-full');
 
-      // ==== Data from server ====
       const labels = @json($labels ?? []);
       const prod   = @json($weeklyProductionSeries ?? []);
       const qty    = @json($weeklySalesQtySeries ?? []);
       const rev    = @json($weeklySalesRevenueSeries ?? []);
       const exp    = @json($weeklyExpirySeries ?? []);
 
-      // Palette for charts (spec)
-      const C_RED    = 'rgba(239,68,68,1)';
-      const C_RED_30 = 'rgba(239,68,68,.3)';
-      const C_GREEN    = 'rgba(16,185,129,1)';
-      const C_GREEN_30 = 'rgba(16,185,129,.3)';
-      const C_BLUE    = 'rgba(37,99,235,1)';
-      const C_BLUE_30 = 'rgba(37,99,235,.3)';
-      const C_YELLOW    = 'rgba(245,158,11,1)';
-      const C_YELLOW_30 = 'rgba(245,158,11,.3)';
-
-      const gridColor = 'rgba(107,114,128,.25)';
-      const tickColor = '#4b5563';
-      const barRadius = 6;
+      const C_RED='rgba(239,68,68,1)', C_RED_30='rgba(239,68,68,.3)';
+      const C_GREEN='rgba(16,185,129,1)', C_GREEN_30='rgba(16,185,129,.3)';
+      const C_BLUE='rgba(37,99,235,1)', C_BLUE_30='rgba(37,99,235,.3)';
+      const C_YELLOW='rgba(245,158,11,1)', C_YELLOW_30='rgba(245,158,11,.3)';
+      const gridColor='rgba(107,114,128,.25)', tickColor='#4b5563', barRadius=6;
 
       const showIfEmpty = (arr, id) => {
         const el = document.getElementById(id);
@@ -593,47 +513,28 @@
         el.classList.add('flex');
       };
 
-      // ----- Production (Green bars) -----
       showIfEmpty(prod, 'prodEmpty');
       const productionChart = new Chart(document.getElementById('productionChart'), {
         type: 'bar',
         data: { labels, datasets: [{
-          label: 'Units Produced',
-          data: prod,
-          backgroundColor: C_GREEN_30,
-          borderColor: C_GREEN,
-          borderWidth: 2,
-          borderRadius: barRadius,
-          topFaceColor: 'rgba(16,185,129,.45)',
-          sideFaceColor: 'rgba(16,185,129,.25)'
+          label: 'Units Produced', data: prod,
+          backgroundColor: C_GREEN_30, borderColor: C_GREEN, borderWidth: 2, borderRadius: barRadius,
+          topFaceColor: 'rgba(16,185,129,.45)', sideFaceColor: 'rgba(16,185,129,.25)'
         }]},
         options: {
           responsive:true, maintainAspectRatio:false,
-          plugins: {
-            legend:{ labels:{ color: tickColor } },
-            title:{ display:true, text:'Weekly Production', color: '#111827' },
-            bar3d:{ enabled: true, depth: 10, lift: -6 }
-          },
-          scales: {
-            x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
-            y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } }
-          }
+          plugins: { legend:{ labels:{ color: tickColor } }, title:{ display:true, text:'Weekly Production', color:'#111827' }, bar3d:{ enabled: true, depth: 10, lift: -6 } },
+          scales: { x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } }, y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } } }
         }
       });
 
-      // ----- Sales (Blue bars qty + Red line revenue) -----
       showIfEmpty([...(qty||[]), ...(rev||[])], 'salesEmpty');
       const salesChart = new Chart(document.getElementById('salesChart'), {
         data: {
           labels,
           datasets: [
-            { type:'bar', label:'Qty Sold', data: qty, yAxisID:'y',
-              backgroundColor: C_BLUE_30, borderColor: C_BLUE, borderWidth:2, borderRadius: barRadius,
-              topFaceColor:'rgba(37,99,235,.5)', sideFaceColor:'rgba(37,99,235,.3)'
-            },
-            { type:'line', label:'Revenue', data: rev, yAxisID:'y1',
-              borderColor: C_RED, backgroundColor: C_RED, borderWidth:3, tension:.35, pointRadius:3, fill:false
-            }
+            { type:'bar', label:'Qty Sold', data: qty, yAxisID:'y', backgroundColor: C_BLUE_30, borderColor: C_BLUE, borderWidth:2, borderRadius: barRadius, topFaceColor:'rgba(37,99,235,.5)', sideFaceColor:'rgba(37,99,235,.3)' },
+            { type:'line', label:'Revenue',  data: rev, yAxisID:'y1', borderColor: C_RED, backgroundColor: C_RED, borderWidth:3, tension:.35, pointRadius:3, fill:false }
           ]
         },
         options: {
@@ -654,37 +555,27 @@
         }
       });
 
-      // ----- Sales sparkline (Red) -----
       const spark = new Chart(document.getElementById('salesTrendsChart'), {
         type:'line',
         data:{ labels, datasets:[{ label:'Revenue', data: rev, borderColor:C_RED, backgroundColor:C_RED, borderWidth:2, tension:.35, pointRadius:0, fill:false }] },
         options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{ display:false }, y:{ display:false, beginAtZero:true } } }
       });
 
-      // ----- Expiration (Yellow bars) -----
       showIfEmpty(exp, 'expEmpty');
       const expiryChart = new Chart(document.getElementById('expiryChart'), {
         type:'bar',
         data:{ labels, datasets:[{
-          label:'Expiring Items',
-          data: exp,
-          backgroundColor: C_YELLOW_30,
-          borderColor: C_YELLOW,
-          borderWidth:2,
-          borderRadius: barRadius,
-          topFaceColor:'rgba(245,158,11,.45)',
-          sideFaceColor:'rgba(245,158,11,.28)'
+          label:'Expiring Items', data: exp,
+          backgroundColor: C_YELLOW_30, borderColor: C_YELLOW, borderWidth:2, borderRadius: barRadius,
+          topFaceColor:'rgba(245,158,11,.45)', sideFaceColor:'rgba(245,158,11,.28)'
         }]},
         options:{
           responsive:true, maintainAspectRatio:false,
-          plugins:{ legend:{ labels:{ color: tickColor } }, title:{ display:true, text:'Expirations This Week', color:'#111827' },
-                   tooltip:{ callbacks:{ label:(ctx)=> `Expiring: ${Number(ctx.parsed.y).toLocaleString()}` } },
-                   bar3d:{ enabled: true, depth: 10, lift: -6 } },
+          plugins:{ legend:{ labels:{ color: tickColor } }, title:{ display:true, text:'Expirations This Week', color:'#111827' }, tooltip:{ callbacks:{ label:(ctx)=> `Expiring: ${Number(ctx.parsed.y).toLocaleString()}` } }, bar3d:{ enabled: true, depth: 10, lift: -6 } },
           scales:{ x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } }, y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } } }
         }
       });
 
-      // ===== 3D Toggles/Controls =====
       const toggle3D = document.getElementById('toggle3D');
       const toggleProduction = document.getElementById('toggleProduction');
       const toggleSales = document.getElementById('toggleSales');
@@ -718,9 +609,7 @@
         set(expiryChart, toggleExpiry?.checked);
       };
 
-      [toggle3D, toggleProduction, toggleSales, toggleExpiry, depthRange, liftRange]
-        .forEach(el => el?.addEventListener('input', apply3D));
-
+      [toggle3D, toggleProduction, toggleSales, toggleExpiry, depthRange, liftRange].forEach(el => el?.addEventListener('input', apply3D));
       apply3D();
     });
   </script>

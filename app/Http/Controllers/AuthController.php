@@ -28,7 +28,6 @@ class AuthController extends Controller
     /* =========================
      |  Auth Views (GET)
      * ========================*/
-
     public function showLoginForm()
     {
         if (Auth::check()) {
@@ -55,8 +54,7 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $data = $request->validate([
-            // May be an email or a username; keep it as string
-            'email'    => ['required', 'string'],
+            'email'    => ['required', 'string'], // may be email or username
             'password' => ['required', 'string'],
             'remember' => ['sometimes', 'boolean'],
         ]);
@@ -83,8 +81,9 @@ class AuthController extends Controller
             if (str_contains($raw, '@')) {
                 // Email login (case-insensitive)
                 $credentials = [
-                    'email'    => Str::lower($raw),
-                    'password' => $data['password'],
+                    'email'     => Str::lower($raw),
+                    'password'  => $data['password'],
+                    'is_active' => true,
                 ];
             } else {
                 // Username login via employees.username -> users.email
@@ -104,25 +103,47 @@ class AuthController extends Controller
                     $user = User::find($employee->user_id);
                     if ($user) {
                         $credentials = [
-                            'email'    => Str::lower($user->email),
-                            'password' => $data['password'],
+                            'email'     => Str::lower($user->email),
+                            'password'  => $data['password'],
+                            'is_active' => true,
                         ];
                     }
                 }
             }
 
+            // Attempt and verify is_active via credentials filter
             if ($credentials && Auth::attempt($credentials, $remember)) {
                 RateLimiter::clear($throttleKey);
                 $request->session()->regenerate();
 
-                // Optional: update last_login_at if you have the column
+                // Hard-stop just in case (if provider ignored is_active)
+                /** @var \App\Models\User|null $authUser */
+                $authUser = Auth::user();
+                if ($authUser && property_exists($authUser, 'is_active') && !$authUser->is_active) {
+                    Auth::logout();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                    return back()
+                        ->withInput($request->only('email', 'remember'))
+                        ->withErrors(['email' => 'This account is disabled.']);
+                }
+
+                // Post-login: normalize role for UI/ACL consistency (e.g., Masters Admin sidebar)
                 try {
-                    $authUser = Auth::user();
-                    if ($authUser && method_exists($authUser, 'forceFill')) {
-                        $authUser->forceFill(['last_login_at' => now()])->save();
+                    if ($authUser) {
+                        $newRole = $this->normalizeRole((string) ($authUser->role ?? ''));
+                        $updates = ['last_login_at' => now()];
+                        if ($newRole !== ($authUser->role ?? '')) {
+                            $updates['role'] = $newRole;
+                        }
+                        if (method_exists($authUser, 'forceFill')) {
+                            $authUser->forceFill($updates)->saveQuietly();
+                        } else {
+                            $authUser->fill($updates)->saveQuietly();
+                        }
                     }
                 } catch (\Throwable $e) {
-                    // ignore if column doesn't exist
+                    // ignore if columns don't exist or any soft failure
                 }
 
                 return redirect()->intended(route('dashboard'));
@@ -141,14 +162,13 @@ class AuthController extends Controller
                     ->withErrors(['email' =>
                         'A required table is missing (users or employees). Run your migrations and clear caches.']);
             }
-            throw $e; // bubble up other DB errors
+            throw $e;
         }
     }
 
     /**
      * Register a User and link (or create) an Employee.
-     * - Accepts either first_name/last_name or a single "name" to split.
-     * - Enforces roles: admin | sales | inventory.
+     * Accepts full name and enforces allowed roles.
      */
     public function register(Request $request)
     {
@@ -165,12 +185,13 @@ class AuthController extends Controller
             ]);
         }
 
-        // Fallback: use email as username if not provided
+        // Normalize key fields BEFORE validation (makes "unique" and "in" checks consistent)
         $request->merge([
-            'username' => $request->input('username') ?: $request->input('email'),
+            'email'    => Str::lower((string) $request->input('email')),
+            'username' => Str::lower((string) ($request->input('username') ?: $request->input('email'))),
+            'role'     => Str::lower((string) $request->input('role')),
         ]);
 
-        // Dynamically resolve the actual users table (supports User::getTable())
         $usersTable = $this->usersTable();
 
         $validated = $request->validate([
@@ -180,22 +201,23 @@ class AuthController extends Controller
             'position'   => ['nullable', 'string', 'max:160'],
             'username'   => ['required', 'string', 'max:120', Rule::unique('employees', 'username')],
             'email'      => ['required', 'email', Rule::unique($usersTable, 'email')],
-            'password'   => ['required', 'string', 'min:6', 'confirmed'],
-            'role'       => ['required', Rule::in(['admin', 'sales', 'inventory'])],
+            'password'   => ['required', 'string', 'min:8', 'confirmed'],
+            'role'       => ['required', Rule::in(['masters admin', 'production manager', 'sales', 'inventory'])],
         ]);
 
         try {
             DB::transaction(function () use ($validated) {
-                $email    = Str::lower($validated['email']);
-                $username = Str::lower($validated['username']);
+                $email    = $validated['email'];    // already lowercased
+                $username = $validated['username']; // already lowercased
+                $role     = $this->normalizeRole($validated['role']); // ensure canonical role
 
-                // Create auth user (make sure password is hashed here)
                 /** @var \App\Models\User $user */
                 $user = User::create([
-                    'name'     => trim(($validated['first_name'] ?? '') . ' ' . ($validated['last_name'] ?? '')),
-                    'email'    => $email,
-                    'password' => Hash::make($validated['password']),
-                    'role'     => Str::lower($validated['role']),
+                    'name'       => trim(($validated['first_name'] ?? '') . ' ' . ($validated['last_name'] ?? '')),
+                    'email'      => $email,
+                    'password'   => Hash::make($validated['password']),
+                    'role'       => $role,
+                    'is_active'  => true,
                 ]);
 
                 // Attach to existing employee by email; otherwise create
@@ -224,12 +246,11 @@ class AuthController extends Controller
 
         } catch (QueryException $e) {
             if ($this->isMissingTableError($e)) {
-                // Friendly guidance when required tables are missing or renamed
                 return back()
                     ->withInput($request->except('password', 'password_confirmation'))
                     ->withErrors(['email' =>
-                        "A required table is missing. Ensure your auth and employees tables exist, then run:\n" .
-                        "php artisan migrate --force\n" .
+                        "A required table is missing. Ensure your auth and employees tables exist, then run:\n".
+                        "php artisan migrate --force\n".
                         "php artisan config:clear && php artisan cache:clear && php artisan optimize:clear"]);
             }
 
@@ -257,6 +278,26 @@ class AuthController extends Controller
      |  Helpers
      * ========================*/
 
+    /**
+     * Canonicalize role names so UI/ACL stay consistent.
+     * - Any "admin"-ish string becomes "masters admin"
+     * - Supported roles: masters admin, production manager, sales, inventory
+     */
+    private function normalizeRole(string $role): string
+    {
+        $rawLower = strtolower(trim($role));
+        $norm     = preg_replace('/[^a-z]/', '', $rawLower);
+
+        return match ($norm) {
+            // Admin variants map to masters admin
+            'mastersadmin', 'masteradmin', 'admin', 'administrator', 'superadmin', 'superadministrator' => 'masters admin',
+            'productionmanager' => 'production manager',
+            'sales'             => 'sales',
+            'inventory'         => 'inventory',
+            default             => (str_contains($norm, 'admin') ? 'masters admin' : ($rawLower ?: 'sales')),
+        };
+    }
+
     private function throttleKey(string $ip, string $identifier, string $ua = ''): string
     {
         // Use xxh3 if available (PHP 8.3+), otherwise fallback to sha256
@@ -278,8 +319,6 @@ class AuthController extends Controller
 
     /**
      * Resolve the actual users table name the app should use.
-     * - Honors User::getTable()
-     * - Falls back to 'users'
      */
     private function usersTable(): string
     {
@@ -295,7 +334,6 @@ class AuthController extends Controller
      */
     private function isMissingTableError(QueryException $e): bool
     {
-        // MySQL: SQLSTATE[42S02] Base table or view not found
         return $e->getCode() === '42S02' || Str::contains($e->getMessage(), 'SQLSTATE[42S02]');
     }
 

@@ -15,7 +15,7 @@ use App\Http\Controllers\BatchAllocationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProductRecipeController;
 use App\Http\Controllers\FallbackController;
-use App\Http\Controllers\UserManagementController; // User management
+use App\Http\Controllers\UserManagementController;
 
 use App\Http\Middleware\RoleMiddleware;
 
@@ -25,7 +25,7 @@ use App\Http\Middleware\RoleMiddleware;
 |--------------------------------------------------------------------------
 */
 Route::pattern('id', '[0-9]+');
-Route::pattern('user', '[0-9]+');        // for user management
+Route::pattern('user', '[0-9]+');
 Route::pattern('product', '[0-9]+');
 Route::pattern('production', '[0-9]+');
 Route::pattern('sale', '[0-9]+');
@@ -51,7 +51,7 @@ Route::middleware('guest')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Authenticated (routes visible to all signed-in users)
+| Authenticated (all signed-in users)
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
@@ -84,11 +84,11 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin'])->group(function ()
 
     // ----- User Management -----
     Route::prefix('users')->name('users.')->controller(UserManagementController::class)->group(function () {
-        Route::get('/',           'index')->name('index');                 // list + UI
-        Route::post('/',          'store')->name('store');                 // add
-        Route::get('/{user}/edit','edit')->whereNumber('user')->name('edit');
-        Route::put('/{user}',     'update')->whereNumber('user')->name('update');
-        Route::delete('/{user}',  'destroy')->whereNumber('user')->name('destroy');
+        Route::get('/',            'index')->name('index');
+        Route::post('/',           'store')->name('store');
+        Route::get('/{user}/edit', 'edit')->whereNumber('user')->name('edit');
+        Route::put('/{user}',      'update')->whereNumber('user')->name('update');
+        Route::delete('/{user}',   'destroy')->whereNumber('user')->name('destroy');
 
         // UX helpers
         Route::patch('/{user}/toggle-active',  'toggleActive')->whereNumber('user')->name('toggle-active');
@@ -98,6 +98,30 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin'])->group(function ()
         Route::patch('/{user}/restore', 'restore')->whereNumber('user')->name('restore');
         Route::get('/export/csv',       'exportCsv')->name('export.csv');
     });
+
+    // ----- Employees -----
+    Route::prefix('employees')->name('employees.')->controller(EmployeeController::class)->group(function () {
+        Route::get('/',                   'index')->name('index');
+        Route::post('/',                  'store')->name('store');
+        Route::get('/{id}/edit',          'edit')->whereNumber('id')->name('edit');
+        Route::put('/{id}',               'update')->whereNumber('id')->name('update');
+        Route::delete('/{id}',            'destroy')->whereNumber('id')->name('destroy');
+        Route::patch('/{id}/toggle-block','toggleBlock')->whereNumber('id')->name('toggle-block');
+        Route::get('/{id}',               'show')->whereNumber('id')->name('show'); // keep last
+    });
+
+    // Legacy employee aliases
+    Route::redirect('/employee',        '/employees')->name('employee.index');
+    Route::redirect('/employee-alias',  '/employees')->name('employee');
+    Route::redirect('/employees-alias', '/employees')->name('employees');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Admin + Production Manager
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production'])->group(function () {
 
     // ----- Products (catalog + BOM management) -----
     Route::resource('products', ProductController::class);
@@ -122,60 +146,13 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin'])->group(function ()
             ->whereNumber('line')->name('products.recipe.destroy');
     });
 
-    // ----- Employees -----
-    Route::prefix('employees')->name('employees.')->controller(EmployeeController::class)->group(function () {
-        Route::get('/',                   'index')->name('index');
-        Route::post('/',                  'store')->name('store');
-        Route::get('/{id}/edit',          'edit')->whereNumber('id')->name('edit');
-        Route::put('/{id}',               'update')->whereNumber('id')->name('update');
-        Route::delete('/{id}',            'destroy')->whereNumber('id')->name('destroy');
-        Route::patch('/{id}/toggle-block','toggleBlock')->whereNumber('id')->name('toggle-block');
-        Route::get('/{id}',               'show')->whereNumber('id')->name('show'); // keep last
-    });
-
-    // Legacy employee aliases
-    Route::redirect('/employee',        '/employees')->name('employee.index');
-    Route::redirect('/employee-alias',  '/employees')->name('employee');
-    Route::redirect('/employees-alias', '/employees')->name('employees');
-});
-
-/*
-|--------------------------------------------------------------------------
-| Sales role (+ Admin)
-|--------------------------------------------------------------------------
-*/
-Route::middleware(['auth', RoleMiddleware::class . ':Admin,Sales'])->group(function () {
-
-    Route::resource('sales', SalesController::class)->except(['create', 'show']);
-
-    // Availability endpoint used by blades/JS (accept both GET and POST)
-    Route::match(['GET', 'POST'], '/inventory/available', [SalesController::class, 'available'])
-        ->name('sales.available');
-
-    Route::post('/sales/quick-store', [SalesController::class, 'quickStore'])->name('sales.quickStore');
-    Route::get('/sales/{sale}/receipt',  [SalesController::class, 'receipt'])
-        ->whereNumber('sale')->name('sales.receipt');
-    Route::get('/sales/{sale}/download', [SalesController::class, 'download'])
-        ->whereNumber('sale')->name('sales.download');
-
-    // Alias
-    Route::redirect('/sales-alias', '/sales')->name('sales');
-});
-
-/*
-|--------------------------------------------------------------------------
-| Inventory role (+ Admin)
-|--------------------------------------------------------------------------
-*/
-Route::middleware(['auth', RoleMiddleware::class . ':Admin,Inventory'])->group(function () {
-
     // ===== Production / Batches =====
     Route::prefix('production')->name('production.')->controller(ProductionController::class)->group(function () {
-        Route::get('/',          'index')->name('index');
-        Route::get('/filter',    'filter')->name('filter');
+        Route::get('/',             'index')->name('index');
+        Route::get('/filter',       'filter')->name('filter');
 
-        // Non-numeric route before ID routes
-        Route::get('/info/{name}', 'getProductInfo')->name('info');
+        // non-numeric route before ID routes
+        Route::get('/info/{name}',  'getProductInfo')->name('info');
 
         // APIs
         Route::get('/api/by-product/{product}', 'apiByProduct')
@@ -207,20 +184,37 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Inventory'])->group(f
 
     // Alias
     Route::redirect('/production-alias', '/production')->name('production');
+});
 
-    // ===== Allocations =====
-    Route::prefix('allocations')->name('allocations.')->group(function () {
-        Route::patch('/{allocation}/approve',    [BatchAllocationController::class, 'approve'])
-            ->whereNumber('allocation')->name('approve');
-        Route::patch('/{allocation}/release',    [BatchAllocationController::class, 'release'])
-            ->whereNumber('allocation')->name('release');
-        Route::patch('/{allocation}/reallocate', [BatchAllocationController::class, 'reallocate'])
-            ->whereNumber('allocation')->name('reallocate');
-        Route::delete('/{allocation}',           [BatchAllocationController::class, 'destroy'])
-            ->whereNumber('allocation')->name('destroy');
-        Route::get('/by-item/{item}',            [BatchAllocationController::class, 'byItem'])
-            ->whereNumber('item')->name('byItem');
-    });
+/*
+|--------------------------------------------------------------------------
+| Admin + Sales
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', RoleMiddleware::class . ':Admin,Sales'])->group(function () {
+
+    Route::resource('sales', SalesController::class)->except(['create', 'show']);
+
+    // Availability endpoint (GET/POST)
+    Route::match(['GET', 'POST'], '/inventory/available', [SalesController::class, 'available'])
+        ->name('sales.available');
+
+    Route::post('/sales/quick-store', [SalesController::class, 'quickStore'])->name('sales.quickStore');
+    Route::get('/sales/{sale}/receipt',  [SalesController::class, 'receipt'])
+        ->whereNumber('sale')->name('sales.receipt');
+    Route::get('/sales/{sale}/download', [SalesController::class, 'download'])
+        ->whereNumber('sale')->name('sales.download');
+
+    // Alias
+    Route::redirect('/sales-alias', '/sales')->name('sales');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Admin + Inventory
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', RoleMiddleware::class . ':Admin,Inventory'])->group(function () {
 
     // ===== Materials =====
     Route::prefix('materials')->name('materials.')->group(function () {
@@ -242,11 +236,25 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Inventory'])->group(f
         Route::put('/{id}',      [InventoryController::class, 'update'])->whereNumber('id')->name('update');
     });
     Route::redirect('/inventory-alias', '/inventory')->name('inventory');
+
+    // ===== Allocations (kept with inventory ops) =====
+    Route::prefix('allocations')->name('allocations.')->group(function () {
+        Route::patch('/{allocation}/approve',    [BatchAllocationController::class, 'approve'])
+            ->whereNumber('allocation')->name('approve');
+        Route::patch('/{allocation}/release',    [BatchAllocationController::class, 'release'])
+            ->whereNumber('allocation')->name('release');
+        Route::patch('/{allocation}/reallocate', [BatchAllocationController::class, 'reallocate'])
+            ->whereNumber('allocation')->name('reallocate');
+        Route::delete('/{allocation}',           [BatchAllocationController::class, 'destroy'])
+            ->whereNumber('allocation')->name('destroy');
+        Route::get('/by-item/{item}',            [BatchAllocationController::class, 'byItem'])
+            ->whereNumber('item')->name('byItem');
+    });
 });
 
 /*
 |--------------------------------------------------------------------------
-| Fallback (single-action controller; no closures → route:cache safe)
+| Fallback (single-action controller)
 |--------------------------------------------------------------------------
 */
 Route::fallback(FallbackController::class);

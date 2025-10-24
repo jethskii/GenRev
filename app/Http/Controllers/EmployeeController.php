@@ -7,16 +7,20 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class EmployeeController extends Controller
 {
     public function index(Request $request)
     {
-        $status  = strtolower((string) $request->get('status', 'all'));
+        $status  = Str::lower((string) $request->get('status', 'all'));
         $search  = trim((string) $request->get('search', ''));
         $sort    = (string) $request->get('sort', 'first_asc');
         $perPage = $request->get('per_page', 12);
+
+        // sanitize perPage
+        $perPage = $perPage === 'all' ? 'all' : (int) max(1, (int) $perPage);
 
         $q = Employee::query();
 
@@ -43,6 +47,7 @@ class EmployeeController extends Controller
             default:           $q->orderBy('first_name')->orderBy('last_name');
         }
 
+        // KPIs respect current search filter
         $base = Employee::query();
         if ($search !== '') {
             $base->where(function ($w) use ($search) {
@@ -61,7 +66,7 @@ class EmployeeController extends Controller
 
         $employees = ($perPage === 'all')
             ? $q->get()
-            : $q->paginate((int) $perPage)->appends($request->only('status','search','sort','per_page'));
+            : $q->paginate($perPage)->appends($request->only('status','search','sort','per_page'));
 
         return view('employees.index', compact('employees', 'kpis'));
     }
@@ -92,17 +97,19 @@ class EmployeeController extends Controller
 
         $employee = Employee::create($data);
 
-        // 🔐 Optional: create/link user
+        // optional: create/link user
         if ($provision['create_login']) {
             $plainPassword = $provision['login_password'] ?: $this->generatePassword();
-            $role = $provision['role'] ?? 'staff'; // safe default if you kept staff/manager
+            $role = $provision['role'] ?? 'staff';
 
-            // Create or update the user by email
+            // ensure lowercase role consistency
+            $role = Str::lower($role);
+
             $user = User::updateOrCreate(
                 ['email' => $employee->email],
                 [
                     'name'     => trim($employee->first_name.' '.$employee->last_name),
-                    'password' => $plainPassword, // auto-hashed by cast
+                    'password' => Hash::make($plainPassword),
                     'role'     => $role,
                 ]
             );
@@ -110,7 +117,7 @@ class EmployeeController extends Controller
             // link back to employee
             $employee->update(['user_id' => $user->id]);
 
-            // Show the one-time password to the admin
+            // show the one-time password to the admin
             session()->flash('login_created_for', $employee->email);
             session()->flash('login_password_plain', $plainPassword);
         }
@@ -141,12 +148,11 @@ class EmployeeController extends Controller
 
         $employee->update($data);
 
-        // 🔐 Optional: provision/link on update (if not already linked or forced)
+        // optional: provision/link on update
         if ($provision['create_login']) {
-            $plainPassword = $provision['login_password']; // may be null; if null we keep current user password
-            $role = $provision['role'] ?? null;
+            $plainPassword = $provision['login_password']; // may be null; if null keep current user password
+            $role = $provision['role'] ? Str::lower($provision['role']) : null;
 
-            // if employee already linked, update user; else create
             $user = $employee->user_id
                 ? User::find($employee->user_id)
                 : User::where('email', $employee->email)->first();
@@ -162,7 +168,7 @@ class EmployeeController extends Controller
             }
 
             if ($plainPassword) {
-                $user->password = $plainPassword; // hashed by cast
+                $user->password = Hash::make($plainPassword);
                 session()->flash('login_password_plain', $plainPassword);
             }
             if ($role) {
@@ -215,6 +221,11 @@ class EmployeeController extends Controller
             $userUnique  = $userUnique->ignore($ignoreId);
         }
 
+        // normalize role in request before validation, so Rule::in matches
+        if ($request->has('role')) {
+            $request->merge(['role' => Str::lower((string) $request->input('role'))]);
+        }
+
         $employeeData = $request->validate([
             'first_name'    => ['required','string','max:120'],
             'last_name'     => ['required','string','max:120'],
@@ -225,15 +236,15 @@ class EmployeeController extends Controller
             'avatar'        => ['nullable','file','image','max:3072'],
             'remove_avatar' => ['sometimes','boolean'],
 
-            // 👇 optional provisioning inputs live in the same request
+            // optional provisioning inputs live in the same request
             'create_login'  => ['sometimes','boolean'],
-            'role'          => ['sometimes', Rule::in(['admin','sales','inventory','staff','manager'])],
-            'login_password'=> ['nullable','string','min:6'],
+            'role'          => ['sometimes', Rule::in(['masters admin','production manager','sales','inventory','staff','manager'])],
+            'login_password'=> ['nullable','string','min:8'],
         ]);
 
         $provision = [
-            'create_login'   => (bool)($request->boolean('create_login')),
-            'role'           => $request->input('role'),
+            'create_login'   => (bool) $request->boolean('create_login'),
+            'role'           => $request->input('role'), // already lowercased above
             'login_password' => $request->input('login_password'),
         ];
 
@@ -243,7 +254,6 @@ class EmployeeController extends Controller
     /** Generate a strong friendly password when not supplied. */
     private function generatePassword(int $length = 12): string
     {
-        // 12-char mix, readable
         $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*';
         return collect(range(1, $length))
             ->map(fn() => $chars[random_int(0, strlen($chars)-1)])

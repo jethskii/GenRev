@@ -17,7 +17,7 @@ class UserManagementController extends Controller
         // Only Admins can touch user management (UI + actions)
         $this->middleware(function ($request, $next) {
             $u = $request->user();
-            if (!$u || strtolower($u->role ?? '') !== 'admin') {
+            if (!$u || strtolower($u->role ?? '') !== 'Masters Admin') {
                 return redirect()->route('dashboard')
                     ->with('error', 'Access denied. Admins only.');
             }
@@ -173,7 +173,7 @@ class UserManagementController extends Controller
         $new = !$user->is_active;
 
         // Guard: cannot deactivate last active admin
-        if (strtolower($user->role) === 'admin' && $user->is_active && !$new && $this->isLastActiveAdmin($user->id)) {
+        if (strtolower($user->role) === 'masters admin' && $user->is_active && !$new && $this->isLastActiveAdmin($user->id)) {
             return back()->with('error', 'Cannot deactivate the last active Admin.');
         }
 
@@ -247,7 +247,7 @@ class UserManagementController extends Controller
     {
         return User::query()
             ->whereNull('deleted_at')
-            ->where('role', 'admin')       // lowercase
+            ->where('role', 'masters admin')       // lowercase
             ->where('is_active', true)
             ->when($excludeId, fn ($q) => $q->where('id', '!=', $excludeId))
             ->count();

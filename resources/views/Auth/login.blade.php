@@ -87,7 +87,7 @@
 <div class="page-wrap">
   <div class="card fade" role="region" aria-label="Login form">
     <header class="mb-6 text-center">
-      <h2 class="brand-title"><span class="brand-underline">Admin Login</span></h2>
+      <h2 class="brand-title"><span class="brand-underline">GenRev Login</span></h2>
       <p class="muted text-sm">Welcome back. Please sign in to continue.</p>
     </header>
 
