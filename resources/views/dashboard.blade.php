@@ -38,16 +38,33 @@
     thead th{ background:#f9fafb; color:#374151; font-weight:800; border-bottom:1px solid var(--line); }
     tbody td{ color:var(--ink); } tbody tr:nth-child(even){ background:#fafafa; } tbody tr:hover{ background:var(--hover); } th, td{ border-color:var(--line)!important; }
     .brand-title{ font-family:'Kalam',cursive; letter-spacing:.02em; color:var(--ink); } .muted{ color:var(--muted); }
+    /* Mobile sidebar slide-in helper */
+    @media (max-width:1024px){ #sidebar{ transform:translateX(-100%); transition:transform .3s ease; } #sidebar.open{ transform:translateX(0); } }
+    /* Focus ring */
+    :where(a,button,[role="menuitem"],.side-link,.btn):focus{ outline:2px solid var(--green); outline-offset:2px; }
   </style>
 </head>
 <body>
   <div class="flex min-h-screen">
 
     <!-- Sidebar -->
-    <aside id="sidebar" class="sidebar w-64 flex-shrink-0 flex flex-col">
-      <div class="p-6 text-2xl font-bold tracking-wide border-b border-[var(--line)] flex justify-between items-center">
-        <span class="brand-title">GenRev</span>
-        <button id="sidebarClose" class="lg:hidden text-xl font-bold">&times;</button>
+    <aside id="sidebar" class="sidebar w-64 flex-shrink-0 flex flex-col" aria-label="Primary">
+      <!-- Brand with logo -->
+      <div class="p-6 border-b border-[var(--line)] flex justify-between items-center">
+        <a href="{{ route('dashboard') }}" class="flex items-center gap-3" aria-label="GenRev Home">
+          <div class="h-10 w-10 rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden flex items-center justify-center">
+            <img
+              src="{{ asset('images/GENREV_FINAL.png') }}"
+              alt="GenRev"
+              loading="lazy"
+              decoding="async"
+              class="h-full w-full object-contain"
+              onerror="this.closest('div').innerHTML='<span class=&quot;sr-only&quot;>GenRev</span>';"
+            >
+          </div>
+          <span class="text-2xl font-bold tracking-wide brand-title">GenRev</span>
+        </a>
+        <button id="sidebarClose" class="lg:hidden text-xl font-bold" aria-label="Close sidebar">&times;</button>
       </div>
 
       <!-- User -->
@@ -56,10 +73,9 @@
           <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white" style="background:var(--green);">
             {{ Auth::check() ? strtoupper(substr(Auth::user()->name, 0, 1)) : '?' }}
           </div>
-          <div class="text-sm">
-            <p class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</p>
-            <p class="text-xs muted">
-              {{-- Prefer model accessor if present --}}
+          <div class="text-sm min-w-0">
+            <p class="font-semibold truncate">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</p>
+            <p class="text-xs muted truncate">
               {{ Auth::check() && method_exists(Auth::user(), 'getRoleLabelAttribute')
                     ? (Auth::user()->role_label ?? 'User')
                     : (\Illuminate\Support\Str::headline(\Illuminate\Support\Str::lower((string) (Auth::user()->role ?? 'user')))) }}
@@ -69,15 +85,15 @@
       </div>
 
       <!-- Nav (role-aware) -->
-      <nav class="flex-1 mt-4 space-y-1 text-sm font-medium">
+      <nav class="flex-1 mt-4 space-y-1 text-sm font-medium" role="navigation">
         @php
-          // 1) Pull from model's allowlist (single source of truth)
+          // 1) Pull from model's allowlist
           $modules = [];
           if (Auth::check() && method_exists(Auth::user(), 'allowedModules')) {
               $modules = (array) (Auth::user()->allowedModules() ?? []);
           }
 
-          // 2) Safe fallback by role (so links never vanish)
+          // 2) Safe fallback by role
           if (empty($modules)) {
             $role = \Illuminate\Support\Str::lower((string) (Auth::user()->role ?? ''));
             $fallback = [
@@ -89,7 +105,7 @@
             $modules = $fallback[$role] ?? ['dashboard','settings'];
           }
 
-          // 3) Route map: label + route name + active patterns
+          // Map for labels and routes
           $menu = [
             'dashboard'  => ['label'=>'Dashboard',  'route'=>'dashboard',           'active'=>['dashboard*']],
             'production' => ['label'=>'Production', 'route'=>'production.index',    'active'=>['production.*']],
@@ -102,20 +118,18 @@
             'settings'   => ['label'=>'Settings',   'route'=>'settings.index',      'active'=>['settings*','settings.*']],
           ];
 
-          $isActive = function(array $patterns): bool {
-            foreach ($patterns as $p) if (request()->routeIs($p)) return true;
-            return false;
-          };
+          $isActive = fn(array $patterns) => collect($patterns)->some(fn($p) => request()->routeIs($p));
         @endphp
 
         @foreach ($modules as $key)
           @php
-            if (!isset($menu[$key])) continue;                  // unknown key
+            if (!isset($menu[$key])) continue;
             $item = $menu[$key];
-            if (!\Illuminate\Support\Facades\Route::has($item['route'])) continue; // missing named route
+            if (!\Illuminate\Support\Facades\Route::has($item['route'])) continue;
             $active = $isActive($item['active']) ? 'side-link--active' : '';
+            $aria   = $active ? 'aria-current=page' : '';
           @endphp
-          <a href="{{ route($item['route']) }}" class="side-link {{ $active }}">{{ $item['label'] }}</a>
+          <a href="{{ route($item['route']) }}" class="side-link {{ $active }}" {!! $aria !!}>{{ $item['label'] }}</a>
 
           @if($key === 'dashboard')
             <div class="mx-6 my-2 border-t" style="border-color:var(--line)"></div>
@@ -131,7 +145,7 @@
       <!-- Top Nav -->
       <header class="nav-surface px-6 py-4 flex justify-between items-center">
         <div class="flex items-center gap-4">
-          <button id="sidebarToggle" class="lg:hidden text-2xl">&#9776;</button>
+          <button id="sidebarToggle" class="lg:hidden text-2xl" aria-label="Open sidebar">&#9776;</button>
           <h1 class="text-xl font-bold tracking-wide brand-title">Dashboard Overview</h1>
         </div>
 
@@ -146,13 +160,13 @@
 
           <label class="flex items-center gap-2 text-xs">
             Depth
-            <input id="depthRange" type="range" min="0" max="24" value="10" class="w-28">
+            <input id="depthRange" type="range" min="0" max="24" value="10" class="w-28" aria-label="3D depth">
             <span id="depthVal" class="tabular-nums">10</span>
           </label>
 
           <label class="flex items-center gap-2 text-xs">
             Tilt
-            <input id="liftRange" type="range" min="-16" max="0" value="-6" class="w-28">
+            <input id="liftRange" type="range" min="-16" max="0" value="-6" class="w-28" aria-label="3D tilt">
             <span id="liftVal" class="tabular-nums">-6</span>
           </label>
         </div>
@@ -197,7 +211,7 @@
                 <h2 class="text-lg font-semibold mb-1">📈 Sales Report</h2>
                 <p class="text-xs muted">Real-time sales analytics</p>
               </div>
-              <select id="salesRange" class="input w-40 py-1">
+              <select id="salesRange" class="input w-40 py-1" aria-label="Sales range">
                 <option value="today">Today</option>
                 <option value="week" selected>This Week</option>
                 <option value="month">This Month</option>
@@ -223,7 +237,7 @@
                 </div>
               @endforeach
             </div>
-            <div class="h-32 relative"><canvas id="salesTrendsChart"></canvas></div>
+            <div class="h-32 relative"><canvas id="salesTrendsChart" aria-label="Sales trend chart"></canvas></div>
           </div>
 
           {{-- Most Sold Products --}}
@@ -345,7 +359,7 @@
               </label>
             </div>
             <div class="h-56 relative">
-              <canvas id="expiryChart"></canvas>
+              <canvas id="expiryChart" aria-label="Expiry chart"></canvas>
               <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No expiries this week</div>
             </div>
           </div>
@@ -360,7 +374,7 @@
               </label>
             </div>
             <div class="h-56 relative">
-              <canvas id="productionChart"></canvas>
+              <canvas id="productionChart" aria-label="Production chart"></canvas>
               <div id="prodEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
           </div>
@@ -375,7 +389,7 @@
               </label>
             </div>
             <div class="h-56 relative">
-              <canvas id="salesChart"></canvas>
+              <canvas id="salesChart" aria-label="Sales chart"></canvas>
               <div id="salesEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
           </div>
@@ -489,9 +503,12 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       const sidebar = document.getElementById('sidebar');
-      document.getElementById('sidebarToggle')?.addEventListener('click', ()=> sidebar?.classList.toggle('!-translate-x-full'));
-      document.getElementById('sidebarClose')?.addEventListener('click',  ()=> sidebar?.classList.add('!-translate-x-full'));
-      sidebar?.classList.remove('!-translate-x-full');
+      const openBtn = document.getElementById('sidebarToggle');
+      const closeBtn = document.getElementById('sidebarClose');
+
+      // Mobile sidebar open/close
+      openBtn?.addEventListener('click', ()=> sidebar?.classList.add('open'));
+      closeBtn?.addEventListener('click', ()=> sidebar?.classList.remove('open'));
 
       const labels = @json($labels ?? []);
       const prod   = @json($weeklyProductionSeries ?? []);

@@ -11,7 +11,7 @@
   // Falls back safely to 'sales' when unknown/empty.
   $rawOriginal = (string) ($user->role ?? '');
   $rawLower    = strtolower(trim($rawOriginal));
-  // Strip non-letters to be tolerant of spaces/hyphens/etc.
+  // Strip non-letters to be tolerant of spaces and hyphens
   $norm        = preg_replace('/[^a-z]/', '', $rawLower);
 
   $role = match (true) {
@@ -29,7 +29,6 @@
       $norm === 'inventory'         => 'inventory',
       $norm === 'sales'             => 'sales',
 
-      // Keep your previous simple fallback
       default => ($rawLower ?: 'sales'),
   };
 
@@ -61,7 +60,18 @@
 
     <nav class="relative h-full overflow-y-auto rounded-3xl p-4">
       <div class="mb-4 flex items-center gap-3">
-        <div class="h-10 w-10 rounded-2xl bg-gradient-to-br from-emerald-400 to-cyan-400 shadow-md"></div>
+        {{-- Brand logo --}}
+        <div class="h-10 w-10 rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden flex items-center justify-center">
+          <img
+            src="{{ asset('images/GENREV_FINAL.png') }}"
+            alt="GenRev"
+            loading="lazy"
+            decoding="async"
+            class="h-full w-full object-contain"
+            onerror="this.closest('div').innerHTML='<span class=&quot;sr-only&quot;>GenRev</span>';"
+          >
+        </div>
+
         <div class="min-w-0">
           <div class="text-slate-900 font-semibold leading-5 truncate">GenRev Admin</div>
           <div class="text-[11px] text-slate-500 flex items-center gap-2">
@@ -83,12 +93,14 @@
           </li>
         @endif
 
-        {{-- Materials (Inventory + Admin) --}}
+        {{-- Materials --}}
         @if($can('materials'))
           <li>
             <button @click="toggle('materials')" type="button" class="sb-link justify-between">
               <span class="inline-flex items-center gap-3"><span>Materials</span></span>
-              <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180' : open['materials'] }" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.108l3.71-3.878a.75.75 0 011.08 1.04l-4.24 4.43a.75.75 0 01-1.08 0l-4.24-4.43a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg>
+              <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180' : open['materials'] }" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.108l3.71-3.878a.75.75 0 011.08 1.04l-4.24 4.43a.75.75 0 01-1.08 0l-4.24-4.43a.75.75 0 01.02-1.06z" clip-rule="evenodd"/>
+              </svg>
             </button>
             <div x-show="open['materials']" x-collapse class="ml-2 mt-1 space-y-1 pl-4 border-l border-slate-200">
               <a href="{{ route('materials.index') }}"  class="sb-sublink {{ $link('materials.index') }}">List</a>
@@ -98,7 +110,7 @@
           </li>
         @endif
 
-        {{-- Production (Admin + Production Manager) --}}
+        {{-- Production --}}
         @if($can('production'))
           <li>
             <a href="{{ route('production.index') }}" class="sb-link {{ $link('production.*') }}">
@@ -125,7 +137,7 @@
           </li>
         @endif
 
-        {{-- Products (Admin + Production Manager) --}}
+        {{-- Products --}}
         @if($can('products'))
           <li>
             <a href="{{ route('products.index') }}" class="sb-link {{ $link('products.*') }}">
@@ -134,7 +146,7 @@
           </li>
         @endif
 
-        {{-- Reports (Admin only) --}}
+        {{-- Reports --}}
         @if($can('reports'))
           <li>
             <a href="{{ route('reports.index') }}" class="sb-link {{ $link('reports.*') }}">
@@ -143,7 +155,7 @@
           </li>
         @endif
 
-        {{-- Employee (Admin only) --}}
+        {{-- Employee --}}
         @if($can('employee'))
           <li>
             <a href="{{ route('employees.index') }}" class="sb-link {{ $link('employees.*') }}">

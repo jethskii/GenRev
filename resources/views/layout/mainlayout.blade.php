@@ -54,6 +54,8 @@
     .chart-palette{--c1:var(--chart-1);--c2:var(--chart-2);--c3:var(--chart-3);--c4:var(--chart-4)}
     .skip-link{position:absolute;left:50%;transform:translateX(-50%);top:-40px;background:#000;color:#fff;padding:.5rem .75rem;border-radius:.5rem;transition:top .2s ease;z-index:100}
     .skip-link:focus{top:.5rem;outline:2px solid var(--accent-green)}
+    /* Focus outlines for accessibility */
+    :where(a,button,[role="menuitem"],.nav-link,.btn):focus{outline:2px solid var(--accent-green);outline-offset:2px}
   </style>
 
   @yield('styles')
@@ -73,7 +75,7 @@
       @php
         $user = Auth::user();
 
-        // Resolve modules (prefer model method; fallback so links NEVER vanish)
+        // Resolve modules (prefer model method; fallback so links never vanish)
         $modules = [];
         if ($user) {
             $modules = method_exists($user, 'allowedModules') ? (array) ($user->allowedModules() ?? []) : [];
@@ -102,9 +104,22 @@
       @endphp
 
       <aside id="sidebar" class="w-64 sidebar flex-shrink-0 flex flex-col" aria-label="Primary">
-        <div class="px-6 py-5 text-2xl font-bold tracking-wide border-b" style="border-color:var(--line)">
-          <span style="font-family:'Kalam',cursive">GenRev</span>
-          <button id="sidebarClose" class="lg:hidden text-2xl leading-none float-right" aria-label="Close sidebar">&times;</button>
+        <!-- Sidebar Brand with Logo -->
+        <div class="px-6 py-5 border-b flex items-center justify-between" style="border-color:var(--line)">
+          <a href="{{ route('dashboard') }}" class="flex items-center gap-3 focus:outline-none" aria-label="GenRev Home">
+            <div class="h-10 w-10 rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden flex items-center justify-center">
+              <img
+                src="{{ asset('images/GENREV_FINAL.png') }}"
+                alt="GenRev"
+                loading="lazy"
+                decoding="async"
+                class="h-full w-full object-contain"
+                onerror="this.closest('div').innerHTML='<span class=&quot;sr-only&quot;>GenRev</span>';"
+              >
+            </div>
+            <span class="text-xl font-bold tracking-wide" style="font-family:'Kalam',cursive">GenRev</span>
+          </a>
+          <button id="sidebarClose" type="button" class="lg:hidden text-2xl leading-none" aria-label="Close sidebar">&times;</button>
         </div>
 
         <!-- User Info -->
@@ -115,7 +130,7 @@
             </div>
             <div class="text-sm">
               <p class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</p>
-              <p class="text-xs text-gray-500">{{ $roleLabel }}</p>
+              <p class="text-xs" style="color:var(--text-sub)">{{ $roleLabel }}</p>
             </div>
           </div>
         </div>
@@ -162,14 +177,14 @@
           @endif
         </nav>
 
-        <div class="p-6 text-xs text-gray-500 mt-auto">© {{ now()->year }} GenRev</div>
+        <div class="p-6 text-xs" style="color:var(--text-sub)">© {{ now()->year }} GenRev</div>
       </aside>
 
       <!-- Main Content -->
       <div class="flex flex-col flex-1 overflow-hidden">
         <header class="header-bar px-6 py-4 flex justify-between items-center" role="banner">
           <div class="flex items-center gap-4">
-            <button id="sidebarToggle" class="lg:hidden text-2xl" aria-label="Open sidebar">&#9776;</button>
+            <button id="sidebarToggle" type="button" class="lg:hidden text-2xl" aria-label="Open sidebar">&#9776;</button>
             <h1 class="text-xl font-bold tracking-wide text-gray-900">
               @yield('page_title', 'Dashboard Overview')
             </h1>
@@ -187,7 +202,7 @@
 
             <!-- User Menu -->
             <div class="relative z-30">
-              <button id="userMenuButton" class="focus:outline-none" aria-haspopup="menu" aria-expanded="false">
+              <button id="userMenuButton" type="button" class="focus:outline-none" aria-haspopup="menu" aria-expanded="false">
                 <div class="w-9 h-9 rounded-full flex items-center justify-center font-bold uppercase text-sm text-white"
                      style="background: var(--accent-green);">
                   {{ Auth::check() ? strtoupper(substr(Auth::user()->name, 0, 1)) : '?' }}
@@ -195,10 +210,10 @@
               </button>
               <div id="userDropdown" class="hidden absolute right-0 mt-2 w-56 dropdown" role="menu" aria-label="User menu">
                 <div class="px-4 py-3 border-b" style="border-color:var(--line)">
-                  <div class="text-xs text-gray-500">Logged in as</div>
+                  <div class="text-xs" style="color:var(--text-sub)">Logged in as</div>
                   <div class="font-semibold">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</div>
                   @if(Auth::check() && Auth::user()->role)
-                    <div class="text-xs text-gray-500">{{ $roleLabel }}</div>
+                    <div class="text-xs" style="color:var(--text-sub)">{{ $roleLabel }}</div>
                   @endif
                 </div>
                 <form method="POST" action="{{ route('logout') }}">
@@ -291,6 +306,11 @@
         else { document.body.classList.remove('dark-mode'); localStorage.setItem('theme','light'); }
         setLabel();
       });
+
+      // Reduce motion preference for smoother experience
+      if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        document.querySelectorAll('*').forEach(el => el.style.scrollBehavior = 'auto');
+      }
 
       window.btnClasses = {
         primary:'btn btn-primary',
