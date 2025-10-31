@@ -17,10 +17,7 @@ class ProductController extends Controller
 {
     /* ============================== LIST / SHOW ============================== */
 
-    /**
-     * Products index with filters, sort, and pagination.
-     * Matches resources/views/products/index.blade.php
-     */
+    /** Products index with filters, sort, and pagination. */
     public function index(Request $request)
     {
         $perPage = max(1, (int) $request->integer('per_page', 10));
@@ -30,7 +27,7 @@ class ProductController extends Controller
             ->category($request->get('category'))
             ->status($request->get('status'))
             ->sorted($request->get('sort'))
-            ->withCount('recipes')
+            ->withCount(['recipes', 'children as variants_count'])
             ->paginate($perPage)
             ->appends($request->query());
 
@@ -43,31 +40,29 @@ class ProductController extends Controller
         return view('products.index', compact('products', 'categories'));
     }
 
-    /**
-     * Single product page with batches, recipe, and quick sale.
-     * Matches resources/views/products/show.blade.php
-     */
+    /** Single product page with batches, recipe, and quick sale. */
     public function show(Product $product)
     {
-        // Eager-load recipe + material, aliasing materials.unit_price as default_unit_price
         $product->load([
             'productions' => fn ($q) => $q->orderByDesc('production_date')->orderByDesc('id'),
             'recipes.material' => function ($q) {
                 $q->select('id', 'material_name', 'unit')
-                  ->addSelect(DB::raw('unit_price as default_unit_price'));
+                  ->addSelect(\DB::raw('unit_price as default_unit_price'));
             },
+            'parent:id,product_name',
+            'children:id,product_name,parent_id',
         ]);
 
-        // Materials list for “Add line” dropdown (also alias the price)
         $materials = Material::query()
             ->select('id', 'material_name', 'unit')
-            ->addSelect(DB::raw('unit_price as default_unit_price'))
+            ->addSelect(\DB::raw('unit_price as default_unit_price'))
             ->orderBy('material_name')
             ->get();
 
         $recipe = $product->recipes;
+        $variants = $product->children;
 
-        return view('products.show', compact('product', 'materials', 'recipe'));
+        return view('products.show', compact('product', 'materials', 'recipe', 'variants'));
     }
 
     /* ============================== CREATE / EDIT ============================== */
@@ -75,6 +70,7 @@ class ProductController extends Controller
     public function create()
     {
         return view('products.create', [
+            'parents'        => Product::roots()->orderBy('product_name')->get(['id', 'product_name']),
             'categories'     => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
             'unitOptions'    => ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'],
             'statusOptions'  => ['active' => 'Active', 'inactive' => 'Inactive', 'pending' => 'Pending', 'on_sale' => 'On Sale'],
@@ -100,6 +96,7 @@ class ProductController extends Controller
     {
         return view('products.edit', [
             'product'       => $product,
+            'parents'       => Product::roots()->where('id', '<>', $product->id)->orderBy('product_name')->get(['id','product_name']),
             'categories'    => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
             'unitOptions'   => ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'],
             'statusOptions' => ['active' => 'Active', 'inactive' => 'Inactive', 'pending' => 'Pending', 'on_sale' => 'On Sale'],
@@ -109,6 +106,11 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $data = $this->validateProduct($request, $product->id);
+
+        // prevent setting parent to one of its descendants
+        if (!empty($data['parent_id']) && (int)$data['parent_id'] === (int)$product->id) {
+            unset($data['parent_id']);
+        }
 
         if ($request->hasFile('image')) {
             if (!empty($product->image)) {
@@ -125,41 +127,39 @@ class ProductController extends Controller
     }
 
     /**
-     * PERMANENTLY delete a product and all related data (productions, sales, recipes).
-     * Returns JSON for AJAX calls (used by the 3D Delete Product button).
+     * PERMANENTLY delete a product. If it's a parent, delete all variants and their dependents.
      */
     public function destroy(Request $request, Product $product)
     {
         try {
             DB::transaction(function () use ($product) {
-                // 1) Delete dependent rows (respect FK order)
-                Sale::where('product_id', $product->id)->delete();
-                Production::where('product_id', $product->id)->delete();
+                $targets = collect([$product])->merge($product->children()->get());
 
-                if (method_exists($product, 'recipes')) {
-                    $product->recipes()->delete();
-                }
-
-                // 2) Delete product image file if present
-                if (!empty($product->image)) {
-                    try { Storage::disk('public')->delete($product->image); }
-                    catch (\Throwable $e) {
-                        Log::warning('Failed to delete product image from storage', [
-                            'product_id' => $product->id,
-                            'error' => $e->getMessage(),
-                        ]);
+                foreach ($targets as $p) {
+                    // 1) Delete dependent rows
+                    Sale::where('product_id', $p->id)->delete();
+                    Production::where('product_id', $p->id)->delete();
+                    if (method_exists($p, 'recipes')) {
+                        $p->recipes()->delete();
                     }
-                }
 
-                // 3) Delete product row (force if soft-deleted model)
-                if (in_array('Illuminate\\Database\\Eloquent\\SoftDeletes', class_uses_recursive($product))) {
-                    $product->forceDelete();
-                } else {
-                    $product->delete();
+                    // 2) Delete image
+                    if (!empty($p->image)) {
+                        try { Storage::disk('public')->delete($p->image); } catch (\Throwable $e) {
+                            Log::warning('Failed to delete product image', ['product_id' => $p->id, 'error' => $e->getMessage()]);
+                        }
+                    }
+
+                    // 3) Force delete
+                    if (in_array('Illuminate\\Database\\Eloquent\\SoftDeletes', class_uses_recursive($p))) {
+                        $p->forceDelete();
+                    } else {
+                        $p->delete();
+                    }
                 }
             });
 
-            // KPI snapshot (optional for your dashboard badges)
+            // KPI snapshot for dashboard badges
             [$forecastedDemand, $actualInventory, $shortfall, $recommendedProduction] = $this->totalsSnapshot();
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -181,7 +181,6 @@ class ProductController extends Controller
             Log::error('Failed to permanently delete product', [
                 'product_id' => $product->id ?? null,
                 'error'      => $e->getMessage(),
-                'trace'      => $e->getTraceAsString(),
             ]);
 
             $msg = config('app.debug') ? 'Delete failed: '.$e->getMessage() : 'Server error while deleting product.';
@@ -194,23 +193,24 @@ class ProductController extends Controller
     }
 
     /**
-     * Quick-store for inline "Quick add" in index header.
-     * Accepts either `name` or `product_name` to stay compatible with older blades.
+     * QUICK STORE (AJAX) — used by your “+ New variant” button in the Orders modal.
+     * Accepts: product_name, parent_id (optional), unit_cost (optional), shelf_life_days (optional)
+     * Returns JSON: { id, product_name, unit_cost }
      */
     public function quickStore(Request $request)
     {
-        $incomingName = $request->input('product_name') ?? $request->input('name');
-
-        $request->validate([
-            $incomingName === null ? 'product_name' : 'tmp' => ['nullable'],
-        ]);
-
-        $name = trim((string) $incomingName);
+        $name = trim((string) ($request->input('product_name') ?? $request->input('name')));
         if ($name === '') {
             return $request->wantsJson()
-                ? response()->json(['ok' => false, 'message' => 'Name is required'], 422)
+                ? response()->json(['ok' => false, 'message' => 'Product name is required'], 422)
                 : back()->withErrors(['name' => 'Product name is required'])->withInput();
         }
+
+        $validated = $request->validate([
+            'parent_id'        => ['nullable','integer', Rule::exists('products','id')],
+            'unit_cost'        => ['nullable','numeric','min:0'],
+            'shelf_life_days'  => ['nullable','integer','min:0'],
+        ]);
 
         if (Product::where('product_name', $name)->exists()) {
             $msg = 'Product name already exists.';
@@ -220,31 +220,35 @@ class ProductController extends Controller
         }
 
         $product = Product::create([
-            'product_name' => $name,
-            'status'       => 'active',
-            'unit'         => 'kg',
+            'product_name'     => $name,
+            'parent_id'        => $validated['parent_id'] ?? null,
+            'unit_cost'        => (float)($validated['unit_cost'] ?? 0),
+            'shelf_life_days'  => (int)($validated['shelf_life_days'] ?? 0),
+            'status'           => 'active',
+            'unit'             => 'kg',
         ]);
 
         if ($request->wantsJson()) {
-            return response()->json(['ok' => true, 'id' => $product->id, 'name' => $product->product_name]);
+            return response()->json([
+                'ok'           => true,
+                'id'           => $product->id,
+                'product_name' => $product->product_name,
+                'unit_cost'    => (float)($product->unit_cost ?? 0),
+            ]);
         }
+
         return back()->with('success', 'Product added.');
     }
 
     /* ============================== MATERIALS / RECIPE ============================== */
 
-    /**
-     * Per-product materials (Recipe/BOM) page.
-     * Matches resources/views/products/materials/index.blade.php
-     */
     public function materialsIndex(Product $product)
     {
         $product->load('recipes.material');
 
-        // Materials for dropdown (alias price)
         $materials = Material::query()
             ->select('id', 'material_name', 'unit')
-            ->addSelect(DB::raw('unit_price as default_unit_price'))
+            ->addSelect(\DB::raw('unit_price as default_unit_price'))
             ->orderBy('material_name')
             ->get();
 
@@ -253,13 +257,7 @@ class ProductController extends Controller
         return view('products.materials.index', compact('product', 'materials', 'recipe'));
     }
 
-    /**
-     * Save (sync) recipe lines for a product.
-     * Expected payload from the BOM editor (rows[]):
-     *  - ingredient_id (int, materials.id)
-     *  - qty (number)
-     *  - unit_price (number)  // snapshot
-     */
+    /** Save (sync) recipe lines for a product. */
     public function recipeStore(Request $request, Product $product)
     {
         $validated = $request->validate([
@@ -296,9 +294,7 @@ class ProductController extends Controller
         return back()->with('success', 'Recipe saved.');
     }
 
-    /**
-     * Remove a single recipe line.
-     */
+    /** Remove a single recipe line. */
     public function recipeDestroy(Product $product, ProductRecipe $line)
     {
         if ((int) $line->product_id !== (int) $product->id) {
@@ -307,28 +303,6 @@ class ProductController extends Controller
         $line->delete();
 
         return back()->with('success', 'Recipe line removed.');
-    }
-
-    /**
-     * Provide default recipe rows as JSON to "Load Defaults" button.
-     */
-    public function materialsDefaults(Product $product)
-    {
-        $rows = $product->recipes()
-            ->with(['material' => function ($q) {
-                $q->select('id', 'unit')
-                  ->addSelect(DB::raw('unit_price as default_unit_price'));
-            }])
-            ->get()
-            ->map(fn ($r) => [
-                'ingredient_id' => (int) ($r->material_id ?? $r->ingredient_id),
-                'unit'          => (string) ($r->material->unit ?? ''),
-                'qty'           => (float) ($r->qty ?? 0),
-                // Prefer the historical snapshot if present; else use current material price alias.
-                'unit_price'    => (float) ($r->unit_price_snapshot ?? ($r->material->default_unit_price ?? 0)),
-            ])->values();
-
-        return response()->json($rows);
     }
 
     /* ============================== IMAGE ONLY ============================== */
@@ -351,6 +325,7 @@ class ProductController extends Controller
     protected function validateProduct(Request $request, ?int $productId = null): array
     {
         return $request->validate([
+            'parent_id'           => ['nullable','integer', Rule::exists('products','id')->whereNull('deleted_at')],
             'product_code'        => ['nullable', 'string', 'max:100', Rule::unique('products', 'product_code')->ignore($productId)],
             'product_name'        => ['required', 'string', 'max:255', Rule::unique('products', 'product_name')->ignore($productId)],
             'category'            => ['nullable', 'string', 'max:100'],

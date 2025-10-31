@@ -23,7 +23,9 @@ class Production extends Model
 
     /** Mass assignable (mirror table columns) */
     protected $fillable = [
-        'product_id',
+        'parent_product_id',     // parent (e.g., Skinless Longganisa)
+        'product_id',            // child/variant product id
+        'product_name_snapshot', // per-order type/variant label captured at order time
         'batch_number',
         'forecasted_demand',
         'current_inventory',
@@ -37,11 +39,13 @@ class Production extends Model
         'image_path',
         'image_medium_path',
         'image_thumb_path',
+        // 'notes', // include only if the column exists
     ];
 
     /** Casts */
     protected $casts = [
         'id'                => 'integer',
+        'parent_product_id' => 'integer',
         'product_id'        => 'integer',
         'production_date'   => 'date',
         'expiration_date'   => 'date',
@@ -63,13 +67,20 @@ class Production extends Model
         'days_to_expiry',
         'image_url',
         'image_srcset',
+        'type_name',       // derived per-order
+        'type_keywords',   // for client-side search
     ];
 
     /* ========================== Relationships ========================== */
 
     public function product()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class, 'product_id');
+    }
+
+    public function parentProduct()
+    {
+        return $this->belongsTo(Product::class, 'parent_product_id');
     }
 
     public function sales()
@@ -82,6 +93,11 @@ class Production extends Model
     public function scopeByProduct($q, int $productId)
     {
         return $q->where('product_id', $productId);
+    }
+
+    public function scopeByParent($q, int $parentId)
+    {
+        return $q->where('parent_product_id', $parentId);
     }
 
     public function scopeFreshFirst($q)
@@ -127,7 +143,6 @@ class Production extends Model
 
     public function getImageUrlAttribute(): string
     {
-        // Prefer production image; fallback to product image; then default
         if (!empty($this->image_path)) {
             $disk = $this->image_disk ?: 'public';
             try {
@@ -160,6 +175,40 @@ class Production extends Model
         return $parts ? implode(', ', $parts) : null;
     }
 
+    /**
+     * Human-friendly "Type" derived from per-order snapshot and parent.
+     * We do NOT fall back to category here — the snapshot is the source of truth.
+     */
+    public function getTypeNameAttribute(): string
+    {
+        $childName  = trim((string)($this->product_name_snapshot ?: $this->product?->product_name ?: ''));
+        $parentName = trim((string)($this->parentProduct?->product_name ?: ''));
+
+        if ($childName !== '') {
+            if ($parentName !== '' && stripos($childName, $parentName) !== false) {
+                $type = trim(preg_replace('/\s+/', ' ', str_ireplace($parentName, '', $childName)));
+                if ($type !== '') return $type; // e.g., "Garlic skinless"
+            }
+            if ($parentName === '' || strcasecmp($childName, $parentName) !== 0) {
+                return $childName; // distinct variant/label
+            }
+        }
+
+        return 'Base';
+    }
+
+    public function getTypeKeywordsAttribute(): string
+    {
+        $parts = [
+            mb_strtolower($this->type_name),
+            mb_strtolower($this->product_name_snapshot ?: $this->product?->product_name ?: ''),
+            mb_strtolower($this->parentProduct?->product_name ?: ''),
+            mb_strtolower($this->batch_number ?: ''),
+            mb_strtolower($this->notes ?? ''), // only if your schema has notes
+        ];
+        return trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($parts))));
+    }
+
     /* ============================ Mutators ============================= */
 
     public function setBatchNumberAttribute($value): void
@@ -178,53 +227,74 @@ class Production extends Model
     {
         // Normalize & ensure NOT NULL numeric fields before save
         static::saving(function (self $m) {
-            // Coerce to numbers (avoid null for NOT NULL cols)
+            // numbers
             $m->quantity          = is_numeric($m->quantity) ? (int)$m->quantity : 0;
             $m->current_inventory = is_numeric($m->current_inventory) ? (int)$m->current_inventory : null;
             $m->unit_cost         = is_numeric($m->unit_cost) ? (float)$m->unit_cost : 0.0;
             $m->forecasted_demand = is_numeric($m->forecasted_demand) ? (float)$m->forecasted_demand : 0.0;
+            $m->unit_price_pack   = is_numeric($m->unit_price_pack) ? max(0.0, (float)$m->unit_price_pack) : 0.0;
+            $m->unit_price_bag    = is_numeric($m->unit_price_bag)  ? max(0.0, (float)$m->unit_price_bag)  : 0.0;
 
-            // Optional price fields default to 0 if missing/negative
-            $m->unit_price_pack = is_numeric($m->unit_price_pack) ? max(0.0, (float)$m->unit_price_pack) : 0.0;
-            $m->unit_price_bag  = is_numeric($m->unit_price_bag)  ? max(0.0, (float)$m->unit_price_bag)  : 0.0;
-
-            // Clamp negatives
+            // clamps
             if ($m->quantity < 0) $m->quantity = 0;
             if (($m->current_inventory ?? 0) < 0) $m->current_inventory = 0;
             if ($m->unit_cost < 0) $m->unit_cost = 0.0;
 
-            // On create, if current_inventory missing, default to quantity
+            // default current_inventory on create
             if ($m->exists === false && ($m->current_inventory === null || $m->current_inventory === '')) {
                 $m->current_inventory = (int) $m->quantity;
             }
 
-            // Default disk
+            // image disk default
             if (empty($m->image_disk)) {
                 $m->image_disk = 'public';
             }
 
-            // Ensure production_date (NOT NULL in DB)
+            // production date default
             if (empty($m->production_date)) {
                 $m->production_date = Carbon::today();
             }
 
-            // Auto-calc expiration if missing but we know shelf life
+            // **Guarantee parent_product_id** (parent of chosen variant, else itself)
+            if (empty($m->parent_product_id) && !empty($m->product_id)) {
+                if ($m->relationLoaded('product') && $m->product) {
+                    $m->parent_product_id = (int) ($m->product->parent_id ?: $m->product_id);
+                } else {
+                    $parentId = (int) (Product::whereKey($m->product_id)->value('parent_id') ?: $m->product_id);
+                    $m->parent_product_id = $parentId;
+                }
+            }
+
+            // **Guarantee per-order snapshot** (this drives the Type column)
+            if (empty($m->product_name_snapshot)) {
+                $cat = null; $pname = null;
+                if ($m->relationLoaded('product') && $m->product) {
+                    $cat   = trim((string)($m->product->category ?? ''));
+                    $pname = trim((string)($m->product->product_name ?? ''));
+                } elseif (!empty($m->product_id)) {
+                    $prod  = Product::select('category','product_name')->find($m->product_id);
+                    $cat   = trim((string)($prod->category ?? ''));
+                    $pname = trim((string)($prod->product_name ?? ''));
+                }
+                // Prefer category (e.g. Garlic skinless). If empty, fall back to product name.
+                $m->product_name_snapshot = $cat !== '' ? $cat : ($pname ?: 'Base');
+            }
+
+            // expiration auto-calc (if shelf life known)
             if (empty($m->expiration_date) && !empty($m->production_date)) {
                 $days = null;
-
                 if ($m->relationLoaded('product') && $m->product) {
                     $days = (int) ($m->product->shelf_life_days ?? 0);
                 } elseif (!empty($m->product_id)) {
                     $days = (int) (Product::whereKey($m->product_id)->value('shelf_life_days') ?? 0);
                 }
-
                 if ($days > 0) {
                     $m->expiration_date = Carbon::parse($m->production_date)->copy()->addDays($days);
                 }
             }
         });
 
-        // After any change, recompute product balances
+        // After any change, recompute balances for the child/variant product
         $recompute = function (self $m) {
             if ($m->product_id) {
                 if (App::bound(\App\Services\InventoryService::class)) {

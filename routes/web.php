@@ -148,35 +148,39 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production'])->group(
 
     // ===== Production / Batches =====
     Route::prefix('production')->name('production.')->controller(ProductionController::class)->group(function () {
-        Route::get('/',             'index')->name('index');
-        Route::get('/filter',       'filter')->name('filter');
+    Route::get('/',             'index')->name('index');
+    Route::get('/filter',       'filter')->name('filter');
+    Route::get('/info/{name}',  'getProductInfo')->name('info');
 
-        // non-numeric route before ID routes
-        Route::get('/info/{name}',  'getProductInfo')->name('info');
+    Route::get('/api/by-product/{product}', 'apiByProduct')->whereNumber('product')->name('api.byProduct');
+    Route::get('/{product}/batches',        'apiByProduct')->whereNumber('product')->name('batches.byProduct');
 
-        // APIs
-        Route::get('/api/by-product/{product}', 'apiByProduct')
-            ->whereNumber('product')->name('api.byProduct');
-        Route::get('/{product}/batches',        'apiByProduct')
-            ->whereNumber('product')->name('batches.byProduct'); // JS usage
+    Route::get('/orders/{id}', 'showOrders')->whereNumber('id')->name('orders');
+    Route::post('/orders',     'storeOrder')->name('orders.store');
+    Route::post('/orders/legacy', 'storeOrder')->name('storeOrder');
 
-        // Orders
-        Route::get('/orders/{id}', 'showOrders')->whereNumber('id')->name('orders');
-        Route::post('/orders',     'storeOrder')->name('orders.store');
-        Route::post('/orders/legacy', 'storeOrder')->name('storeOrder'); // legacy alias
+    Route::post('/', 'store')->name('store');
 
-        // Create production batch
-        Route::post('/', 'store')->name('store');
+    Route::get('/{id}/edit',       'edit')->whereNumber('id')->name('edit');
+    Route::put('/{id}',            'update')->whereNumber('id')->name('update');
+    Route::delete('/{production}', 'destroy')->whereNumber('production')->name('destroy');
+    Route::delete('/batch/latest/{product}', 'destroyLatest')->whereNumber('product')->name('batch.destroyLatest');
 
-        // Edit / update / destroy / show
-        Route::get('/{id}/edit',       'edit')->whereNumber('id')->name('edit');
-        Route::put('/{id}',            'update')->whereNumber('id')->name('update');
-        Route::delete('/{production}', 'destroy')->whereNumber('production')->name('destroy');
-        Route::delete('/batch/latest/{product}', 'destroyLatest')
-            ->whereNumber('product')->name('batch.destroyLatest');
+    // ✅ NEW:
+    Route::get('/{id}/pdf',        'pdf')->whereNumber('id')->name('pdf');
+    // Create form for new production batch
+    Route::get('/create', 'create')->name('create');
 
-        Route::get('/{id}', 'show')->whereNumber('id')->name('show');
-    });
+    Route::get('/{id}', 'show')->whereNumber('id')->name('show');
+    // routes/web.php
+    Route::get('/production/{parent}/types', [\App\Http\Controllers\ProductionController::class, 'suggestTypes'])
+    ->name('production.types');
+    // routes/web.php
+    Route::get('/production/{parent}/types', [\App\Http\Controllers\ProductionController::class, 'suggestTypes'])
+    ->name('production.types');
+
+});
+
 
     // Quick-add payload (kept outside to avoid collision with /{id})
     Route::get('/production/quick-add/{product}', [ProductionController::class, 'quickAddPayload'])

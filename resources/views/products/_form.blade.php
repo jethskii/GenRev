@@ -1,182 +1,114 @@
 {{-- resources/views/products/_form.blade.php --}}
 @csrf
 @php
-  // If editing, $product will be defined; otherwise use null-safe fallback
   $p = $product ?? null;
-  $unitOptions = $unitOptions ?? ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'];
-  $statusOptions = $statusOptions ?? ['active' => 'Active', 'inactive' => 'Inactive', 'pending' => 'Pending', 'on_sale' => 'On Sale'];
-  $categoryOptions = $categories ?? []; // pass distinct categories from controller (optional)
 @endphp
 
-<div class="grid grid-cols-1 md:grid-cols-12 gap-3">
-  {{-- Left column: identity --}}
-  <div class="md:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-3">
+<div class="bg-white shadow-xl rounded-2xl p-8 text-black">
+  <h2 class="text-2xl font-semibold mb-6 border-b border-gray-200 pb-3">Add Product</h2>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    {{-- Batch Number --}}
     <div>
-      <label class="text-sm">Product Code <span class="text-red-400">*</span></label>
-      <input name="product_code" value="{{ old('product_code', $p->product_code ?? '') }}"
-             class="input-dark w-full" required>
-      @error('product_code') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
+      <label class="block text-sm font-medium mb-1">Batch Number <span class="text-red-500">*</span></label>
+      <input name="batch_number" value="{{ old('batch_number', $p->batch_number ?? '') }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-4 focus:ring-blue-200 focus:border-blue-400 transition" required>
+      @error('batch_number') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
     </div>
 
+    {{-- Quantity --}}
     <div>
-      <label class="text-sm">Product Name <span class="text-red-400">*</span></label>
-      <input name="product_name" value="{{ old('product_name', $p->product_name ?? '') }}"
-             class="input-dark w-full" required>
-      @error('product_name') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
+      <label class="block text-sm font-medium mb-1">Quantity</label>
+      <input type="number" name="quantity" min="0"
+             value="{{ old('quantity', $p->quantity ?? '') }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-4 focus:ring-blue-200 focus:border-blue-400 transition">
+      @error('quantity') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
     </div>
 
+    {{-- Forecasted Demand --}}
     <div>
-      <label class="text-sm">Category</label>
-      <input list="categories" name="category" value="{{ old('category', $p->category ?? '') }}"
-             class="input-dark w-full">
-      <datalist id="categories">
-        @foreach($categoryOptions as $cat) <option value="{{ $cat }}"> @endforeach
-      </datalist>
-      @error('category') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
+      <label class="block text-sm font-medium mb-1">Forecasted Demand</label>
+      <input type="number" step="0.01" name="forecasted_demand"
+             value="{{ old('forecasted_demand', $p->forecasted_demand ?? '') }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-4 focus:ring-blue-200 focus:border-blue-400 transition">
+      @error('forecasted_demand') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
     </div>
 
+    {{-- Current Inventory --}}
     <div>
-      <label class="text-sm">Unit</label>
-      <select name="unit" class="input-dark w-full">
-        @foreach($unitOptions as $val => $label)
-          <option value="{{ $val }}" @selected(old('unit', $p->unit ?? 'kg') === $val)>{{ $label }}</option>
-        @endforeach
-      </select>
-      @error('unit') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
+      <label class="block text-sm font-medium mb-1">Current Inventory</label>
+      <input type="number" name="current_inventory" min="0"
+             value="{{ old('current_inventory', $p->current_inventory ?? '') }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-4 focus:ring-blue-200 focus:border-blue-400 transition">
+      @error('current_inventory') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
     </div>
 
+    {{-- Unit Cost --}}
     <div>
-      <label class="text-sm">Status</label>
-      <select name="status" class="input-dark w-full">
-        @foreach($statusOptions as $val => $label)
-          <option value="{{ $val }}" @selected(old('status', $p->status ?? 'active') === $val)>{{ $label }}</option>
-        @endforeach
-      </select>
-      @error('status') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
+      <label class="block text-sm font-medium mb-1">Unit Cost</label>
+      <input type="number" step="0.01" name="unit_cost"
+             value="{{ old('unit_cost', $p->unit_cost ?? '') }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-4 focus:ring-blue-200 focus:border-blue-400 transition">
+      @error('unit_cost') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
     </div>
 
+    {{-- Unit Price Pack --}}
     <div>
-      <label class="text-sm">Default Price (sell)</label>
-      <input type="number" step="0.01" min="0" name="default_price"
-             value="{{ old('default_price', $p->default_price ?? '') }}"
-             class="input-dark w-full">
-      @error('default_price') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
+      <label class="block text-sm font-medium mb-1">Unit Price (Pack)</label>
+      <input type="number" step="0.01" name="unit_price_pack"
+             value="{{ old('unit_price_pack', $p->unit_price_pack ?? '') }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-4 focus:ring-blue-200 focus:border-blue-400 transition">
+      @error('unit_price_pack') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
+    </div>
+
+    {{-- Unit Price Bag --}}
+    <div>
+      <label class="block text-sm font-medium mb-1">Unit Price (Bag)</label>
+      <input type="number" step="0.01" name="unit_price_bag"
+             value="{{ old('unit_price_bag', $p->unit_price_bag ?? '') }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-4 focus:ring-blue-200 focus:border-blue-400 transition">
+      @error('unit_price_bag') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
+    </div>
+
+    {{-- Production Date --}}
+    <div>
+      <label class="block text-sm font-medium mb-1">Production Date</label>
+      <input type="date" name="production_date"
+             value="{{ old('production_date', $p->production_date ?? '') }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-4 focus:ring-blue-200 focus:border-blue-400 transition">
+      @error('production_date') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
+    </div>
+
+    {{-- Expiration Date --}}
+    <div>
+      <label class="block text-sm font-medium mb-1">Expiration Date</label>
+      <input type="date" name="expiration_date"
+             value="{{ old('expiration_date', $p->expiration_date ?? '') }}"
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-4 focus:ring-blue-200 focus:border-blue-400 transition">
+      @error('expiration_date') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
+    </div>
+
+    {{-- Image Upload --}}
+    <div class="md:col-span-2">
+      <label class="block text-sm font-medium mb-1">Upload Image</label>
+      <input type="file" name="image" accept="image/*"
+             class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition">
+      @error('image') <div class="text-xs text-red-500 mt-1">{{ $message }}</div> @enderror
+      @if(!empty($p?->image_path))
+        <img src="{{ asset($p->image_path) }}" alt="Product image" class="mt-3 w-40 h-40 object-cover rounded-lg shadow border">
+      @endif
+      <p class="text-xs mt-1 text-gray-500">Recommended size: 512x512px (JPG or PNG)</p>
     </div>
   </div>
 
-  {{-- Right column: image --}}
-  <div class="md:col-span-5">
-    <label class="text-sm">Image</label>
-    <input type="file" name="image" accept="image/*" class="block w-full text-sm">
-    @error('image') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    @if(!empty($p?->image_url))
-      <img src="{{ $p->image_url }}" class="mt-2 w-36 h-36 object-cover rounded-xl border border-white/10">
-    @endif
-    <p class="text-xs opacity-70 mt-1">Recommended 512×512+, JPG or PNG.</p>
+  {{-- Buttons --}}
+  <div class="mt-8 flex justify-end space-x-3">
+    <a href="{{ route('products.index') }}"
+       class="px-5 py-2.5 rounded-lg border border-gray-300 hover:bg-gray-100 transition font-medium">Cancel</a>
+    <button type="submit"
+            class="px-6 py-2.5 rounded-lg text-white font-semibold bg-gradient-to-r from-teal-500 via-blue-500 to-purple-500 hover:opacity-90 focus:ring-4 focus:ring-purple-200 transition">
+      Save Product
+    </button>
   </div>
-
-  {{-- Divider --}}
-  <div class="md:col-span-12 border-t border-white/10 my-2"></div>
-
-  {{-- Ops fields --}}
-  <div class="md:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-3">
-    <div>
-      <label class="text-sm">Shelf Life (days)</label>
-      <input type="number" min="0" name="shelf_life_days"
-             value="{{ old('shelf_life_days', $p->shelf_life_days ?? 0) }}"
-             class="input-dark w-full">
-      @error('shelf_life_days') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-
-    <div>
-      <label class="text-sm">Yield Rate (%)</label>
-      <input type="number" step="0.01" min="0" max="100" name="yield_rate"
-             value="{{ old('yield_rate', $p->yield_rate ?? 100) }}"
-             class="input-dark w-full">
-      @error('yield_rate') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-
-    <div>
-      <label class="text-sm">Standard Batch Size</label>
-      <input type="number" step="0.001" min="0" name="standard_batch_size"
-             value="{{ old('standard_batch_size', $p->standard_batch_size ?? null) }}"
-             class="input-dark w-full">
-      @error('standard_batch_size') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-
-    <div>
-      <label class="text-sm">Lead Time (days)</label>
-      <input type="number" min="0" name="lead_time_days"
-             value="{{ old('lead_time_days', $p->lead_time_days ?? 0) }}"
-             class="input-dark w-full">
-      @error('lead_time_days') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-
-    <div>
-      <label class="text-sm">Min Run Qty</label>
-      <input type="number" step="0.001" min="0" name="min_run_qty"
-             value="{{ old('min_run_qty', $p->min_run_qty ?? null) }}"
-             class="input-dark w-full">
-      @error('min_run_qty') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-
-    <div>
-      <label class="text-sm">Max Run Qty</label>
-      <input type="number" step="0.001" min="0" name="max_run_qty"
-             value="{{ old('max_run_qty', $p->max_run_qty ?? null) }}"
-             class="input-dark w-full">
-      @error('max_run_qty') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-  </div>
-
-  {{-- Divider --}}
-  <div class="md:col-span-12 border-t border-white/10 my-2"></div>
-
-  {{-- Storage / Constraints / Costs --}}
-  <div class="md:col-span-12 grid grid-cols-1 md:grid-cols-3 gap-3">
-    <div>
-      <label class="text-sm">Storage Zone</label>
-      <select name="storage_zone" class="input-dark w-full">
-        @foreach(['chiller'=>'Chiller','freezer'=>'Freezer','ambient'=>'Ambient'] as $val=>$label)
-          <option value="{{ $val }}" @selected(old('storage_zone', $p->storage_zone ?? 'chiller') === $val)>{{ $label }}</option>
-        @endforeach
-      </select>
-      @error('storage_zone') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-
-    <div>
-      <label class="text-sm">Unit Cost (std)</label>
-      <input type="number" step="0.01" min="0" name="unit_cost"
-             value="{{ old('unit_cost', $p->unit_cost ?? null) }}"
-             class="input-dark w-full">
-      @error('unit_cost') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-
-    <div>
-      <label class="text-sm">Last Cost Date</label>
-      <input type="date" name="last_cost_date"
-             value="{{ old('last_cost_date', optional($p->last_cost_date ?? null)->toDateString()) }}"
-             class="input-dark w-full">
-      @error('last_cost_date') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-
-    <div class="md:col-span-3">
-      <label class="text-sm">Temperature / Notes</label>
-      <textarea name="temp_requirements" rows="2" class="input-dark w-full"
-        placeholder="e.g., Store at 0–4°C, avoid refreeze">{{ old('temp_requirements', $p->temp_requirements ?? '') }}</textarea>
-      @error('temp_requirements') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-
-    <div class="md:col-span-3">
-      <label class="text-sm">Line Constraints (JSON)</label>
-      <textarea name="line_constraints" rows="2" class="input-dark w-full"
-        placeholder='e.g., {"allowed_lines":["A","B"],"must_run_in_multiples_of":50}'>{{ old('line_constraints', is_array($p->line_constraints ?? null) ? json_encode($p->line_constraints) : ($p->line_constraints ?? '')) }}</textarea>
-      @error('line_constraints') <div class="text-xs text-red-300 mt-1">{{ $message }}</div> @enderror
-    </div>
-  </div>
-</div>
-
-<div class="mt-5 flex justify-end gap-2">
-  <a href="{{ route('products.index') }}" class="px-3 py-2 rounded-lg border border-dark-line hover:bg-sidebar-hover">Cancel</a>
-  <button class="btn-armygreen">{{ $submitLabel ?? 'Save' }}</button>
 </div>

@@ -1,285 +1,290 @@
-@php
-/** @var \Illuminate\Support\Collection|\App\Models\Product[] $products */
-use Illuminate\Support\Str;
-@endphp
+{{-- Add Order Modal (parent-aware) --}}
+<div id="addOrderModal" class="fixed inset-0 z-[9999] hidden">
+  <div class="absolute inset-0 bg-black/40" onclick="closeOrderModal()" aria-hidden="true"></div>
 
-@once
-<style>
-/* ===== Add Production modal: force dark inputs with bright text ===== */
-#addModal input,
-#addModal select,
-#addModal textarea{
-  background-color: rgba(16,24,16,.85) !important; /* deep green/black */
-  border: 1px solid rgba(255,255,255,.18) !important;
-  color: #fff !important;
-  border-radius: .9rem !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.04) !important;
-}
-#addModal label{ color: rgba(255,255,255,.82) !important; }
-#addModal small, #addModal .hint{ color: rgba(255,255,255,.6) !important; }
+  <div class="relative mx-auto my-10 max-w-md w-[92%] page-card animate-fadeIn">
+    <button type="button" onclick="closeOrderModal()" aria-label="Close"
+            class="absolute top-2 right-4 text-2xl font-bold text-[color:var(--muted)] hover:text-[color:var(--red)]">&times;</button>
 
-#addModal input::placeholder,
-#addModal textarea::placeholder{ color: rgba(255,255,255,.55) !important; }
+    <h3 id="modalTitle" class="text-xl font-semibold mb-4">
+      Add Order ({{ $product->product_name }})
+    </h3>
 
-/* Focus ring matches your neon accent */
-#addModal input:focus,
-#addModal select:focus,
-#addModal textarea:focus{
-  outline: none !important;
-  border-color: #C3E956 !important;
-  box-shadow: 0 0 0 2px rgba(195,233,86,.38) !important;
-}
+    {{-- POST to production.orders.store --}}
+    <form id="addOrderForm" action="{{ route('production.orders.store') }}" method="POST" class="space-y-3">
+      @csrf
 
-/* Date inputs: make year/month/day segments & icon visible across engines */
-#addModal input[type="date"]{
-  color-scheme: dark;                            /* Firefox/Chromium dark picker */
-  caret-color: #fff !important;
-}
-#addModal input[type="date"]::-webkit-calendar-picker-indicator{
-  filter: invert(1) opacity(.9) !important;      /* Chrome/Safari icon */
-}
-#addModal input[type="date"]::-webkit-datetime-edit,
-#addModal input[type="date"]::-webkit-datetime-edit-year-field,
-#addModal input[type="date"]::-webkit-datetime-edit-month-field,
-#addModal input[type="date"]::-webkit-datetime-edit-day-field{
-  color: #fff !important;                        /* Chrome/Safari text */
-  background: transparent !important;
-}
+      {{-- parent product = current page --}}
+      <input type="hidden" name="parent_product_id" id="po_parent_product_id" value="{{ (int) $product->id }}">
 
-/* Number spinners visible on dark */
-#addModal input[type="number"]::-webkit-inner-spin-button,
-#addModal input[type="number"]::-webkit-outer-spin-button{
-  filter: invert(1) opacity(.8) !important;
-}
+      {{-- selected variant (child) --}}
+      <input type="hidden" id="po_product_id" name="product_id" value="{{ (int) $product->id }}">
 
-/* Select: dark dropdown panel + white options; custom caret */
-#addModal select{
-  padding-right: 2.25rem !important;
-  -webkit-appearance: none; -moz-appearance: none; appearance: none;
-  background-image:
-    linear-gradient(45deg, transparent 50%, #C3E956 50%),
-    linear-gradient(135deg, #C3E956 50%, transparent 50%),
-    linear-gradient(to right, transparent, transparent);
-  background-position:
-    calc(100% - 20px) calc(1em - 2px),
-    calc(100% - 15px) calc(1em - 2px),
-    calc(100% - 2.5rem) 0.5em;
-  background-size: 5px 5px, 5px 5px, 0 0;
-  background-repeat: no-repeat;
-}
-#addModal select option,
-#addModal select optgroup{
-  background: #0f160f !important;
-  color: #fff !important;
-}
+      {{-- legacy snapshot (kept in sync with type_label) --}}
+      <input type="hidden" id="po_product_name" name="product_name_snapshot" value="{{ $product->product_name }}">
 
-/* File input: readable button + filename */
-#addModal input[type="file"]{
-  color: rgba(255,255,255,.9) !important;
-}
-#addModal input[type="file"]::file-selector-button{
-  background: rgba(255,255,255,.14) !important;
-  border: 1px solid rgba(255,255,255,.26) !important;
-  color: #fff !important;
-  border-radius: .6rem !important;
-  padding: .4rem .8rem !important;
-  margin-right: .75rem !important;
-  cursor: pointer !important;
-}
-#addModal input[type="file"]::file-selector-button:hover{
-  background: rgba(255,255,255,.22) !important;
-}
+      {{-- mirrors the computed expiration --}}
+      <input type="hidden" id="po_expiration_date" name="expiration_date" value="{{ old('expiration_date', $defaultExpiry ?? '') }}">
 
-/* Chrome autofill on dark */
-#addModal input:-webkit-autofill,
-#addModal textarea:-webkit-autofill,
-#addModal select:-webkit-autofill{
-  -webkit-text-fill-color: #fff !important;
-  -webkit-box-shadow: 0 0 0px 1000px rgba(16,24,16,.85) inset !important;
-  transition: background-color 9999s ease-in-out 0s !important;
-}
-</style>
-@endonce
+      {{-- Variant selector --}}
+      <div>
+        <label class="label">Variant / Product</label>
+        <select id="po_product_select" class="select">
+          <option value="{{ $product->id }}">{{ $product->product_name }} (Base)</option>
+          @foreach(($variantProducts ?? collect()) as $vp)
+            <option value="{{ $vp->id }}">{{ $vp->product_name }}</option>
+          @endforeach
+        </select>
 
-@forelse($products as $p)
-  @php
-    $qty     = number_format((float)($p->quantity ?? 0), 3);
-    $demand  = number_format((float)($p->forecasted_demand ?? 0), 3);
-    $unit    = number_format((float)($p->unit_cost ?? 0), 2);
-    $status  = $p->stock_status ?? ((float)($p->quantity ?? 0) > 0 ? 'in_stock' : 'out_of_stock');
+        <div class="mt-2 flex items-center gap-2 flex-wrap">
+          <button type="button" id="po_new_toggle" class="btn btn-outline px-2 py-1 text-sm">+ New variant</button>
+          @php $chips=['Regular skinless','Special skinless','Garlic skinless','Chicken skinless','Beef skinless','Hamonado']; @endphp
+          @foreach($chips as $chip)
+            <button type="button" class="chip js-type-chip" data-value="{{ $chip }}">{{ $chip }}</button>
+          @endforeach
+        </div>
 
-    $delta = (float)($p->quantity ?? 0) - (float)($p->forecasted_demand ?? 0);
-    $ring  = $delta <= 0 ? 'ring-1 ring-rose-700/50'
-          : ($delta <= 10 ? 'ring-1 ring-amber-600/40' : '');
+        {{-- Type label saved per order (drives the Type column) --}}
+        <div class="mt-3">
+          <label class="label">Type / Variant label to record</label>
+          <input id="po_type_label" name="type_label" type="text" class="input"
+                 placeholder="e.g., Garlic skinless" value="{{ old('type_label') }}">
+          <p class="help mt-1">This is saved with this order only and will appear in the Type column.</p>
+        </div>
 
-    $badge = null; $badgeCls = '';
-    if (isset($p->is_expired) || isset($p->days_to_expiry)) {
-        if ($p->is_expired ?? false) { $badge = 'Expired'; $badgeCls = 'bg-rose-600/15 text-rose-300 border border-rose-700/40'; }
-        elseif (($p->days_to_expiry ?? 99) <= 3) { $badge = ($p->days_to_expiry).'d left'; $badgeCls = 'bg-amber-500/15 text-amber-300 border border-amber-600/40'; }
-    }
-
-    $imgPrimary  = $p->card_image_url ?? $p->image_thumb_url ?? $p->image_url ?? asset('images/default-product.png');
-    $srcset      = $p->card_image_srcset ?? null;
-    $sku         = $p->sku ?? '—';
-  @endphp
-
-  <div
-    class="prod-card glass rounded-2xl border border-white/10 p-4 flex flex-col gap-3 hover:bg-white/5 transition {{ $ring }}"
-    id="product-card-{{ $p->id }}"
-    data-id="{{ $p->id }}"
-    data-name="{{ e($p->product_name) }}"
-    data-unit-cost="{{ (float)($p->unit_cost ?? 0) }}"
-    data-forecasted="{{ (float)($p->forecasted_demand ?? 0) }}"
-  >
-    {{-- Image --}}
-    <div class="relative">
-      <img
-        @if($srcset) srcset="{{ $srcset }}" sizes="(min-width:1280px) 25vw, (min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw" @endif
-        src="{{ $imgPrimary }}"
-        alt="{{ $p->product_name }} image"
-        class="prod-card-img"
-        width="400" height="300"
-        loading="lazy" decoding="async"
-        onerror="this.onerror=null;this.src='{{ asset('images/default-product.png') }}';"
-      >
-      @if($badge)
-        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs {{ $badgeCls }} backdrop-blur">
-          {{ $badge }}
-        </span>
-      @endif
-      @if(!empty($p->category))
-        <span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs bg-white/10 text-white/80 border border-white/20 backdrop-blur">
-          {{ $p->category }}
-        </span>
-      @endif
-    </div>
-
-    {{-- Info --}}
-    <div class="flex items-start justify-between gap-3">
-      <div class="min-w-0">
-        <h3 class="text-lg font-semibold text-white truncate" title="{{ $p->product_name }}">{{ $p->product_name }}</h3>
-        <p class="text-xs text-white/60">SKU: {{ $sku }}</p>
+        {{-- inline quick-add variant --}}
+        <div id="po_new_wrap" class="mt-3 hidden rounded-xl border border-[color:var(--line)] bg-white p-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="sm:col-span-2">
+              <label class="label">New Variant Name</label>
+              <input id="po_new_name" type="text" class="input" placeholder="e.g., Garlic skinless, Regular skinless" />
+              <p class="help mt-1">New variant will be created under {{ $product->product_name }}.</p>
+            </div>
+            <div>
+              <label class="label">Unit Cost (₱)</label>
+              <input id="po_new_cost" type="number" step="0.01" min="0" class="input" />
+            </div>
+            <div>
+              <label class="label">Shelf Life (days)</label>
+              <input id="po_new_shelf" type="number" min="1" class="input" value="{{ (int)($product->shelf_life_days ?? 7) }}" />
+            </div>
+          </div>
+          <div class="mt-3 flex items-center gap-2">
+            <button type="button" id="po_new_save" class="btn btn-primary text-sm">Save variant</button>
+            <button type="button" id="po_new_cancel" class="btn btn-outline text-sm">Cancel</button>
+            <span id="po_new_err" class="text-xs text-[color:var(--red)] ml-2 hidden"></span>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="grid grid-cols-2 gap-3 text-sm">
-      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
-        <p class="text-white/60">Inventory</p>
-        <p class="text-white font-semibold">{{ $qty }} kg</p>
+      {{-- Batch Number (preview only) --}}
+      <div>
+        <label class="label">Batch Number</label>
+        <input id="po_batch_preview" class="input cursor-not-allowed bg-gray-50"
+               value="{{ $nextBatchNumber ?? 'Auto' }}" readonly>
       </div>
-      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
-        <p class="text-white/60">Forecasted Demand</p>
-        <p class="text-white font-semibold">{{ $demand }} kg</p>
-      </div>
-      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
-        <p class="text-white/60">Unit Cost</p>
-        <p class="text-white font-semibold">₱ {{ $unit }}</p>
-      </div>
-      <div class="bg-white/5 rounded-xl p-3 border border-white/10">
-        <p class="text-white/60">Status</p>
-        @php
-          $cls = $status === 'in_stock'
-            ? 'bg-emerald-600/15 text-emerald-300 border-emerald-700/40'
-            : 'bg-rose-600/15 text-rose-300 border-rose-700/40';
-        @endphp
-        <span class="px-2 py-0.5 rounded-full text-xs border {{ $cls }}">{{ Str::of($status)->replace('_',' ')->title() }}</span>
-      </div>
-    </div>
 
-    {{-- Actions --}}
-    <div class="flex items-center justify-end gap-2 pt-2">
-      @if (Route::has('production.show'))
-        <a href="{{ route('production.show', $p->id) }}"
-           class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white/90 hover:bg-white/10">
-          Manage Orders
-        </a>
-      @endif
+      {{-- Forecasted / Produced --}}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="label">Forecasted Demand (kg)</label>
+          <input id="po_fc" name="forecasted_demand" type="number" step="0.01" min="0" class="input"
+                 value="{{ old('forecasted_demand', (float)($product->forecasted_demand ?? 0)) }}">
+        </div>
+        <div>
+          <label class="label">Produced Quantity (kg)</label>
+          <input id="po_prod_qty" name="quantity" type="number" step="1" min="1" required class="input"
+                 value="{{ old('quantity') }}">
+        </div>
+      </div>
 
-      {{-- Dynamic Quick Add --}}
-      <button
-        type="button"
-        class="js-quick-add px-3 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold hover:opacity-90 relative z-10"
-        data-id="{{ (int)$p->id }}"
-        aria-label="Quick add to Sales"
-      >
-        + Quick Add
-      </button>
-    </div>
+      {{-- Unit Cost / Prices --}}
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label class="label">Unit Cost (₱)</label>
+          <input id="po_cost" name="unit_cost" type="number" step="0.01" min="0" required class="input"
+                 value="{{ old('unit_cost', (float)($product->unit_cost ?? 0)) }}">
+        </div>
+        <div>
+          <label class="label">Price per Pack (₱)</label>
+          <input id="po_price_pack" name="unit_price_pack" type="number" step="0.01" min="0" class="input"
+                 value="{{ old('unit_price_pack') }}">
+        </div>
+        <div>
+          <label class="label">Price per Bag (₱)</label>
+          <input id="po_price_bag" name="unit_price_bag" type="number" step="0.01" min="0" class="input"
+                 value="{{ old('unit_price_bag') }}">
+        </div>
+      </div>
+
+      {{-- Dates --}}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="label">Production Date</label>
+          <input id="po_prod_date" name="production_date" type="date" required class="input"
+                 value="{{ old('production_date', $defaultProdDate ?? now()->toDateString()) }}">
+        </div>
+        <div>
+          <label class="label">Expiration Date (auto)</label>
+          <input id="po_exp_preview" type="date" readonly class="input cursor-not-allowed bg-gray-50"
+                 value="{{ old('expiration_date', $defaultExpiry ?? '') }}">
+          <p class="help mt-1">Computed from production date + {{ (int)($product->shelf_life_days ?? 7) }} days.</p>
+        </div>
+      </div>
+
+      {{-- Optional fields --}}
+      <div>
+        <label class="label">Order Date</label>
+        <input id="po_order_date" name="order_date" type="date" class="input"
+               value="{{ old('order_date', now()->toDateString()) }}">
+        <p class="help mt-1">Leave blank to use today.</p>
+      </div>
+      <div>
+        <label class="label">Order Quantity (kg)</label>
+        <input id="po_order_qty" name="order_quantity_kg" type="number" step="0.01" class="input"
+               value="{{ old('order_quantity_kg') }}">
+      </div>
+      <div>
+        <label class="label">Customer (optional)</label>
+        <input name="customer_name" class="input" value="{{ old('customer_name') }}" placeholder="Walk-in, Distributor A, etc.">
+      </div>
+      <div>
+        <label class="label">Notes</label>
+        <textarea name="notes" rows="2" class="textarea" placeholder="Special handling, delivery date, etc.">{{ old('notes') }}</textarea>
+      </div>
+
+      <button id="submitAddOrder" class="btn btn-primary w-full">Add Order (Production + Sale)</button>
+    </form>
   </div>
-@empty
-  <div class="col-span-full text-center text-white/70 py-10">No products yet.</div>
-@endforelse
+</div>
 
-@once
 <script>
-(function() {
-  if (window.__quickAddBound) return;
-  window.__quickAddBound = true;
+  const $$ = id => document.getElementById(id);
 
-  const openSalesModal = (payload) => {
-    const { id, name, price } = payload || {};
-    const saleModal      = document.querySelector('#saleModal');
-    const fldProductSel  = document.querySelector('#sale_product_id');
-    const fldProductName = document.querySelector('#sale_product_name');
-    const fldPrice       = document.querySelector('#sale_price');
-    const fldQty         = document.querySelector('#sale_quantity');
-
-    if (fldProductSel && id) {
-      fldProductSel.value = String(id);
-      fldProductSel.dispatchEvent(new Event('change', { bubbles: true }));
+  function openOrderModal(){
+    syncExpiryPreview();
+    const sel = $$('#po_product_select');
+    if (sel) {
+      const opt = sel.options[sel.selectedIndex];
+      const name = opt.textContent.replace(/\s*\(Base\)\s*$/,'').trim();
+      updateFormForProduct(opt.value, name);
+      autoFillCostPriceForName(name);
     }
-    if (fldProductName && name) fldProductName.value = name;
-    if (fldPrice && typeof price === 'number' && isFinite(price)) fldPrice.value = price.toFixed(2);
-    if (fldQty && !fldQty.value) fldQty.value = '1';
+    const m = $$('#addOrderModal'); if (!m) return;
+    m.classList.remove('hidden'); m.classList.add('flex');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function closeOrderModal(){ const m=$$('#addOrderModal'); if(!m) return; m.classList.add('hidden'); m.classList.remove('flex'); }
 
-    if (typeof window.prefillSaleModal === 'function') {
-      try { window.prefillSaleModal({ id, name, price }); } catch(_) {}
-    }
+  function syncExpiryPreview(){
+    const shelf = {{ (int)($product->shelf_life_days ?? 7) }};
+    const prod  = $$('#po_prod_date');
+    const expPv = $$('#po_exp_preview');
+    const expHidden = $$('#po_expiration_date');
+    if(!prod || !expPv || !prod.value) return;
+    const d = new Date(prod.value);
+    d.setDate(d.getDate() + shelf);
+    const iso = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+    expPv.value = iso; expPv.min = prod.value;
+    if (expHidden) expHidden.value = iso;
+  }
+  document.addEventListener('change', e => { if (e.target && e.target.id === 'po_prod_date') syncExpiryPreview(); });
 
-    if (saleModal) {
-      if (window.bootstrap && window.bootstrap.Modal) {
-        try { window.bootstrap.Modal.getOrCreateInstance(saleModal).show(); return; } catch(_) {}
+  function autoFillCostPriceForName(name){
+    fetch(`{{ route('production.info', ':name') }}`.replace(':name', encodeURIComponent(name)))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(info => {
+        if ($$('#po_cost') && !$$('#po_cost').value) $$('#po_cost').value = Number(info.unit_cost ?? 0).toFixed(2);
+        if ($$('#po_fc')   && !$$('#po_fc').value)   $$('#po_fc').value   = Number(info.forecasted_demand ?? 0);
+      })
+      .catch(()=>{});
+  }
+
+  (function(){
+    const form = $$('#addOrderForm'); const btn  = $$('#submitAddOrder');
+    if (!form || !btn) return;
+    form.addEventListener('submit', () => { btn.disabled = true; btn.textContent = 'Saving...'; });
+  })();
+
+  // Keep type label and legacy snapshot in sync
+  function setTypeLabel(val) {
+    const label = $$('#po_type_label');
+    if (label) label.value = val;
+    const snap  = $$('#po_product_name');
+    if (snap)   snap.value = val;
+  }
+
+  function updateFormForProduct(productId, productName){
+    const hid = $$('#po_product_id'); const hnm = $$('#po_product_name');
+    if (hid) hid.value = String(productId);
+    if (hnm && !$$('#po_type_label')?.value) hnm.value = productName;
+    if (!$$('#po_type_label')?.value) setTypeLabel(productName);
+    const title = document.getElementById('modalTitle');
+    if (title) title.textContent = `Add Order ({{ $product->product_name }} → ${productName})`;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const sel   = document.getElementById('po_product_select');
+    const wrap  = document.getElementById('po_new_wrap');
+    const tog   = document.getElementById('po_new_toggle');
+    const save  = document.getElementById('po_new_save');
+    const cancel= document.getElementById('po_new_cancel');
+    const err   = document.getElementById('po_new_err');
+
+    sel?.addEventListener('change', () => {
+      const opt = sel.options[sel.selectedIndex];
+      const name = opt.textContent.replace(/\s*\(Base\)\s*$/,'').trim();
+      updateFormForProduct(opt.value, name);
+      if (!$$('#po_type_label').value) setTypeLabel(name);
+      autoFillCostPriceForName(name);
+    });
+
+    document.querySelectorAll('.js-type-chip').forEach(ch => {
+      ch.addEventListener('click', () => setTypeLabel(ch.dataset.value || ch.textContent.trim()));
+    });
+
+    tog?.addEventListener('click', () => { wrap?.classList.toggle('hidden'); err?.classList.add('hidden'); err.textContent=''; });
+    cancel?.addEventListener('click', () => { wrap?.classList.add('hidden'); err?.classList.add('hidden'); err.textContent=''; });
+
+    // Save new variant under parent
+    save?.addEventListener('click', async () => {
+      const name  = document.getElementById('po_new_name')?.value?.trim();
+      const cost  = parseFloat(document.getElementById('po_new_cost')?.value || '0') || 0;
+      const shelf = parseInt(document.getElementById('po_new_shelf')?.value || '7', 10) || 7;
+      const parentId = {{ (int)$product->id }};
+
+      if (!name) { err.textContent = 'Variant name is required.'; err.classList.remove('hidden'); return; }
+
+      try {
+        const res = await fetch(@json(route('products.quick-store')), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': (document.querySelector('#addOrderForm input[name=_token]')?.value || ''),
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({ product_name: name, unit_cost: cost, shelf_life_days: shelf, parent_id: parentId })
+        });
+        if (!res.ok) throw new Error('Failed to create variant');
+        const data = await res.json();
+
+        const newId   = data.id ?? data?.product_id ?? null;
+        const newName = data.name ?? data?.product_name ?? name;
+        if (!newId) throw new Error('Invalid response');
+
+        const opt = new Option(newName, newId, true, true);
+        sel.add(opt); sel.value = newId;
+
+        updateFormForProduct(newId, newName);
+        setTypeLabel(newName);
+        if ($$('#po_cost') && !$$('#po_cost').value && typeof data.unit_cost !== 'undefined') {
+          $$('#po_cost').value = Number(data.unit_cost).toFixed(2);
+        }
+
+        wrap?.classList.add('hidden'); err.classList.add('hidden'); err.textContent = '';
+      } catch (e) {
+        err.textContent = 'Could not save variant. Please try again.'; err.classList.remove('hidden');
       }
-      try { saleModal.showModal && saleModal.showModal(); } catch(_) {}
-      try { saleModal.classList.remove('hidden'); saleModal.removeAttribute('aria-hidden'); } catch(_) {}
-    } else {
-      console.warn('Sales modal (#saleModal) not found.');
-    }
-  };
-
-  const endpointFor = (id) => `/production/quick-add/${id}`;
-
-  document.addEventListener('click', async function(e) {
-    const btn = e.target.closest('.js-quick-add');
-    if (!btn) return;
-
-    const id = Number(btn.dataset.id || 0);
-    if (!id) return;
-
-    const originalHTML = btn.innerHTML;
-    btn.classList.add('btn-busy');
-    btn.innerHTML = 'Loading…';
-
-    try {
-      const res = await fetch(endpointFor(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-
-      const payload = {
-        id:  data.id ?? id,
-        name: (data.name || '').toString(),
-        price: Number(data.price ?? 0)
-      };
-
-      openSalesModal(payload);
-    } catch (err) {
-      console.warn('Quick Add payload fetch failed, falling back.', err);
-      openSalesModal({ id, name: '', price: 0 });
-    } finally {
-      btn.classList.remove('btn-busy');
-      btn.innerHTML = originalHTML;
-    }
-  }, true);
-})();
+    });
+  });
 </script>
-@endonce

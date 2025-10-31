@@ -1,379 +1,389 @@
-@extends('layout.mainlayout')
+{{-- resources/views/sales/index.blade.php (LIGHT THEME, VARIANT-AWARE) --}}
+@php
+    /** @var \Illuminate\Support\Collection|\App\Models\Sale[] $sales */
 
-@section('title', 'Sales')
+    // Status chip styles for the light theme
+    $statusColors = [
+        'Paid'      => 'bg-green-50 text-green-800 border-green-200',
+        'Completed' => 'bg-blue-50 text-blue-800 border-blue-200',
+        'Pending'   => 'bg-amber-50 text-amber-800 border-amber-200',
+        'Cancelled' => 'bg-rose-50 text-rose-800 border-rose-200',
+    ];
+
+    // Safe fallbacks
+    $chartMonths    = $chartMonths    ?? ['Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'];
+    $chartTotals    = $chartTotals    ?? array_fill(0, count($chartMonths), 0);
+    $annualRevenue  = $annualRevenue  ?? array_sum($chartTotals);
+    $monthlyRevenue = $monthlyRevenue ?? (end($chartTotals) ?: 0);
+    $orderCount     = $orderCount     ?? ($sales->count() ?? 0);
+
+    /*
+     | Variant-aware donut (last 90 days)
+     | Group by Product + Type (type_label or production snapshot, else "Base").
+     */
+    $cutoff = \Carbon\Carbon::now()->subDays(90);
+    $byVariant = [];
+
+    foreach ($sales as $s) {
+        $d = $s->order_date ?? $s->date ?? $s->created_at ?? null;
+        if ($d && \Carbon\Carbon::parse($d)->lt($cutoff)) continue;
+
+        $prod = $s->display_product
+            ?? ($s->product ?? optional($s->productRef)->product_name ?? 'Unknown');
+
+        $type = trim((string)($s->type_label ?? ''));
+        if ($type === '' && isset($s->production) && $s->production?->product_name_snapshot) {
+            $type = $s->production->product_name_snapshot;
+        }
+        if ($type === '') $type = 'Base';
+
+        $key = $prod.' · '.$type;
+
+        $qty  = (float) ($s->quantity_kg ?? $s->quantity ?? 0);
+        $unit = (float) ($s->unit_price  ?? $s->price     ?? 0);
+        $tot  = (float) ($s->total_price ?? $s->total     ?? ($qty * $unit));
+
+        $byVariant[$key] = ($byVariant[$key] ?? 0) + $tot;
+    }
+
+    arsort($byVariant);
+    $topPairsVariant = array_slice($byVariant, 0, 6, true);
+    $donutLabels = array_keys($topPairsVariant) ?: ['No Data'];
+    $donutValues = array_map('floatval', array_values($topPairsVariant)) ?: [0];
+@endphp
+
+@extends('layout.mainlayout')
 
 @section('head')
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
 <style>
-  /* Jost + Liquid/Glass theme */
+  /* LIGHT THEME */
   body, p, ul, li, a, button, input, select { font-family: 'Jost', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  body {
-    background: linear-gradient(135deg, #1F1E1E 0%, #001C00 100%);
-    min-height: 100vh; overflow-x: hidden;
+
+  .light-card{
+    background:#fff; border:1px solid #e5e7eb; border-radius:16px;
+    box-shadow:0 8px 18px rgba(17,24,39,.04);
   }
-  body::before {
-    content:''; position:fixed; top:-50%; left:-50%; width:200%; height:200%;
-    background: linear-gradient(to bottom right,
-      rgba(18,108,7,.15) 0%,
-      rgba(113,200,98,.15) 25%,
-      rgba(210,220,50,.12) 50%,
-      rgba(113,200,98,.15) 75%,
-      rgba(10,56,14,.15) 100%
-    );
-    transform: rotate(30deg); animation: liquidFlow 15s linear infinite;
-    z-index:-1; opacity:.5;
+  .input-light{
+    background:#fff; border:1px solid #e5e7eb; color:#111827; border-radius:12px; padding:.5rem .75rem;
   }
-  @keyframes liquidFlow {
-    0% { transform: rotate(30deg) translate(-10%, -10%); }
-    50% { transform: rotate(30deg) translate(10%, 10%); }
-    100% { transform: rotate(30deg) translate(-10%, -10%); }
+  .input-light::placeholder{ color:#9ca3af; }
+  .input-light:focus{ outline:none; box-shadow:0 0 0 2px rgba(59,130,246,.25); border-color:#93c5fd; }
+
+  .btn.btn-primary{
+    background:#ef4444; color:#fff; border:1px solid #ef4444;
+    border-radius:12px; padding:.55rem 1rem; font-weight:600;
+  }
+  .btn.btn-primary:hover{ filter:brightness(.95); }
+
+  .chip{
+    border:1px solid; padding:.25rem .6rem; border-radius:999px; font-size:.72rem; font-weight:600;
   }
 
-  .liquid-card {
-    position:relative; overflow:hidden; border-radius:20px; backdrop-filter:blur(10px);
-    background:rgba(31,30,30,.7); border: .5px solid rgba(255,255,255,.2);
-    box-shadow:0 8px 32px rgba(0,28,0,.3);
-  }
-  .liquid-card::before{
-    content:''; position:absolute; inset:0; pointer-events:none; z-index:-1;
-    background:linear-gradient(45deg, rgba(4,119,5,.10), rgba(237,209,0,.10), rgba(4,119,5,.10));
-    animation: cardShine 8s ease infinite;
-  }
-  @keyframes cardShine { 0%{opacity:.3} 50%{opacity:.1} 100%{opacity:.3} }
+  /* Table */
+  .table-wrap{ border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; }
+  thead th{ background:#f9fafb; color:#374151; font-weight:700; }
+  tbody td{ color:#111827; }
 
-  .liquid-table { width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border-radius:15px; }
-  .liquid-table thead { background: linear-gradient(90deg, #047705 0%, #0aad0a 100%); position:sticky; top:0; z-index:5; }
-  .liquid-table th { padding:12px 14px; text-align:left; color:#fff; font-weight:600; font-size:.75rem; letter-spacing:.4px; text-transform:uppercase; }
-  .liquid-table td { padding:12px 14px; color:#e6f4ea; border-bottom:1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.02); }
-  .liquid-table tr:hover td { background: rgba(4,119,5,.08); }
-
-  .toolbar input, .toolbar select {
-    background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15);
-    color:#fff; border-radius:12px; padding:.55rem .8rem; outline:none;
-  }
-  .toolbar input:focus, .toolbar select:focus { border-color:#047705; box-shadow:0 0 0 2px rgba(4,119,5,.25); }
-
-  .btn-primary{
-    background: linear-gradient(90deg,#047705 0%, #0aad0a 100%);
-    color:#fff; border:1px solid rgba(255,255,255,.15);
-    border-radius:12px; padding:.55rem 1rem; box-shadow:0 6px 18px rgba(4,119,5,.35);
-    transition:.2s;
-  }
-  .btn-primary:hover{ transform: translateY(-1px); }
-
-  .chip { display:inline-flex; align-items:center; padding:.25rem .55rem; border-radius:999px; font-size:.72rem; border:1px solid transparent; }
-  .chip-paid{ background:#04770526; color:#9AF2A8; border-color:#04770555; }
-  .chip-pending{ background:#EDD10026; color:#FFE877; border-color:#EDD10066; }
-  .chip-completed{ background:#3B82F626; color:#CBE1FE; border-color:#3B82F677; }
-  .chip-cancelled{ background:#ef444426; color:#fecaca; border-color:#ef444477; }
-  .chip-refunded{ background:#f59e0b26; color:#fde68a; border-color:#f59e0b66; }
-  .chip-default{ background:#94a3b826; color:#e5e7eb; border-color:#94a3b866; }
-
-  /* Unit-type chip inside table */
+  /* Unit chip (kg/pack/bag) */
   .u-chip{
     display:inline-flex; align-items:center; gap:.35rem;
-    padding:.16rem .45rem; border-radius:999px; font-size:.68rem; font-weight:600;
-    border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.10); color:#e6f4ea;
-    margin-left:.35rem;
+    padding:.15rem .5rem; border-radius:999px; font-size:.7rem; font-weight:600;
+    border:1px solid #e5e7eb; background:#f8fafc; color:#334155; margin-left:.4rem;
   }
-
-  .flash { border-radius:12px; padding:.6rem .9rem; display:flex; justify-content:space-between; align-items:center; }
-  .flash-success{ background:#047705; color:#fff; }
-  .flash-error{ background:#dc2626; color:#fff; }
-  .flash button{ font-size:1.1rem; line-height:1; }
 </style>
 @endsection
 
 @section('content')
-<div class="px-6 py-8">
-  {{-- Flash messages --}}
-  @if(session('success'))
-    <div id="successAlert" class="flash flash-success mb-4">
-      <span>{{ session('success') }}</span>
-      <button onclick="document.getElementById('successAlert').style.display='none'">&times;</button>
-    </div>
-  @endif
+<div class="px-6 py-6 text-gray-900">
 
-  @if(session('error'))
-    <div id="errorAlert" class="flash flash-error mb-4">
-      <span>{{ session('error') }}</span>
-      <button onclick="document.getElementById('errorAlert').style.display='none'">&times;</button>
-    </div>
-  @endif
+  {{-- Header --}}
+  <div class="mb-4">
+    <h1 class="text-2xl font-bold">Sales Overview</h1>
+    <p class="text-sm text-gray-500">Trends and product breakdown at a glance.</p>
+  </div>
 
-  @if($errors->any())
-    <div class="flash flash-error mb-4" style="display:block;">
-      <div>
-        @foreach($errors->all() as $e)
-          <div>{{ $e }}</div>
-        @endforeach
+  {{-- KPIs --}}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="light-card p-4">
+      <p class="text-gray-500 text-sm">Annual Revenue</p>
+      <h2 class="text-2xl font-semibold">₱ {{ number_format($annualRevenue, 2) }}</h2>
+    </div>
+    <div class="light-card p-4">
+      <p class="text-gray-500 text-sm">Monthly Revenue</p>
+      <h2 class="text-2xl font-semibold">₱ {{ number_format($monthlyRevenue, 2) }}</h2>
+    </div>
+    <div class="light-card p-4">
+      <p class="text-gray-500 text-sm">Orders</p>
+      <h2 class="text-2xl font-semibold">{{ $orderCount }}</h2>
+    </div>
+  </div>
+
+  {{-- Charts --}}
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+    <div class="light-card p-5 xl:col-span-2">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold">Sales Report (12 months)</h2>
+        <div class="text-sm text-gray-500">{{ now()->format('M d, Y') }}</div>
       </div>
-      <button onclick="this.parentElement.style.display='none'">&times;</button>
-    </div>
-  @endif
-
-  <div class="liquid-card p-6">
-    {{-- Header --}}
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-      <h1 class="text-2xl font-bold text-white" style="text-shadow:-2px 1px 0px #047705;">Sales</h1>
-      <button onclick="openModal()" class="btn-primary">+ Add New Sale</button>
+      <div id="salesBar3D" class="w-full" style="height: 340px;"></div>
     </div>
 
-    {{-- Tools --}}
-    <div class="toolbar flex flex-col sm:flex-row gap-3 mb-5">
-      <input type="text" id="searchInput" placeholder="Search product / invoice / status…" class="w-full sm:w-80">
-      <select id="statusFilter" class="w-full sm:w-56">
-        <option value="">Filter by Status</option>
-        <option value="Paid">Paid</option>
-        <option value="Pending">Pending</option>
-        <option value="Completed">Completed</option>
-        <option value="Cancelled">Cancelled</option>
-        <option value="Refunded">Refunded</option>
-      </select>
-    </div>
-
-    {{-- Table --}}
-    <div class="overflow-auto rounded-xl border border-white/10">
-      <table class="liquid-table">
-        <thead>
-          <tr>
-            <th>Invoice</th>
-            <th>Product</th>
-            <th>Date</th>
-            <th class="text-right">Quantity</th>
-            <th class="text-right">Unit Price</th>
-            <th class="text-right">Total</th>
-            <th>Status</th>
-            <th class="text-center">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          @forelse ($sales as $sale)
-            @php
-              // status chip
-              $status = strtolower($sale->status ?? '');
-              $chipClass = match($status){
-                'paid' => 'chip-paid', 'pending' => 'chip-pending', 'completed' => 'chip-completed',
-                'cancelled' => 'chip-cancelled', 'refunded' => 'chip-refunded', default => 'chip-default',
-              };
-
-              // robust product name
-              $pname = $sale->display_product
-                        ?? ($sale->product ?? optional($sale->productRef)->product_name ?? optional($sale->product)->product_name ?? '—');
-
-              // robust date
-              $dateVal = $sale->order_date ?? $sale->date ?? $sale->created_at ?? null;
-              $dateStr = $dateVal ? \Illuminate\Support\Carbon::parse($dateVal)->format('Y-m-d') : '—';
-
-              // robust quantity (kg or plain)
-              $qty = (float)($sale->quantity_kg ?? $sale->quantity ?? 0);
-
-              // robust pricing
-              $unit = (float)($sale->unit_price ?? $sale->price ?? 0);
-              $total = (float)($sale->total_price ?? $sale->total ?? ($qty * $unit));
-
-              // NEW: unit-type chip (per pack / per bag)
-              $uTypeRaw = $sale->unit_type ?? $sale->unit ?? null;
-              $uType    = in_array($uTypeRaw, ['pack','bag'], true) ? $uTypeRaw : null;
-
-              // invoice no
-              $invoice = $sale->invoice_number ?? $sale->order_number ?? ('INV-' . $sale->id);
-            @endphp
-            <tr>
-              <td class="text-emerald-300 font-semibold cursor-pointer" onclick="openInvoiceModal({{ $sale->id }})">
-                {{ $invoice }}
-              </td>
-              <td>{{ $pname }}</td>
-              <td>{{ $dateStr }}</td>
-              <td class="text-right">{{ is_numeric($qty) ? (strpos(number_format($qty,3),'000') !== false ? (int)$qty : number_format($qty,3)) : '0' }}</td>
-              <td class="text-right">
-                ₱{{ number_format($unit, 2) }}
-                @if($uType)
-                  <span class="u-chip">per {{ $uType }}</span>
-                @endif
-              </td>
-              <td class="text-right">₱{{ number_format($total, 2) }}</td>
-              <td>
-                <span class="chip {{ $chipClass }}">{{ ucfirst($status ?: 'Unknown') }}</span>
-              </td>
-              <td>
-                <div class="flex flex-wrap justify-center items-center gap-3">
-                  {{-- Edit --}}
-                  <button onclick="handleEdit({{ $sale->id }})" title="Edit" class="text-indigo-300 hover:text-indigo-100">Edit</button>
-
-                  {{-- Receipt --}}
-                  <a href="{{ route('sales.receipt', $sale) }}" target="_blank" title="Receipt" class="text-emerald-300 hover:text-emerald-100">Receipt</a>
-
-                  {{-- PDF --}}
-                  <a href="{{ route('sales.download', $sale) }}" title="Download PDF" class="text-yellow-300 hover:text-yellow-100">PDF</a>
-
-                  {{-- Refund (optional route) --}}
-                  <form action="{{ route('sales.refund', $sale->id) }}" method="POST"
-                        onsubmit="return confirm('Are you sure you want to refund this sale?');" class="inline">
-                    @csrf
-                    <button type="submit" title="Refund" class="text-amber-300 hover:text-amber-100">Refund</button>
-                  </form>
-
-                  {{-- Delete --}}
-                  <form action="{{ route('sales.destroy', $sale) }}" method="POST"
-                        onsubmit="return confirm('Delete this sale?');" class="inline">
-                    @csrf @method('DELETE')
-                    <button type="submit" title="Delete" class="text-rose-300 hover:text-rose-100">Delete</button>
-                  </form>
-                </div>
-              </td>
-            </tr>
-          @empty
-            <tr>
-              <td colspan="8" class="text-center text-white/70 py-6">No sales records found.</td>
-            </tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-
-    {{-- Footer meta (optional) --}}
-    <div class="flex items-center justify-between text-sm text-white/60 mt-4">
-      <div>
-        <span class="mr-2">INV-</span>{{ now()->format('Ymd') }}<span class="mx-2">—</span>{{ $nextInvoice ?? '' }}
+    <div class="light-card p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold">Top Products (Revenue by Type)</h2>
+        <div class="text-sm text-gray-500">Last 90 days</div>
       </div>
-      <div></div>
+      <div id="topProductsDonut" class="w-full" style="height: 340px;"></div>
+      <ul id="topProductsLegend" class="mt-3 space-y-1 text-sm text-gray-700"></ul>
+    </div>
+  </div>
+
+  {{-- Sales Table --}}
+  <div class="light-card">
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 px-5 py-4">
+      <h2 class="text-xl font-semibold">Sales</h2>
+      <div class="flex flex-wrap items-center gap-3">
+        <div class="relative">
+          <input id="salesSearch" type="text" placeholder="Search invoice / product / type / status…" class="w-64 input-light pr-8" aria-label="Search sales">
+          <span class="absolute right-3 top-2.5 text-gray-400">⌕</span>
+        </div>
+        <input id="dateFilter" type="date" class="input-light" aria-label="Filter by date">
+        <button type="button" onclick="toggleAddSaleModal(true)" class="btn btn-primary">+ Add New Sale</button>
+      </div>
+    </div>
+
+    <div class="px-5 pb-5">
+      <div class="table-wrap">
+        <table class="min-w-full border-collapse">
+          <thead>
+            <tr class="text-sm">
+              <th class="px-4 py-3 text-left">Invoice</th>
+              <th class="px-4 py-3 text-left">Product</th>
+              <th class="px-4 py-3 text-left">Type</th>
+              <th class="px-4 py-3 text-left">Date</th>
+              <th class="px-4 py-3 text-right">Quantity</th>
+              <th class="px-4 py-3 text-right">Unit Price</th>
+              <th class="px-4 py-3 text-right">Total</th>
+              <th class="px-4 py-3 text-left">Status</th>
+              <th class="px-4 py-3 text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="salesTableBody" class="divide-y divide-gray-200">
+            @forelse($sales as $row)
+              @php
+                $pname   = $row->display_product ?? ($row->product ?? optional($row->productRef)->product_name);
+                $date    = $row->order_date ?? $row->date ?? $row->created_at ?? null;
+                $qty     = (float) ($row->quantity_kg ?? $row->quantity ?? 0);
+                $unit    = (float) ($row->unit_price ?? $row->price ?? 0);
+                $tot     = (float) ($row->total_price ?? $row->total ?? ($qty * $unit));
+                $invoice = $row->invoice_number ?? $row->order_number;
+
+                // unit type: kg/pack/bag (default kg if missing)
+                $uTypeRaw = $row->unit_type ?? $row->unit ?? null;
+                $uType    = in_array($uTypeRaw, ['kg','pack','bag'], true) ? $uTypeRaw : 'kg';
+
+                // TYPE column (variant)
+                $typeLabel = trim((string)($row->type_label ?? ''));
+                if ($typeLabel === '' && isset($row->production) && $row->production?->product_name_snapshot) {
+                    $typeLabel = $row->production->product_name_snapshot;
+                }
+                if ($typeLabel === '') $typeLabel = '—';
+              @endphp
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 whitespace-nowrap">{{ $invoice }}</td>
+                <td class="px-4 py-3">{{ $pname }}</td>
+                <td class="px-4 py-3"><span class="chip border bg-slate-50 text-slate-700">{{ $typeLabel }}</span></td>
+                <td class="px-4 py-3">{{ $date ? \Carbon\Carbon::parse($date)->format('Y-m-d') : '' }}</td>
+
+                <td class="px-4 py-3 text-right">
+                  {{ number_format($qty, $uType === 'kg' ? 3 : 0) }}
+                  <span class="u-chip">{{ $uType }}</span>
+                </td>
+
+                <td class="px-4 py-3 text-right">
+                  ₱ {{ number_format($unit, 2) }}
+                  @if(in_array($uType, ['pack','bag']))
+                    <span class="u-chip">per {{ $uType }}</span>
+                  @endif
+                </td>
+
+                <td class="px-4 py-3 text-right">₱ {{ number_format($tot, 2) }}</td>
+                <td class="px-4 py-3">
+                  @php $cls = $statusColors[$row->status] ?? 'bg-gray-100 text-gray-800 border-gray-200'; @endphp
+                  <span class="chip {{ $cls }} border">{{ $row->status ?? 'Pending' }}</span>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-center gap-2">
+                    <a href="{{ route('sales.receipt', $row) }}" class="btn btn-secondary-blue">Receipt</a>
+                    <a href="{{ route('sales.edit', $row) }}" class="btn btn-secondary-green">Edit</a>
+                    <form action="{{ route('sales.destroy', $row) }}" method="POST" onsubmit="return confirm('Delete this sale?')" class="inline">
+                      @csrf @method('DELETE')
+                      <button class="btn btn-ghost text-rose-700 border border-rose-200 hover:bg-rose-50">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            @empty
+              <tr><td colspan="9" class="px-4 py-6 text-center text-gray-600">No sales yet.</td></tr>
+            @endforelse
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center justify-between text-sm text-gray-600 mt-4">
+        <div>
+          <span class="mr-2">INV-</span>{{ now()->format('Ymd') }}<span class="mx-2">—</span>{{ $nextInvoice ?? '' }}
+        </div>
+        <div></div>
+      </div>
     </div>
   </div>
 </div>
 
-{{-- Your modals partial (ensure IDs used below exist) --}}
-@include('modals.modals')
+{{-- Add Sale Modal include (expects unit_type + optional type_label input in that partial) --}}
+@include('sales.partials.add-sale-modal', [
+  'products' => $products ?? null,
+  'statusOptions' => $statusOptions ?? ['Pending','Completed','Cancelled','Paid'],
+  'nextInvoice' => $nextInvoice ?? null
+])
 @endsection
 
 @push('scripts')
 <script>
-  // Modal handles (IDs must exist in your partial)
-  const addModal  = document.getElementById('addSaleModal');
-  const editModal = document.getElementById('editSaleModal');
+  // --- Filters (now includes Type column) ---
+  const search = document.getElementById('salesSearch');
+  const dateFilter = document.getElementById('dateFilter');
+  const rows = Array.from(document.querySelectorAll('#salesTableBody tr'));
 
-  function openModal() {
-    const inv      = @json($nextInvoice ?? null);
-    const invField = document.getElementById('invoice_number');
-    if (inv && invField) invField.value = inv;
-
-    addModal?.classList.remove('hidden');
-    addModal?.classList.add('flex');
+  function applyFilters() {
+    const term = (search?.value || '').toLowerCase();
+    const date = (dateFilter?.value || '');
+    rows.forEach(tr => {
+      const tds = tr.querySelectorAll('td'); if (!tds.length) return;
+      const invoice = (tds[0].textContent || '').toLowerCase();
+      const product = (tds[1].textContent || '').toLowerCase();
+      const typeCol = (tds[2].textContent || '').toLowerCase();
+      const rowDate = (tds[3].textContent || '').trim();
+      const status  = (tds[7].textContent || '').toLowerCase();
+      const matchTerm = !term || invoice.includes(term) || product.includes(term) || typeCol.includes(term) || status.includes(term);
+      const matchDate = !date || rowDate === date;
+      tr.style.display = (matchTerm && matchDate) ? '' : 'none';
+    });
   }
-  function closeModal() {
-    addModal?.classList.remove('flex');
-    addModal?.classList.add('hidden');
-  }
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+  search?.addEventListener('input', applyFilters);
+  dateFilter?.addEventListener('change', applyFilters);
 
-  // Prefer global openEditModal(id) (from your modal partial). Fallback to API.
-  async function handleEdit(id){
-    if (typeof window.openEditModal === 'function') {
-      window.openEditModal(id);
-      return;
+  // --- Modal open helper for your add-sale modal partial ---
+  window.toggleAddSaleModal = (open) => {
+    const el = document.getElementById('addSaleModal'); if (!el) return;
+    el.classList.toggle('hidden', !open);
+    el.classList.toggle('flex', open);
+    if (open) {
+      const form = el.querySelector('form');
+      if (form) {
+        form.reset();
+        const btn = form.querySelector('button[type="submit"]');
+        if (btn) { btn.disabled = false; btn.classList.remove('opacity-70','cursor-not-allowed'); }
+      }
     }
-    try {
-      const res = await fetch(`/api/sales/${id}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-      if (!res.ok) throw new Error('Failed to load sale');
-      const data = await res.json();
+  };
 
-      // Minimal fallback population (IDs must match your edit modal inputs)
-      document.getElementById('edit-sale-id')?.setAttribute('value', data.id);
-      const prodSel = document.getElementById('edit-product-id');
-      if (prodSel && data.product_id) prodSel.value = String(data.product_id);
-
-      const d = data.order_date || data.date || null;
-      const iso = d ? new Date(d).toISOString().slice(0,10) : '';
-      document.getElementById('edit-date')?.setAttribute('value', iso);
-
-      const qty = (data.quantity_kg ?? data.quantity ?? 0);
-      document.getElementById('edit-quantity')?.setAttribute('value', qty);
-
-      const price = (data.unit_price ?? data.price ?? '');
-      document.getElementById('edit-price')?.setAttribute('value', price);
-
-      const status = (data.status ?? 'Completed');
-      const statusSel = document.getElementById('edit-status');
-      if (statusSel) statusSel.value = status;
-
-      const form = document.getElementById('editSaleForm');
-      if (form) form.action = `/sales/${data.id}`;
-
-      editModal?.classList.remove('hidden');
-      editModal?.classList.add('flex');
-    } catch (e) {
-      alert('Unable to open edit modal.');
-    }
+  // --- Colors from CSS vars or fallbacks ---
+  function cssVar(name, fallback){
+    const v = getComputedStyle(document.body).getPropertyValue(name).trim();
+    return v || fallback;
   }
+  const C_RED    = cssVar('--chart-1', '#ef4444');
+  const C_GREEN  = cssVar('--chart-2', '#22c55e');
+  const C_YELLOW = cssVar('--chart-3', '#f59e0b');
+  const C_BLUE   = cssVar('--chart-4', '#3b82f6');
 
-  function closeEditModal() {
-    editModal?.classList.add('hidden');
-    editModal?.classList.remove('flex');
-  }
-
-  function openInvoiceModal(id) {
-    window.open(`/sales/${id}/receipt`, '_blank');
-  }
-
-  // Search + Status filter
+  // --- BAR (12 months) ---
   (function(){
-    const searchInput  = document.getElementById('searchInput');
-    const statusFilter = document.getElementById('statusFilter');
-    const rows         = Array.from(document.querySelectorAll('tbody tr'));
+    const el = document.querySelector('#salesBar3D');
+    if (!el || !window.ApexCharts) return;
 
-    function applyFilters() {
-      const term = (searchInput.value || '').toLowerCase();
-      const status = statusFilter.value;
+    const months = @json(array_values($chartMonths));
+    const totals = @json(array_map('floatval', $chartTotals));
 
-      rows.forEach(tr => {
-        const tds = tr.querySelectorAll('td');
-        if (!tds.length) return;
+    const options = {
+      chart: {
+        type:'bar', height:340, toolbar:{show:false}, foreColor:'#374151', background:'transparent',
+        animations:{enabled:true, easing:'easeinout', speed:600}
+      },
+      grid:{borderColor:'#e5e7eb', strokeDashArray:4, padding:{left:10,right:10}},
+      plotOptions:{ bar:{ columnWidth:'45%', borderRadius:8, borderRadiusApplication:'around'} },
+      colors:[C_BLUE],
+      dataLabels:{enabled:false},
+      stroke:{show:false},
+      series:[{name:'Revenue', data: totals}],
+      xaxis:{
+        categories:months,
+        labels:{rotate:-15, style:{colors:'#374151'}},
+        axisBorder:{color:'#e5e7eb'}, axisTicks:{color:'#e5e7eb'}
+      },
+      yaxis:{labels:{formatter:(v)=>'₱ '+Number(v).toLocaleString(), style:{colors:'#374151'}}},
+      tooltip:{theme:'light', y:{formatter:(v)=>'₱ '+Number(v).toLocaleString()}},
+      fill:{type:'gradient', gradient:{shade:'light', type:'vertical',
+            gradientToColors:[C_GREEN], opacityFrom:.95, opacityTo:.9, stops:[0,60,100]}}
+    };
 
-        const invoice = (tds[0].textContent || '').toLowerCase();
-        const product = (tds[1].textContent || '').toLowerCase();
-        const rowStatus = (tds[6].textContent || '').trim();
-
-        const matchTerm = !term || invoice.includes(term) || product.includes(term) || rowStatus.toLowerCase().includes(term);
-        const matchStatus = !status || rowStatus === status;
-
-        tr.style.display = (matchTerm && matchStatus) ? '' : 'none';
-      });
-    }
-
-    searchInput?.addEventListener('input', applyFilters);
-    statusFilter?.addEventListener('change', applyFilters);
+    new ApexCharts(el, options).render();
   })();
 
-  // Optional: Available stock helper in Add Sale modal
-  document.addEventListener('DOMContentLoaded', () => {
-    const productSel = document.getElementById('product_id');
-    const qtyInput   = document.getElementById('quantity');
-    const availHelp  = document.getElementById('availableHelp');
-    let available    = 0;
+  // --- DONUT (Top Products by Type, 90d) ---
+  (function(){
+    const el = document.querySelector('#topProductsDonut');
+    if (!el || !window.ApexCharts) return;
 
-    productSel?.addEventListener('change', async () => {
-      if (!productSel.value) { if (availHelp) availHelp.textContent = 'Available: —'; return; }
-      try {
-        const res  = await fetch(@json(route('sales.available')) + '?product_id=' + encodeURIComponent(productSel.value), {
-          headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        });
-        const data = await res.json();
-        available  = data.available ?? 0;
-        if (availHelp) availHelp.textContent = 'Available: ' + available;
-      } catch {
-        available = 0;
-        if (availHelp) availHelp.textContent = 'Available: —';
-      }
-    });
+    const labels = @json($donutLabels); // "Product · Type"
+    const values = @json($donutValues);
+    const colors = [C_RED, C_GREEN, C_YELLOW, C_BLUE, '#60a5fa', '#34d399'];
 
-    qtyInput?.addEventListener('input', () => {
-      const val = parseFloat(qtyInput.value || '0');
-      if (available && val > available) {
-        qtyInput.setCustomValidity('Quantity exceeds available stock (' + available + ').');
-      } else {
-        qtyInput.setCustomValidity('');
-      }
+    const chart = new ApexCharts(el, {
+      chart:{type:'donut', height:340, foreColor:'#374151', background:'transparent'},
+      series: values,
+      labels: labels,
+      legend:{show:false},
+      colors: colors,
+      tooltip:{
+        theme:'light',
+        y:{ formatter:(v)=>'₱ '+Number(v).toLocaleString() },
+        x:{ formatter:(name)=>name } // full "Product · Type" in tooltip
+      },
+      dataLabels:{
+        enabled:true,
+        formatter:(val,opts)=>{
+          const full = opts.w.globals.labels[opts.seriesIndex] || '';
+          const parts = full.split('·');
+          const type = (parts[1] || full).trim();
+          return type; // show Type inside the slice
+        }
+      },
+      plotOptions:{
+        pie:{ donut:{ size:'68%',
+          labels:{ show:true, total:{ show:true, label:'Total',
+            formatter:(w)=>{
+              const sum=w.globals.seriesTotals.reduce((a,b)=>a+b,0);
+              return '₱ '+Number(sum).toLocaleString();
+            }
+          }}
+        }}
+      },
+      stroke:{colors:['#ffffff']}
     });
-  });
+    chart.render();
+
+    // Legend with full "Product · Type"
+    const ul = document.getElementById('topProductsLegend');
+    if (ul) {
+      ul.innerHTML = labels.map((label,i)=>
+        `<li class="flex justify-between"><span>${label}</span><span>₱ ${Number(values[i]??0).toLocaleString()}</span></li>`
+      ).join('');
+    }
+  })();
 </script>
 @endpush

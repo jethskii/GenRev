@@ -18,6 +18,40 @@ use App\Models\Material;
 class ProductionController extends Controller
 {
     /* ============================= INDEX / FILTER ============================= */
+    // App\Http\Controllers\ProductionController.php
+
+public function suggestTypes(Product $parent): JsonResponse
+{
+    // Distinct per-order snapshots used under this parent
+    $fromOrders = \App\Models\Production::query()
+        ->where(function($q) use ($parent){
+            $q->where('parent_product_id', $parent->id)
+              ->orWhere(function($q2) use ($parent){
+                  $q2->whereNull('parent_product_id')->where('product_id', $parent->id);
+              });
+        })
+        ->whereNotNull('product_name_snapshot')
+        ->pluck('product_name_snapshot');
+
+    // Variant product names (children under this parent)
+    $fromVariants = Product::where('parent_id', $parent->id)
+        ->pluck('product_name');
+
+    // Optional: include parent->category if it looks like a type label
+    $maybeCat = collect($parent->category ? [$parent->category] : []);
+
+    $types = $fromOrders
+        ->merge($fromVariants)
+        ->merge($maybeCat)
+        ->map(fn($s)=>trim((string)$s))
+        ->filter()
+        ->unique()
+        ->sort()
+        ->values();
+
+    return response()->json(['types' => $types]);
+}
+
     public function index(Request $request)
     {
         $selectedCategory = $request->string('category')->toString() ?: null;
@@ -73,7 +107,7 @@ class ProductionController extends Controller
         ]);
     }
 
-    /* =============================== CREATE (DASHBOARD) =============================== */
+    /* =============================== CREATE (DASHBOARD CARD) =============================== */
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -99,14 +133,12 @@ class ProductionController extends Controller
                     return $this->respondError($request, ['product_name' => 'Please select a product or enter a new name.']);
                 }
 
-                // Only include columns that exist in products table
                 $attrs = $this->filterProductColumns([
                     'forecasted_demand' => (float)($validated['forecasted_demand'] ?? 0),
                     'unit_cost'         => (float)($validated['unit_cost'] ?? 0),
                     'production_date'   => $validated['production_date'],
-                    'stock_status'      => 'in_stock',                  // ✅ exists
+                    'stock_status'      => 'in_stock',
                     'category'          => $validated['category'] ?? null,
-                    // ❌ 'status' and 'unit' removed (do not exist in your schema)
                 ]);
 
                 $product = Product::firstOrCreate(['product_name' => $name], $attrs);
@@ -118,7 +150,6 @@ class ProductionController extends Controller
             } else {
                 $product = Product::findOrFail((int)$validated['product_id']);
 
-                // Update using only existing columns
                 $updates = $this->filterProductColumns([
                     'forecasted_demand' => array_key_exists('forecasted_demand', $validated) ? (float)$validated['forecasted_demand'] : $product->forecasted_demand,
                     'unit_cost'         => array_key_exists('unit_cost', $validated)         ? (float)$validated['unit_cost']         : $product->unit_cost,
@@ -142,12 +173,10 @@ class ProductionController extends Controller
                 ? Carbon::parse($validated['expiration_date'])
                 : $prodDate->copy()->addDays((int)($product->shelf_life_days ?? 7));
 
-            // Robust unique batch number (honor user input but suffix if needed)
             $batchNumber = !empty($validated['batch_number'])
                 ? $this->uniqueBatchNumber($product, $validated['batch_number'])
                 : $this->uniqueBatchNumber($product);
 
-            // === Optional BOM consumption ===
             if (config('app.consume_materials', false)) {
                 if (!$this->productHasRecipe($product)) {
                     return $this->respondNeedsRecipe($request, $product);
@@ -159,7 +188,7 @@ class ProductionController extends Controller
                         $this->createBatchAndRecompute($product, $validated, $prodDate, $expiry, $batchNumber);
                     });
                 } catch (\RuntimeException $re) {
-                    return $this->respondError($request, ['materials' => $re->getMessage()]);
+                    return $this->respondError($request, ['materials' => $re->getMessage() ]);
                 }
             } else {
                 $this->createBatchAndRecompute($product, $validated, $prodDate, $expiry, $batchNumber);
@@ -205,17 +234,24 @@ class ProductionController extends Controller
     public function storeOrder(Request $request)
     {
         $validated = $request->validate([
-            'product_id'       => ['required','integer','exists:products,id'],
-            'batch_number'     => ['nullable','string','max:255'],
-            'production_date'  => ['required','date'],
-            'expiration_date'  => ['nullable','date','after_or_equal:production_date'],
-            'quantity'         => ['required','integer','min:1'],
-            'unit_cost'        => ['nullable','numeric','min:0'],
-            'unit_price_pack'  => ['nullable','numeric','min:0'],
-            'unit_price_bag'   => ['nullable','numeric','min:0'],
+            'parent_product_id'     => ['nullable','integer','exists:products,id'], // parent (e.g., Skinless Longganisa)
+            'product_id'            => ['required','integer','exists:products,id'], // child/variant or base
+            'product_name_snapshot' => ['nullable','string','max:255'],             // legacy support (hidden field)
+            'type_label'            => ['nullable','string','max:255'],             // NEW: per-order type/variant label
+            'batch_number'          => ['nullable','string','max:255'],
+            'production_date'       => ['required','date'],
+            'expiration_date'       => ['nullable','date','after_or_equal:production_date'],
+            'quantity'              => ['required','integer','min:1'],
+            'unit_cost'             => ['nullable','numeric','min:0'],
+            'unit_price_pack'       => ['nullable','numeric','min:0'],
+            'unit_price_bag'        => ['nullable','numeric','min:0'],
         ]);
 
         $product  = Product::findOrFail((int)$validated['product_id']);
+
+        // Determine the parent: explicit from form, else variant’s parent_id, else itself.
+        $parentProductId = (int)($validated['parent_product_id'] ?? $product->parent_id ?? $product->id);
+
         $prodDate = Carbon::parse($validated['production_date']);
         $expiry   = !empty($validated['expiration_date'])
             ? Carbon::parse($validated['expiration_date'])
@@ -225,8 +261,19 @@ class ProductionController extends Controller
             ? $this->uniqueBatchNumber($product, $validated['batch_number'])
             : $this->uniqueBatchNumber($product);
 
+        // Build snapshot driving the Type column
+        $typeLabel    = trim((string)($validated['type_label'] ?? ''));
+        $snapshotName = trim((string)($validated['product_name_snapshot'] ?? ''));
+
+        if ($typeLabel !== '') {
+            $snapshotName = $typeLabel;                       // prefer explicit order type
+        }
+        if ($snapshotName === '') {
+            $snapshotName = $product->category ?: $product->product_name; // final fallback
+        }
+
         try {
-            DB::transaction(function () use ($product, $validated, $prodDate, $expiry, &$batchNumber, $request) {
+            DB::transaction(function () use ($product, $parentProductId, $snapshotName, $validated, $prodDate, $expiry, &$batchNumber) {
                 if (config('app.consume_materials', false)) {
                     if (!$this->productHasRecipe($product)) {
                         throw new \LogicException('__NEEDS_RECIPE__');
@@ -234,24 +281,26 @@ class ProductionController extends Controller
                     $this->consumeMaterials($product, (float)$validated['quantity']);
                 }
 
-                // Retry once on dup key (race with unique index)
+                // Retry once on duplicate key (race)
                 for ($attempt = 1; $attempt <= 2; $attempt++) {
                     try {
                         Production::create([
-                            'product_id'        => $product->id,
-                            'batch_number'      => $batchNumber,
-                            'forecasted_demand' => (float)($product->forecasted_demand ?? 0),
-                            'current_inventory' => (int)$validated['quantity'],
-                            'quantity'          => (int)$validated['quantity'],
-                            'unit_cost'         => (float)($validated['unit_cost'] ?? ($product->unit_cost ?? 0)),
-                            'unit_price_pack'   => (float)($validated['unit_price_pack'] ?? 0),
-                            'unit_price_bag'    => (float)($validated['unit_price_bag']  ?? 0),
-                            'production_date'   => $prodDate->toDateString(),
-                            'expiration_date'   => $expiry->toDateString(),
+                            'parent_product_id'     => $parentProductId,
+                            'product_id'            => $product->id,
+                            'product_name_snapshot' => $snapshotName,    // <- per-order type/variant label
+                            'batch_number'          => $batchNumber,
+                            'forecasted_demand'     => (float)($product->forecasted_demand ?? 0),
+                            'current_inventory'     => (int)$validated['quantity'],
+                            'quantity'              => (int)$validated['quantity'],
+                            'unit_cost'             => (float)($validated['unit_cost'] ?? ($product->unit_cost ?? 0)),
+                            'unit_price_pack'       => (float)($validated['unit_price_pack'] ?? 0),
+                            'unit_price_bag'        => (float)($validated['unit_price_bag']  ?? 0),
+                            'production_date'       => $prodDate->toDateString(),
+                            'expiration_date'       => $expiry->toDateString(),
                         ]);
                         break;
                     } catch (QueryException $e) {
-                        if ($e->getCode() === '23000' && $attempt < 2) {
+                        if ($e->getCode() === '23000' && $attempt < 2) { // duplicate key
                             $batchNumber = $this->uniqueBatchNumber($product);
                             continue;
                         }
@@ -260,13 +309,14 @@ class ProductionController extends Controller
                 }
             });
 
+            // Recompute balances for the actual child/variant
             $this->recomputeProductBalance($product->id);
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => true, 'message' => 'Order added.']);
             }
 
-            return redirect()->route('production.orders', $product->id)->with('success', 'Order added.');
+            return redirect()->route('production.orders', $parentProductId)->with('success', 'Order added.');
         } catch (\LogicException $lex) {
             if ($lex->getMessage() === '__NEEDS_RECIPE__') {
                 return $this->respondNeedsRecipe($request, $product);
@@ -287,7 +337,18 @@ class ProductionController extends Controller
     public function show($id)
     {
         $product = Product::findOrFail($id);
-        $orders  = Production::where('product_id', $id)->orderByDesc('production_date')->orderByDesc('id')->get();
+
+        // All orders attached to this parent (and legacy rows where product_id = parent)
+        $orders = Production::query()
+            ->where(function ($q) use ($id) {
+                $q->where('parent_product_id', $id)
+                  ->orWhere(function ($q2) use ($id) {
+                      $q2->whereNull('parent_product_id')->where('product_id', $id);
+                  });
+            })
+            ->with(['product','parentProduct']) // for accessor type_name
+            ->orderByDesc('production_date')->orderByDesc('id')
+            ->get();
 
         $nextBatchNumber  = $this->uniqueBatchNumber($product);
         $defaultProdDate  = now()->toDateString();
@@ -295,11 +356,13 @@ class ProductionController extends Controller
         $defaultUnitPrice = $this->defaultUnitPriceFromSales($product);
 
         $allProducts      = Product::orderBy('product_name')->get();
+        $variantProducts  = Product::where('parent_id', $product->id)->orderBy('product_name')->get();
         $consumeMaterials = (bool) config('app.consume_materials', false);
         $hasRecipe        = method_exists($product, 'recipes') ? $product->recipes()->exists() : false;
 
         return view('production.orders', compact(
-            'product','orders','nextBatchNumber','defaultProdDate','defaultExpiry','defaultUnitPrice','allProducts','consumeMaterials','hasRecipe'
+            'product','orders','nextBatchNumber','defaultProdDate','defaultExpiry','defaultUnitPrice',
+            'allProducts','variantProducts','consumeMaterials','hasRecipe'
         ));
     }
 
@@ -522,7 +585,7 @@ class ProductionController extends Controller
 
         if ($preferred && ($preferred = trim($preferred)) !== '') {
             $candidate = $normalize($preferred);
-            if (! $this->batchExists($product->id, $candidate)) {
+            if (!$this->batchExists($product->id, $candidate)) {
                 return $candidate;
             }
             $stem = $candidate;

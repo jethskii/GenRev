@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 
 use App\Models\Production;
@@ -23,8 +23,11 @@ class Product extends Model
     public $incrementing  = true;
     protected $keyType    = 'int';
 
-    /** Columns expected from controller + your schema */
+    /** Columns expected from controllers + schema (now includes parent_id) */
     protected $fillable = [
+        // Parent/Variant
+        'parent_id',               // <-- ensures we can save variants under a parent
+
         // Identity
         'product_code',
         'product_name',
@@ -32,8 +35,8 @@ class Product extends Model
 
         // Pricing / costs
         'unit_cost',
-        'price',            // prefer this if it exists
-        'default_price',    // controller may pass this
+        'price',
+        'default_price',
         'last_cost_date',
 
         // Inventory / demand
@@ -54,9 +57,9 @@ class Product extends Model
         'max_run_qty',
         'line_constraints',
 
-        // Status / unit (controller uses these)
-        'status',           // enum: active, inactive, pending, on_sale
-        'unit',             // e.g. kg, pcs, lt
+        // Status / unit (optional, but controller may set)
+        'status',
+        'unit',
 
         // Media
         'image_disk',
@@ -67,11 +70,13 @@ class Product extends Model
 
         // Legacy/optional
         'production_date',
-        'stock_status',     // enum('in_stock','out_of_stock','low_stock') if present
+        'stock_status',
     ];
 
     protected $casts = [
         'id'                  => 'integer',
+        'parent_id'           => 'integer',
+
         'deleted_at'          => 'datetime',
         'created_at'          => 'datetime',
         'updated_at'          => 'datetime',
@@ -101,22 +106,50 @@ class Product extends Model
         'produced_qty_kg',
         'sold_qty_kg',
         'available_stock_kg',
-        'image_url',         // accessor respects existing DB value
+        'image_url',            // accessor respects existing DB value
         'unit_material_cost',
         'display_name',
+        'is_variant',           // NEW: quick boolean
+        'base_name',            // NEW: parent display name (if any)
     ];
 
     /* ----------------------------------------------------------------------
-     | Relationships
+     | Relationships (parent → children/variants)
      * ---------------------------------------------------------------------*/
-    public function productions() { return $this->hasMany(Production::class); }
-    public function sales()       { return $this->hasMany(Sale::class); }
-    public function recipes()     { return $this->hasMany(ProductRecipe::class)->with('material'); }
+    public function parent()
+    {
+        return $this->belongsTo(Product::class, 'parent_id');
+    }
+
+    public function children()
+    {
+        return $this->hasMany(Product::class, 'parent_id');
+    }
+
+    /** Alias that reads semantically with your UI */
+    public function variants()
+    {
+        return $this->children();
+    }
+
+    public function productions()
+    {
+        return $this->hasMany(Production::class);
+    }
+
+    public function sales()
+    {
+        return $this->hasMany(Sale::class);
+    }
+
+    public function recipes()
+    {
+        return $this->hasMany(ProductRecipe::class)->with('material');
+    }
 
     /* ----------------------------------------------------------------------
      | Accessors / Mutators
      * ---------------------------------------------------------------------*/
-
     protected function displayName(): Attribute
     {
         return Attribute::get(function () {
@@ -187,9 +220,9 @@ class Product extends Model
     public function getPriceAttribute(): float
     {
         $raw = $this->getAttributes();
-        $p = $raw['price'] ?? $this->attributes['price'] ?? null;      // real column if present
-        $p = $p ?? ($this->attributes['default_price'] ?? null);        // controller fallback
-        $p = $p ?? ($this->attributes['selling_price'] ?? null);        // legacy (optional)
+        $p = $raw['price'] ?? $this->attributes['price'] ?? null;
+        $p = $p ?? ($this->attributes['default_price'] ?? null);
+        $p = $p ?? ($this->attributes['selling_price'] ?? null); // legacy
         return (float) ($p !== null ? $p : $this->effective_unit_cost);
     }
 
@@ -221,6 +254,18 @@ class Product extends Model
     {
         $available = $this->produced_qty_kg - $this->sold_qty_kg;
         return $available > 0 ? (float)$available : 0.0;
+    }
+
+    /** NEW: is this a variant (child) of a base/parent product? */
+    public function getIsVariantAttribute(): bool
+    {
+        return !empty($this->parent_id);
+    }
+
+    /** NEW: convenience for UI text — the parent's name if it exists */
+    public function getBaseNameAttribute(): ?string
+    {
+        return $this->parent?->product_name;
     }
 
     /** Convenience: compute an expiry date from a given production date */
@@ -290,7 +335,7 @@ class Product extends Model
     }
 
     /* ----------------------------------------------------------------------
-     | Small helper for scopes (column exists?)
+     | Small helper for scopes
      * ---------------------------------------------------------------------*/
     protected static function has(string $column): bool
     {
@@ -298,7 +343,7 @@ class Product extends Model
     }
 
     /* ----------------------------------------------------------------------
-     | Query scopes (match controller chain)
+     | Query scopes
      * ---------------------------------------------------------------------*/
     public function scopeSearch($q, ?string $term)
     {
@@ -308,7 +353,7 @@ class Product extends Model
             $qq->where('product_name', 'like', "%{$s}%")
                ->orWhere('product_code', 'like', "%{$s}%")
                ->orWhere('category', 'like', "%{$s}%")
-               ->orWhere('name', 'like', "%{$s}%"); // optional 'name' column
+               ->orWhere('name', 'like', "%{$s}%"); // optional legacy
         });
     }
 
@@ -319,9 +364,7 @@ class Product extends Model
     }
 
     /**
-     * Controller calls ->status(...).
-     * If 'status' column exists, use it; else fall back to 'stock_status'.
-     * Accepts string or array.
+     * If 'status' exists, use it; else fall back to 'stock_status'.
      */
     public function scopeStatus($q, $status)
     {
@@ -355,6 +398,18 @@ class Product extends Model
 
         [$col, $dir] = $map[$sort];
         return $q->orderBy($col, $dir);
+    }
+
+    /** NEW: only base/parent products (no parent) */
+    public function scopeRoots($q)
+    {
+        return $q->whereNull('parent_id');
+    }
+
+    /** NEW: only variants of a specific parent */
+    public function scopeVariantsOf($q, int $parentId)
+    {
+        return $q->where('parent_id', $parentId);
     }
 
     /* ----------------------------------------------------------------------

@@ -54,7 +54,6 @@
     .chart-palette{--c1:var(--chart-1);--c2:var(--chart-2);--c3:var(--chart-3);--c4:var(--chart-4)}
     .skip-link{position:absolute;left:50%;transform:translateX(-50%);top:-40px;background:#000;color:#fff;padding:.5rem .75rem;border-radius:.5rem;transition:top .2s ease;z-index:100}
     .skip-link:focus{top:.5rem;outline:2px solid var(--accent-green)}
-    /* Focus outlines for accessibility */
     :where(a,button,[role="menuitem"],.nav-link,.btn):focus{outline:2px solid var(--accent-green);outline-offset:2px}
   </style>
 
@@ -65,10 +64,15 @@
 <body class="chart-palette">
   <a href="#main" class="skip-link">Skip to content</a>
 
-  @hasSection('simple')
-    <main id="main" class="min-h-screen flex items-center justify-center p-6">
-      @yield('content')
-    </main>
+  {{-- SIMPLE/AUTH MODE: no header/sidebar; supports a background layer --}}
+  @if (View::hasSection('simple') || View::hasSection('auth_page'))
+    <div class="relative min-h-screen">
+      {{-- Optional background (e.g., your video) --}}
+      @yield('background')
+      <main id="main" class="relative min-h-screen flex items-center justify-center p-6" role="main">
+        @yield('content')
+      </main>
+    </div>
   @else
     <div class="flex min-h-screen overflow-hidden">
       <!-- Sidebar -->
@@ -256,8 +260,8 @@
       };
 
       document.addEventListener('click', (e) => {
-        const openTarget = e.target.closest('[data-open]');
-        const closeTarget = e.target.closest('[data-close]');
+        const openTarget = e.target.closest?.('[data-open]');
+        const closeTarget = e.target.closest?.('[data-close]');
         const clickedDialogShell = e.target instanceof Element && e.target.matches('dialog[open]');
         if (openTarget){ openDialog(byId(openTarget.getAttribute('data-open'))); e.preventDefault(); e.stopPropagation(); return; }
         if (closeTarget){ closeDialog(closeTarget.closest('dialog')); e.preventDefault(); e.stopPropagation(); return; }

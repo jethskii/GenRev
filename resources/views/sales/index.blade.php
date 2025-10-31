@@ -1,4 +1,4 @@
-{{-- resources/views/sales/index.blade.php (LIGHT THEME) --}}
+{{-- resources/views/sales/index.blade.php (LIGHT THEME, VARIANT-AWARE) --}}
 @php
     /** @var \Illuminate\Support\Collection|\App\Models\Sale[] $sales */
     // Light-theme status chips
@@ -9,31 +9,47 @@
         'Cancelled' => 'bg-rose-50 text-rose-800 border-rose-200',
     ];
 
-    // Optional data from controller (safe fallbacks here)
+    // Safe fallbacks from the controller
     $chartMonths    = $chartMonths    ?? ['Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'];
     $chartTotals    = $chartTotals    ?? array_fill(0, count($chartMonths), 0);
     $annualRevenue  = $annualRevenue  ?? array_sum($chartTotals);
     $monthlyRevenue = $monthlyRevenue ?? (end($chartTotals) ?: 0);
     $orderCount     = $orderCount     ?? ($sales->count() ?? 0);
 
-    // Donut data: Top products by revenue in the last 90 days (computed from $sales)
+    /*
+     | Variant-aware donut (last 90 days):
+     | Groups revenue by Product + Type (type_label or production snapshot or 'Base').
+     | Slice label inside the donut shows the Type only; tooltip/legend show full "Product · Type".
+     */
     $cutoff = \Carbon\Carbon::now()->subDays(90);
-    $byProduct = [];
+    $byVariant = [];
+
     foreach ($sales as $s) {
         $d = $s->order_date ?? $s->date ?? $s->created_at ?? null;
         if ($d && \Carbon\Carbon::parse($d)->lt($cutoff)) continue;
 
-        $name = $s->display_product ?? ($s->product ?? optional($s->productRef)->product_name ?? 'Unknown');
-        $qty  = (float) ($s->quantity_kg ?? $s->quantity ?? 0);
-        $unit = (float) ($s->unit_price ?? $s->price ?? 0);
-        $tot  = (float) ($s->total_price ?? $s->total ?? ($qty * $unit));
+        $prod = $s->display_product
+            ?? ($s->product ?? optional($s->productRef)->product_name ?? 'Unknown');
 
-        $byProduct[$name] = ($byProduct[$name] ?? 0) + $tot;
+        $type = trim((string)($s->type_label ?? ''));
+        if ($type === '' && isset($s->production) && $s->production?->product_name_snapshot) {
+            $type = $s->production->product_name_snapshot;
+        }
+        if ($type === '') $type = 'Base';
+
+        $label = $prod . ' · ' . $type;
+
+        $qty  = (float) ($s->quantity_kg ?? $s->quantity ?? 0);
+        $unit = (float) ($s->unit_price  ?? $s->price     ?? 0);
+        $tot  = (float) ($s->total_price ?? $s->total     ?? ($qty * $unit));
+
+        $byVariant[$label] = ($byVariant[$label] ?? 0) + $tot;
     }
-    arsort($byProduct);
-    $topPairs    = array_slice($byProduct, 0, 6, true);
-    $donutLabels = array_keys($topPairs) ?: ['No Data'];
-    $donutValues = array_map('floatval', array_values($topPairs)) ?: [0];
+
+    arsort($byVariant);
+    $topPairsVariant = array_slice($byVariant, 0, 6, true);
+    $donutLabels = array_keys($topPairsVariant) ?: ['No Data'];
+    $donutValues = array_map('floatval', array_values($topPairsVariant)) ?: [0];
 @endphp
 
 @extends('layout.mainlayout')
@@ -47,7 +63,7 @@
   body, p, ul, li, a, button { font-family: 'Jost', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
   .light-card{
     background:#fff; border:1px solid #e5e7eb; border-radius:16px;
-    box-shadow: 0 8px 18px rgba(17,24,39,.04);
+    box-shadow:0 8px 18px rgba(17,24,39,.04);
   }
   .input-light{
     background:#fff; border:1px solid #e5e7eb; color:#111827; border-radius:12px; padding:.5rem .75rem;
@@ -64,7 +80,7 @@
   thead th{ background:#f9fafb; color:#374151; font-weight:700; }
   tbody td{ color:#111827; }
 
-  /* Unit type chip (per pack/bag) */
+  /* Unit type chip (kg / pack / bag) */
   .u-chip{
     display:inline-flex; align-items:center; gap:.35rem;
     padding:.15rem .5rem; border-radius:999px; font-size:.7rem; font-weight:600;
@@ -110,7 +126,7 @@
 
     <div class="light-card p-5">
       <div class="flex items-center justify-between mb-3">
-        <h2 class="text-xl font-semibold">Top Products (Revenue)</h2>
+        <h2 class="text-xl font-semibold">Top Products (Revenue by Type)</h2>
         <div class="text-sm text-gray-500">Last 90 days</div>
       </div>
       <div id="topProductsDonut" class="w-full" style="height: 340px;"></div>
@@ -124,11 +140,10 @@
       <h2 class="text-xl font-semibold">Sales</h2>
       <div class="flex flex-wrap items-center gap-3">
         <div class="relative">
-          <input id="salesSearch" type="text" placeholder="Search invoice / product / status…" class="w-64 input-light pr-8" aria-label="Search sales">
+          <input id="salesSearch" type="text" placeholder="Search invoice / product / type / status…" class="w-64 input-light pr-8" aria-label="Search sales">
           <span class="absolute right-3 top-2.5 text-gray-400">⌕</span>
         </div>
         <input id="dateFilter" type="date" class="input-light" aria-label="Filter by date">
-        {{-- Primary = RED, Secondary = BLUE/GREEN (from mainlayout classes) --}}
         <button type="button" onclick="toggleAddSaleModal(true)" class="btn btn-primary">+ Add New Sale</button>
       </div>
     </div>
@@ -140,8 +155,9 @@
             <tr class="text-sm">
               <th class="px-4 py-3 text-left">Invoice</th>
               <th class="px-4 py-3 text-left">Product</th>
+              <th class="px-4 py-3 text-left">Type</th> {{-- NEW --}}
               <th class="px-4 py-3 text-left">Date</th>
-              <th class="px-4 py-3 text-right">Quantity (kg)</th>
+              <th class="px-4 py-3 text-right">Quantity</th>
               <th class="px-4 py-3 text-right">Unit Price</th>
               <th class="px-4 py-3 text-right">Total</th>
               <th class="px-4 py-3 text-left">Status</th>
@@ -151,28 +167,46 @@
           <tbody id="salesTableBody" class="divide-y divide-gray-200">
             @forelse($sales as $row)
               @php
-                $pname    = $row->display_product ?? ($row->product ?? optional($row->productRef)->product_name);
-                $date     = $row->order_date ?? $row->date ?? $row->created_at ?? null;
-                $qty      = (float) ($row->quantity_kg ?? $row->quantity ?? 0);
-                $unit     = (float) ($row->unit_price ?? $row->price ?? 0);
-                $tot      = (float) ($row->total_price ?? $row->total ?? ($qty * $unit));
-                $invoice  = $row->invoice_number ?? $row->order_number;
+                $pname   = $row->display_product ?? ($row->product ?? optional($row->productRef)->product_name);
+                $date    = $row->order_date ?? $row->date ?? $row->created_at ?? null;
+                $qty     = (float) ($row->quantity_kg ?? $row->quantity ?? 0);
+                $unit    = (float) ($row->unit_price ?? $row->price ?? 0);
+                $tot     = (float) ($row->total_price ?? $row->total ?? ($qty * $unit));
+                $invoice = $row->invoice_number ?? $row->order_number;
 
-                // NEW: unit type label (prefer 'unit_type', fallback to 'unit')
+                // Unit type (accept kg/pack/bag; default kg for existing rows)
                 $uTypeRaw = $row->unit_type ?? $row->unit ?? null;
-                $uType    = in_array($uTypeRaw, ['pack','bag'], true) ? $uTypeRaw : null; // normalize/sanitize
+                $uType    = in_array($uTypeRaw, ['kg','pack','bag'], true) ? $uTypeRaw : 'kg';
+
+                // Type label
+                $typeLabel = trim((string)($row->type_label ?? ''));
+                if ($typeLabel === '' && isset($row->production) && $row->production?->product_name_snapshot) {
+                  $typeLabel = $row->production->product_name_snapshot;
+                }
+                if ($typeLabel === '') $typeLabel = '—';
               @endphp
               <tr class="hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-3 whitespace-nowrap">{{ $invoice }}</td>
                 <td class="px-4 py-3">{{ $pname }}</td>
+                <td class="px-4 py-3">
+                  <span class="chip border bg-slate-50 text-slate-700">{{ $typeLabel }}</span>
+                </td>
                 <td class="px-4 py-3">{{ $date ? \Carbon\Carbon::parse($date)->format('Y-m-d') : '' }}</td>
-                <td class="px-4 py-3 text-right">{{ number_format($qty, 3) }}</td>
+
+                {{-- Quantity with unit chip --}}
+                <td class="px-4 py-3 text-right">
+                  {{ number_format($qty, $uType === 'kg' ? 3 : 0) }}
+                  <span class="u-chip">{{ $uType }}</span>
+                </td>
+
+                {{-- Unit price with per pack/bag chip when applicable --}}
                 <td class="px-4 py-3 text-right">
                   ₱ {{ number_format($unit, 2) }}
-                  @if($uType)
+                  @if(in_array($uType, ['pack','bag']))
                     <span class="u-chip">per {{ $uType }}</span>
                   @endif
                 </td>
+
                 <td class="px-4 py-3 text-right">₱ {{ number_format($tot, 2) }}</td>
                 <td class="px-4 py-3">
                   @php $cls = $statusColors[$row->status] ?? 'bg-gray-100 text-gray-800 border-gray-200'; @endphp
@@ -191,7 +225,7 @@
               </tr>
             @empty
               <tr>
-                <td colspan="8" class="px-4 py-6 text-center text-gray-600">No sales yet.</td>
+                <td colspan="9" class="px-4 py-6 text-center text-gray-600">No sales yet.</td>
               </tr>
             @endforelse
           </tbody>
@@ -208,7 +242,7 @@
   </div>
 </div>
 
-{{-- Add Sale Modal (kept via partial, includes unit_type + batch-aware pricing) --}}
+{{-- Add Sale Modal (batch-aware pricing + unit_type + type label is handled in form) --}}
 @include('sales.partials.add-sale-modal', [
   'products' => $products ?? null,
   'statusOptions' => $statusOptions ?? ['Pending','Completed','Cancelled','Paid'],
@@ -218,7 +252,7 @@
 
 @push('scripts')
 <script>
-  // ----- filters -----
+  // ----- filters (account for new Type column) -----
   const search = document.getElementById('salesSearch');
   const dateFilter = document.getElementById('dateFilter');
   const rows = Array.from(document.querySelectorAll('#salesTableBody tr'));
@@ -229,9 +263,10 @@
       const tds = tr.querySelectorAll('td'); if (!tds.length) return;
       const invoice = (tds[0].textContent || '').toLowerCase();
       const product = (tds[1].textContent || '').toLowerCase();
-      const rowDate = (tds[2].textContent || '').trim();
-      const status  = (tds[6].textContent || '').toLowerCase();
-      const matchTerm = !term || invoice.includes(term) || product.includes(term) || status.includes(term);
+      const typeCol = (tds[2].textContent || '').toLowerCase();
+      const rowDate = (tds[3].textContent || '').trim();
+      const status  = (tds[7].textContent || '').toLowerCase();
+      const matchTerm = !term || invoice.includes(term) || product.includes(term) || typeCol.includes(term) || status.includes(term);
       const matchDate = !date || rowDate === date;
       tr.style.display = (matchTerm && matchDate) ? '' : 'none';
     });
@@ -299,31 +334,56 @@
     new ApexCharts(el, options).render();
   })();
 
-  // ----- DONUT (Top Products, 90d) -----
+  // ----- DONUT (Top Products by Type, 90d) -----
   (function(){
     const el = document.querySelector('#topProductsDonut');
     if (!el || !window.ApexCharts) return;
 
-    const labels = @json($donutLabels);
+    const labels = @json($donutLabels); // "Product · Type"
     const values = @json($donutValues);
 
     const colors = [C_RED, C_GREEN, C_YELLOW, C_BLUE, '#60a5fa', '#34d399'];
 
     const chart = new ApexCharts(el, {
       chart:{type:'donut', height:340, foreColor:'#374151', background:'transparent'},
-      series: values, labels: labels, legend:{show:false},
+      series: values,
+      labels: labels,
+      legend:{show:false},
       colors: colors,
-      tooltip:{theme:'light', y:{formatter:(v)=>'₱ '+Number(v).toLocaleString()}},
-      dataLabels:{enabled:true, formatter:(val,opts)=>`${opts.w.globals.labels[opts.seriesIndex]}`},
-      plotOptions:{ pie:{ donut:{ size:'68%', labels:{ show:true, total:{ show:true, label:'Total',
-        formatter:(w)=>{ const sum=w.globals.seriesTotals.reduce((a,b)=>a+b,0); return '₱ '+Number(sum).toLocaleString(); }}}}} },
+      tooltip:{
+        theme:'light',
+        y:{ formatter:(v)=>'₱ '+Number(v).toLocaleString() },
+        x:{ formatter:(name)=>name } // keep full "Product · Type"
+      },
+      dataLabels:{
+        enabled:true,
+        formatter:(val,opts)=>{
+          const full = opts.w.globals.labels[opts.seriesIndex] || '';
+          const parts = full.split('·');
+          const type = (parts[1] || full).trim();
+          return type; // show Type inside slice
+        }
+      },
+      plotOptions:{
+        pie:{ donut:{ size:'68%',
+          labels:{ show:true, total:{ show:true, label:'Total',
+            formatter:(w)=>{
+              const sum=w.globals.seriesTotals.reduce((a,b)=>a+b,0);
+              return '₱ '+Number(sum).toLocaleString();
+            }
+          }}
+        }}
+      },
       stroke:{colors:['#ffffff']}
     });
     chart.render();
 
+    // Legend shows full "Product · Type"
     const ul = document.getElementById('topProductsLegend');
     if (ul) {
-      ul.innerHTML = labels.map((label,i)=>`<li class="flex justify-between"><span>${label}</span><span>₱ ${Number(values[i]??0).toLocaleString()}</span></li>`).join('');
+      ul.innerHTML = labels.map((label,i)=>
+        `<li class="flex justify-between"><span>${label}</span><span>₱ ${Number(values[i]??0).toLocaleString()}</span></li>`
+      ).join('');
     }
   })();
 </script>
