@@ -42,11 +42,24 @@ class SalesOrder extends Model
         'status'     => 'string',
     ];
 
-    /** Expose totals without extra code in controllers */
+    /**
+     * Dashboard-friendly computed fields
+     * - total_amount:  Σ item totals (stored or computed)
+     * - items_count  : number of line items
+     * - is_paid      : boolean flag from status
+     * - total_qty    : Σ item quantities (kg-aware)
+     * - total_revenue: alias of total_amount (handy for charts)
+     * - types_summary: array breakdown by type_label with qty & revenue
+     * - types_badge  : compact string summary for UI badges
+     */
     protected $appends = [
         'total_amount',
         'items_count',
         'is_paid',
+        'total_qty',
+        'total_revenue',
+        'types_summary',
+        'types_badge',
     ];
 
     /* ----------------------------- Relationships ----------------------------- */
@@ -92,7 +105,7 @@ class SalesOrder extends Model
         return $query->whereIn('status', [self::STATUS_PENDING, self::STATUS_COMPLETED]);
     }
 
-    /** Orders that have at least one item with problems (under-allocated, expired/near-expiry, or negative remaining). */
+    /** Orders that have at least one item with problems (example scope on items model). */
     public function scopeProblematic($query)
     {
         return $query->whereHas('items', function ($q) {
@@ -100,10 +113,25 @@ class SalesOrder extends Model
         });
     }
 
+    /**
+     * Eager-load with a lightweight type breakdown (for lists).
+     * Example:
+     * SalesOrder::withTypeBreakdown()->latest()->take(10)->get();
+     */
+    public function scopeWithTypeBreakdown($query)
+    {
+        $itemsTable = (new SalesOrderItem())->getTable();
+        return $query->withCount('items')->with(['items' => function ($q) use ($itemsTable) {
+            // Only bring columns we use frequently
+            $q->select("$itemsTable.*")
+              ->orderBy('id', 'asc');
+        }]);
+    }
+
     /* --------------------------- Attribute Accessors ------------------------- */
 
     /**
-     * Total amount = Σ (item.total_price) or (qty * unit_price) if total_price missing.
+     * Σ (item.total_price) or (qty * unit_price) if total_price missing.
      * Uses loaded relation when available; falls back to an aggregate query.
      */
     public function getTotalAmountAttribute(): float
@@ -124,6 +152,13 @@ class SalesOrder extends Model
             ->value('total') ?? 0.0);
     }
 
+    /** Mirror total_amount for readability in charts */
+    public function getTotalRevenueAttribute(): float
+    {
+        return $this->total_amount;
+    }
+
+    /** Count items (uses relation if loaded) */
     public function getItemsCountAttribute(): int
     {
         if ($this->relationLoaded('items')) {
@@ -135,9 +170,110 @@ class SalesOrder extends Model
             ->count();
     }
 
+    /** Σ quantities across items (kg-aware) */
+    public function getTotalQtyAttribute(): float
+    {
+        if ($this->relationLoaded('items')) {
+            return (float) $this->items->sum(function ($it) {
+                return (float) ($it->quantity_kg ?? $it->quantity ?? 0);
+            });
+        }
+
+        $itemsTable = (new SalesOrderItem())->getTable();
+        return (float) (DB::table($itemsTable)
+            ->where('sales_order_id', $this->getKey())
+            ->selectRaw('SUM(COALESCE(quantity_kg, quantity, 0)) as q')
+            ->value('q') ?? 0.0);
+    }
+
     public function getIsPaidAttribute(): bool
     {
         return $this->status === self::STATUS_PAID;
+    }
+
+    /**
+     * Type breakdown per order:
+     * Returns an array keyed by type_label with:
+     *   [
+     *     'qty'     => float,
+     *     'revenue' => float
+     *   ]
+     *
+     * Uses loaded relation when available; otherwise performs a grouped query.
+     *
+     * Expected item columns:
+     * - type_label
+     * - quantity_kg (or quantity)
+     * - unit_price / total_price
+     */
+    public function getTypesSummaryAttribute(): array
+    {
+        $itemsTable = (new SalesOrderItem())->getTable();
+
+        // Helper to merge a row into an accumulator
+        $merge = function (array &$acc, ?string $label, float $qty, float $revenue): void {
+            $key = $label !== null && $label !== '' ? $label : 'Unspecified';
+            if (!isset($acc[$key])) {
+                $acc[$key] = ['qty' => 0.0, 'revenue' => 0.0];
+            }
+            $acc[$key]['qty']     += $qty;
+            $acc[$key]['revenue'] += $revenue;
+        };
+
+        $out = [];
+
+        if ($this->relationLoaded('items')) {
+            foreach ($this->items as $it) {
+                $label   = trim((string) ($it->type_label ?? ''));
+                $qty     = (float) ($it->quantity_kg ?? $it->quantity ?? 0);
+                $unit    = (float) ($it->unit_price ?? 0);
+                $total   = (float) ($it->total_price ?? ($qty * $unit));
+                $merge($out, $label, $qty, $total);
+            }
+            return $out;
+        }
+
+        // Not loaded: run a single grouped aggregate query
+        $rows = DB::table($itemsTable)
+            ->where('sales_order_id', $this->getKey())
+            ->selectRaw("
+                NULLIF(TRIM(COALESCE(type_label, '')), '') as type_label,
+                SUM(COALESCE(quantity_kg, quantity, 0))     as qty,
+                SUM(COALESCE(total_price, (COALESCE(quantity_kg, quantity, 0) * COALESCE(unit_price, 0)))) as revenue
+            ")
+            ->groupBy('type_label')
+            ->get();
+
+        foreach ($rows as $r) {
+            $merge($out, $r->type_label, (float) $r->qty, (float) $r->revenue);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Compact, human-friendly badge string for UI:
+     * e.g. "Garlic Skinless 8.0kg • Regular Skinless 5.0kg"
+     */
+    public function getTypesBadgeAttribute(): string
+    {
+        $summary = $this->types_summary;
+        if (empty($summary)) return '';
+
+        // Order by revenue desc, then qty desc
+        uasort($summary, function ($a, $b) {
+            if ($a['revenue'] === $b['revenue']) {
+                return $b['qty'] <=> $a['qty'];
+            }
+            return $b['revenue'] <=> $a['revenue'];
+        });
+
+        $parts = [];
+        foreach ($summary as $label => $v) {
+            $qty = number_format((float) $v['qty'], 2);
+            $parts[] = "{$label} {$qty}";
+        }
+        return implode(' • ', $parts);
     }
 
     /* ------------------------------- Events ---------------------------------- */

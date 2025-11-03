@@ -38,9 +38,7 @@
     thead th{ background:#f9fafb; color:#374151; font-weight:800; border-bottom:1px solid var(--line); }
     tbody td{ color:var(--ink); } tbody tr:nth-child(even){ background:#fafafa; } tbody tr:hover{ background:var(--hover); } th, td{ border-color:var(--line)!important; }
     .brand-title{ font-family:'Kalam',cursive; letter-spacing:.02em; color:var(--ink); } .muted{ color:var(--muted); }
-    /* Mobile sidebar slide-in helper */
     @media (max-width:1024px){ #sidebar{ transform:translateX(-100%); transition:transform .3s ease; } #sidebar.open{ transform:translateX(0); } }
-    /* Focus ring */
     :where(a,button,[role="menuitem"],.side-link,.btn):focus{ outline:2px solid var(--green); outline-offset:2px; }
   </style>
 </head>
@@ -49,7 +47,6 @@
 
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar w-64 flex-shrink-0 flex flex-col" aria-label="Primary">
-      <!-- Brand with logo -->
       <div class="p-6 border-b border-[var(--line)] flex justify-between items-center">
         <a href="{{ route('dashboard') }}" class="flex items-center gap-3" aria-label="GenRev Home">
           <div class="h-10 w-10 rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden flex items-center justify-center">
@@ -87,13 +84,10 @@
       <!-- Nav (role-aware) -->
       <nav class="flex-1 mt-4 space-y-1 text-sm font-medium" role="navigation">
         @php
-          // 1) Pull from model's allowlist
           $modules = [];
           if (Auth::check() && method_exists(Auth::user(), 'allowedModules')) {
               $modules = (array) (Auth::user()->allowedModules() ?? []);
           }
-
-          // 2) Safe fallback by role
           if (empty($modules)) {
             $role = \Illuminate\Support\Str::lower((string) (Auth::user()->role ?? ''));
             $fallback = [
@@ -104,8 +98,6 @@
             ];
             $modules = $fallback[$role] ?? ['dashboard','settings'];
           }
-
-          // Map for labels and routes
           $menu = [
             'dashboard'  => ['label'=>'Dashboard',  'route'=>'dashboard',           'active'=>['dashboard*']],
             'production' => ['label'=>'Production', 'route'=>'production.index',    'active'=>['production.*']],
@@ -117,7 +109,6 @@
             'employee'   => ['label'=>'Employee',   'route'=>'employees.index',     'active'=>['employees*','employees.*']],
             'settings'   => ['label'=>'Settings',   'route'=>'settings.index',      'active'=>['settings*','settings.*']],
           ];
-
           $isActive = fn(array $patterns) => collect($patterns)->some(fn($p) => request()->routeIs($p));
         @endphp
 
@@ -174,8 +165,6 @@
 
       <!-- Content -->
       <main class="flex-1 overflow-y-auto p-8">
-        {{-- ===== your existing dashboard content stays as-is below ===== --}}
-
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
           {{-- Metrics Cards --}}
@@ -240,46 +229,53 @@
             <div class="h-32 relative"><canvas id="salesTrendsChart" aria-label="Sales trend chart"></canvas></div>
           </div>
 
-          {{-- Most Sold Products --}}
+          {{-- Most Sold Products & Types --}}
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-4">
               <div>
-                <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products</h2>
-                <p class="text-xs muted">Top 5 products by revenue</p>
+                <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products & Types</h2>
+                <p class="text-xs muted">Top 5 product–type combos by revenue</p>
               </div>
               <a href="{{ route('sales') }}" class="btn btn-green text-xs">View all</a>
             </div>
 
             @if(($topProducts ?? collect())->isEmpty())
-              <div class="text-center py-8">
-                <div class="text-4xl mb-2">📊</div>
-                <div class="text-sm muted">No sales data available</div>
-                <div class="text-xs muted mt-1">Start recording sales to see top products</div>
-              </div>
-            @else
-              <div class="space-y-3">
-                @foreach($topProducts as $index => $product)
-                  <div class="flex items-center gap-3 p-3 rounded-lg bg-[#fafafa] hover:bg-[#f3f4f6] transition">
-                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white" style="background:var(--red);">
-                      {{ $index + 1 }}
-                    </div>
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center justify-between mb-1">
-                        <div class="font-medium truncate">{{ $product->product_name ?? 'Product' }}</div>
-                        <div class="text-sm font-semibold text-[var(--blue)]">₱{{ number_format($product->revenue ?? 0, 2) }}</div>
-                      </div>
-                      <div class="flex items-center justify-between text-xs muted">
-                        <span>{{ number_format($product->quantity ?? 0, 2) }} sold</span>
-                        <span>{{ number_format($product->revenue_share ?? 0, 1) }}% of total</span>
-                      </div>
-                      <div class="w-full bg-[var(--line)]/40 rounded-full h-1.5 mt-2">
-                        <div class="h-1.5 rounded-full" style="width: {{ min(($product->revenue_share ?? 0), 100) }}%; background:linear-gradient(90deg,var(--red),var(--yellow));"></div>
-                      </div>
-                    </div>
-                  </div>
-                @endforeach
-              </div>
-            @endif
+  <div class="text-center py-8">
+    <div class="text-4xl mb-2">📊</div>
+    <div class="text-sm muted">No sales data available</div>
+    <div class="text-xs muted mt-1">Start recording sales to see top product–type combos</div>
+  </div>
+@else
+  <div class="space-y-3">
+    @foreach($topProducts as $index => $product)
+      <div class="flex items-center gap-3 p-3 rounded-lg bg-[#fafafa] hover:bg-[#f3f4f6] transition">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white" style="background:var(--red);">
+          {{ $index + 1 }}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between mb-1">
+            <div class="font-medium truncate">{{ $product->product_name ?? 'Product' }}</div>
+            <div class="text-sm font-semibold text-[var(--blue)]">₱{{ number_format($product->revenue ?? 0, 2) }}</div>
+          </div>
+
+          {{-- type chip --}}
+          <div class="mb-1">
+            <span class="chip">{{ $product->sale_type ?? '—' }}</span>
+          </div>
+
+          <div class="flex items-center justify-between text-xs muted">
+            <span>{{ number_format($product->quantity ?? 0, 2) }} sold</span>
+            <span>{{ number_format($product->revenue_share ?? 0, 1) }}% of week</span>
+          </div>
+          <div class="w-full bg-[var(--line)]/40 rounded-full h-1.5 mt-2">
+            <div class="h-1.5 rounded-full" style="width: {{ min(($product->revenue_share ?? 0), 100) }}%; background:linear-gradient(90deg,var(--red),var(--yellow));"></div>
+          </div>
+        </div>
+      </div>
+    @endforeach
+  </div>
+@endif
+
           </div>
 
           {{-- Recent Sales --}}
@@ -294,27 +290,33 @@
 
             <table class="text-sm text-left">
               <thead class="uppercase">
-                <tr>
-                  <th class="py-2 px-3">Product</th>
-                  <th class="py-2 px-3">Qty</th>
-                  <th class="py-2 px-3">Price</th>
-                  <th class="py-2 px-3">Date</th>
-                </tr>
-              </thead>
+              <tr>
+                <th class="py-2 px-3">Product</th>
+                <th class="py-2 px-3">Type</th>   {{-- NEW --}}
+                <th class="py-2 px-3">Qty</th>
+                <th class="py-2 px-3">Price</th>
+                <th class="py-2 px-3">Date</th>
+              </tr>
+            </thead>
+
               <tbody>
-                @forelse ($recentSales as $sale)
-                  <tr class="border-t">
-                    <td class="py-2 px-3">{{ $sale->product_name }}</td>
-                    <td class="py-2 px-3">{{ $sale->quantity }}</td>
-                    <td class="py-2 px-3">₱{{ number_format($sale->price, 2) }}</td>
-                    <td class="py-2 px-3">{{ \Carbon\Carbon::parse($sale->date)->format('M d, Y') }}</td>
-                  </tr>
-                @empty
-                  <tr>
-                    <td colspan="4" class="py-3 text-center muted">No sales found.</td>
-                  </tr>
-                @endforelse
-              </tbody>
+          @forelse ($recentSales as $sale)
+            <tr class="border-t">
+              <td class="py-2 px-3">{{ $sale->product_name }}</td>
+              <td class="py-2 px-3">
+                <span class="chip">{{ $sale->sale_type ?? '—' }}</span>
+              </td>
+              <td class="py-2 px-3">{{ number_format($sale->quantity, 3) }}</td>
+              <td class="py-2 px-3">₱{{ number_format($sale->unit_price, 2) }}</td>
+              <td class="py-2 px-3">{{ \Carbon\Carbon::parse($sale->date)->format('M d, Y') }}</td>
+            </tr>
+          @empty
+            <tr>
+              <td colspan="5" class="py-3 text-center muted">No sales found.</td>
+            </tr>
+          @endforelse
+        </tbody>
+
             </table>
           </div>
 

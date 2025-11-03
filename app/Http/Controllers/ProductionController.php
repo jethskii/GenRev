@@ -369,10 +369,11 @@ public function suggestTypes(Product $parent): JsonResponse
     public function showOrders($id) { return $this->show($id); }
 
     public function edit($id)
-    {
-        $production = Production::findOrFail($id);
-        return view('production.edit', compact('production'));
-    }
+        {
+            $product = Production::findOrFail($id);
+            return view('production.edit', compact('product'));
+        }
+
 
     public function update(Request $request, $id)
     {

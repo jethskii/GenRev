@@ -267,6 +267,15 @@ class SalesController extends Controller
         $qty         = (float) $validated['quantity'];
         $unitType    = $validated['unit_type'] ?? null;
 
+        // --- Soft validation UX guards (friendly flashes) ---
+        if ($qty > 5000) {
+            session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
+        }
+        if (isset($validated['price']) && (float)$validated['price'] === 0.0) {
+            session()->flash('info', 'Unit price is zero. If this is intentional, you can ignore this note.');
+        }
+        // -----------------------------------------------------
+
         // Resolve batch if not provided
         $orderDateStr = $validated['date'];
         if (empty($resolvedProductionId)) {
@@ -290,8 +299,11 @@ class SalesController extends Controller
         $debugUuid = (string) Str::uuid();
         Log::info("[sales.store] START {$debugUuid}", ['request' => $request->all()]);
 
+        // capture created sale for audit trail
+        $createdSale = null;
+
         try {
-            DB::transaction(function () use ($validated, $displayName, $invoice, $qty, $unit, $total, $status, $product, $resolvedProductionId, $unitType, $typeLabel, $debugUuid) {
+            DB::transaction(function () use ($validated, $displayName, $invoice, $qty, $unit, $total, $status, $product, $resolvedProductionId, $unitType, $typeLabel, $debugUuid, &$createdSale) {
                 $payload = [
                     'product_id'    => (int) $validated['product_id'],
                     'production_id' => $resolvedProductionId,
@@ -336,13 +348,28 @@ class SalesController extends Controller
                 }
 
                 Log::info("[sales.store] PAYLOAD {$debugUuid}", $payload);
-                $sale = Sale::create($payload);
-                Log::info("[sales.store] CREATED {$debugUuid}", ['id' => $sale->id]);
+                $createdSale = Sale::create($payload);
+                Log::info("[sales.store] CREATED {$debugUuid}", ['id' => $createdSale->id]);
 
                 $this->recomputeProductBalance((int)$product->id);
             });
 
             Log::info("[sales.store] COMMIT {$debugUuid}");
+
+            // --- Audit trail: persist change_log JSON if provided ---
+            $rawChanges = $request->input('change_log');
+            if ($createdSale && $rawChanges && class_exists(\App\Models\SaleChange::class)) {
+                try {
+                    \App\Models\SaleChange::create([
+                        'sale_id'      => $createdSale->id,
+                        'user_id'      => optional(auth()->user())->id,
+                        'changes_json' => $rawChanges,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('[sales.store] SaleChange save failed', ['error' => $e->getMessage()]);
+                }
+            }
+            // -------------------------------------------------------
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => true, 'message' => 'Sale saved.']);
@@ -430,6 +457,15 @@ class SalesController extends Controller
         $qty          = (float) $validated['quantity'];
         $unitType     = $validated['unit_type'] ?? $this->readUnitTypeFromSale($sale);
 
+        // --- Soft validation UX guards (friendly flashes) ---
+        if ($qty > 5000) {
+            session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
+        }
+        if (isset($validated['price']) && (float)$validated['price'] === 0.0) {
+            session()->flash('info', 'Unit price is zero. If this is intentional, you can ignore this note.');
+        }
+        // -----------------------------------------------------
+
         $orderDateStr = $validated['date'];
         if (empty($resolvedProductionId)) {
             $resolved = $this->resolveProductionByProductAndDate((int)$product->id, $orderDateStr);
@@ -492,6 +528,21 @@ class SalesController extends Controller
             $this->recomputeProductBalance((int)$product->id);
 
             Log::info("[sales.update] COMMIT {$debugUuid}");
+
+            // --- Audit trail: persist change_log JSON if provided ---
+            $rawChanges = $request->input('change_log');
+            if ($rawChanges && class_exists(\App\Models\SaleChange::class)) {
+                try {
+                    \App\Models\SaleChange::create([
+                        'sale_id'      => $sale->id,
+                        'user_id'      => optional(auth()->user())->id,
+                        'changes_json' => $rawChanges,
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('[sales.update] SaleChange save failed', ['error' => $e->getMessage()]);
+                }
+            }
+            // -------------------------------------------------------
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => true, 'message' => 'Sale updated.']);

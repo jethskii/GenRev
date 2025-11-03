@@ -332,7 +332,7 @@
           <thead>
           <tr>
             <th>Cut</th>
-            <th class="text-center">Category</th>
+            <th class="text-center">Type</th>
             <th class="text-right">Available (kg)</th>
             <th class="text-right">Forecast (kg)</th>
             <th class="text-right">Days to Stockout</th>

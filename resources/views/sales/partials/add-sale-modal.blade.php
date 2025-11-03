@@ -17,34 +17,24 @@
 
 <div id="addSaleModal" class="fixed inset-0 z-50 hidden items-center justify-center">
   {{-- Backdrop --}}
-  <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="toggleAddSaleModal(false)"></div>
+  <div class="absolute inset-0 bg-black/30" onclick="toggleAddSaleModal(false)"></div>
 
-  {{-- Modal Card --}}
-  <div
-    class="relative w-full max-w-xl mx-4 overflow-hidden rounded-2xl border border-white/10
-          bg-gradient-to-br from-[#1F1E1E]/95 to-[#001C00]/80 shadow-2xl
-          animate-[fadeIn_.18s_ease-out]">
-    {{-- Top bar / title --}}
-    <div class="relative px-6 py-5">
-      <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#047705] via-[#71C862] to-[#EDD100]"></div>
-
+  {{-- Modal Card - LIGHT --}}
+  <div class="relative w-full max-w-xl mx-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+    {{-- Title bar --}}
+    <div class="px-6 py-5 border-b border-gray-200 bg-white">
       <div class="flex items-center justify-between">
-        <h2 class="text-xl font-semibold text-white" style="text-shadow:-1px 1px 0 #047705;">
-          Add New Sale
-        </h2>
+        <h2 class="text-lg font-semibold text-gray-900">Add New Sale</h2>
         <button type="button" onclick="toggleAddSaleModal(false)"
-                class="grid h-9 w-9 place-items-center rounded-full border border-white/10
-                      text-white/80 hover:text-white hover:bg-white/10 transition"
-                aria-label="Close">
-          ✖
-        </button>
+                class="grid h-9 w-9 place-items-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50"
+                aria-label="Close">✖</button>
       </div>
     </div>
 
     {{-- Body --}}
-    <div class="px-6 pb-6 space-y-4">
+    <div class="px-6 pb-6 pt-4 space-y-4">
       @if ($errors->any())
-        <div class="rounded-xl border border-rose-700/40 bg-rose-900/20 text-rose-100 p-3 text-sm">
+        <div class="rounded-xl border border-rose-200 bg-rose-50 text-rose-700 p-3 text-sm">
           <ul class="list-disc list-inside space-y-1">
             @foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach
           </ul>
@@ -56,12 +46,11 @@
 
         {{-- Product --}}
         <div>
-          <label for="product_id" class="block text-sm text-white/80 mb-1">Product</label>
+          <label for="product_id" class="block text-sm text-gray-700 mb-1">Product</label>
           <select
             name="product_id" id="product_id" required
-            class="w-full rounded-xl border border-white/10 bg-white/5 text-white
-                  px-3 py-2.5 outline-none focus:border-[#047705] focus:ring-2 focus:ring-[#047705]/30">
-            <option value="">-- Select Product --</option>
+            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
+            <option value="">— Select product —</option>
             @foreach ($products as $p)
               <option value="{{ $p->id }}" data-price="{{ (float) ($p->price ?? 0) }}">
                 {{ $p->name ?? $p->product_name }}
@@ -69,10 +58,9 @@
             @endforeach
           </select>
 
-          {{-- availability pill --}}
+          {{-- Availability pill --}}
           <div id="availabilityPill" class="mt-2 hidden">
-            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs
-                        border border-white/10 bg-white/5 text-white/90">
+            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs border border-emerald-200 bg-emerald-50 text-emerald-800">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M20 7l-9 9-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -83,82 +71,85 @@
 
         {{-- Batch --}}
         <div>
-          <label for="production_id" class="block text-sm text-white/80 mb-1">Batch</label>
+          <label for="production_id" class="block text-sm text-gray-700 mb-1">Batch</label>
           <select
             name="production_id" id="production_id" disabled
-            class="w-full rounded-xl border border-white/10 bg-white/5 text-white
-                  px-3 py-2.5 outline-none disabled:opacity-60 disabled:cursor-not-allowed
-                  focus:border-[#047705] focus:ring-2 focus:ring-[#047705]/30">
-            <option value="">-- Select Batch --</option>
+            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none disabled:opacity-60 disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-300">
+            <option value="">— Select batch —</option>
           </select>
-          <p id="batchInfo" class="text-xs text-white/60 mt-1 hidden"></p>
+          <p id="batchInfo" class="text-xs text-gray-500 mt-1 hidden"></p>
         </div>
 
         {{-- Date --}}
         <div>
-          <label class="block text-sm text-white/80 mb-1">Date</label>
+          <label class="block text-sm text-gray-700 mb-1">Date</label>
           <input
             type="date" name="date" value="{{ old('date', now()->format('Y-m-d')) }}" required
-            class="w-full rounded-xl border border-white/10 bg-white/5 text-white
-                  px-3 py-2.5 outline-none focus:border-[#047705] focus:ring-2 focus:ring-[#047705]/30">
+            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
+        </div>
+
+        {{-- Type (auto-suggest + auto-increment when blank) --}}
+        <div>
+          <label class="block text-sm text-gray-700 mb-1">Type</label>
+          <input
+            type="text" name="type_label" id="type_label" list="typeList"
+            placeholder="Leave blank for Auto"
+            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
+          <datalist id="typeList"></datalist>
+          <p id="typeAutoHint" class="text-xs text-gray-500 mt-1">Auto will become: <span class="font-medium" id="nextTypeText">Type 1</span></p>
         </div>
 
         {{-- Unit Type --}}
         <div>
-          <label class="block text-sm text-white/80 mb-1">Unit Type</label>
+          <label class="block text-sm text-gray-700 mb-1">Unit Type</label>
           <select
             name="unit_type" id="unit_type"
-            class="w-full rounded-xl border border-white/10 bg-white/5 text-white
-                  px-3 py-2.5 outline-none focus:border-[#047705] focus:ring-2 focus:ring-[#047705]/30">
+            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
             <option value="">Auto</option>
             @foreach ($unitTypeOptions as $opt)
               <option value="{{ $opt }}">{{ ucfirst($opt) }}</option>
             @endforeach
           </select>
-          <p class="text-xs text-white/60 mt-1">Leave on Auto to let the server choose based on the batch.</p>
+          <p class="text-xs text-gray-500 mt-1">Leave on Auto to let the server choose based on the batch.</p>
         </div>
 
         {{-- Qty & Price --}}
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-sm text-white/80 mb-1">Quantity</label>
+            <label class="block text-sm text-gray-700 mb-1">Quantity</label>
             <input
               type="number" name="quantity" min="0.001" step="0.001" value="{{ old('quantity') }}" required inputmode="decimal"
-              class="w-full rounded-xl border border-white/10 bg-white/5 text-white
-                    px-3 py-2.5 outline-none focus:border-[#047705] focus:ring-2 focus:ring-[#047705]/30">
+              class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
           </div>
           <div>
-            <label class="block text-sm text-white/80 mb-1">Unit Price (₱)</label>
+            <label class="block text-sm text-gray-700 mb-1">Unit Price (₱)</label>
             <input
               type="number" name="price" step="0.01" min="0" value="{{ old('price') }}" placeholder="Leave blank for auto"
-              class="w-full rounded-xl border border-white/10 bg-white/5 text-white
-                    px-3 py-2.5 outline-none focus:border-[#047705] focus:ring-2 focus:ring-[#047705]/30">
-            <p class="text-xs text-white/60 mt-1">If blank, server uses the batch’s per-{{ '{' }}unit_type{{ '}' }} price.</p>
+              class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
+            <p class="text-xs text-gray-500 mt-1">If blank, server uses the batch’s per-{unit_type} price.</p>
           </div>
         </div>
 
         {{-- Total preview --}}
-        <div class="flex items-center justify-between rounded-xl border border-white/10 bg-white/[.06] px-3 py-2.5">
-          <span class="text-white/80">Total</span>
-          <span id="totalPreview" class="text-white font-semibold">₱ 0.00</span>
+        <div class="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+          <span class="text-gray-700">Total</span>
+          <span id="totalPreview" class="text-gray-900 font-semibold">₱ 0.00</span>
         </div>
 
         {{-- Invoice (preview) --}}
         <div>
-          <label class="block text-sm text-white/80 mb-1">Invoice Number</label>
+          <label class="block text-sm text-gray-700 mb-1">Invoice Number</label>
           <input
             type="text" value="{{ $nextInvoice }}" readonly
-            class="w-full rounded-xl border border-white/10 bg-white/5 text-white/90
-                  px-3 py-2.5 opacity-90" aria-readonly="true">
+            class="w-full rounded-xl border border-gray-200 bg-gray-50 text-gray-700 px-3 py-2.5" aria-readonly="true">
         </div>
 
         {{-- Status --}}
         <div>
-          <label class="block text-sm text-white/80 mb-1">Status</label>
+          <label class="block text-sm text-gray-700 mb-1">Status</label>
           <select
             name="status" required
-            class="w-full rounded-xl border border-white/10 bg-white/5 text-white
-                  px-3 py-2.5 outline-none focus:border-[#047705] focus:ring-2 focus:ring-[#047705]/30">
+            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
             @foreach ($statusOptions as $opt)
               <option value="{{ $opt }}" @selected(old('status')===$opt)>{{ $opt }}</option>
             @endforeach
@@ -168,17 +159,11 @@
         {{-- Actions --}}
         <div class="flex items-center justify-end gap-2 pt-2">
           <button type="button" onclick="toggleAddSaleModal(false)"
-                  class="rounded-xl px-4 py-2 text-white/90 border border-white/10 bg-white/5 hover:bg-white/10 transition">
+                  class="rounded-xl px-4 py-2 text-gray-700 border border-gray-300 bg-white hover:bg-gray-50">
             Cancel
           </button>
           <button type="submit"
-                  class="inline-flex items-center gap-2 rounded-xl px-4 py-2
-                        bg-gradient-to-r from-[#047705] to-[#0aad0a]
-                        text-white shadow-[0_6px_18px_rgba(4,119,5,.35)]
-                        hover:brightness-110 active:scale-[.99] transition">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
+                  class="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-blue-600 text-white hover:bg-blue-700">
             Save Sale
           </button>
         </div>
@@ -206,8 +191,13 @@ document.addEventListener('DOMContentLoaded', function () {
   const availQtyEl = document.getElementById('availQty');
   const batchInfo  = document.getElementById('batchInfo');
 
+  const typeInput   = document.getElementById('type_label');
+  const typeList    = document.getElementById('typeList');
+  const nextTypeTxt = document.getElementById('nextTypeText');
+
   const batchesUrlBase  = "{{ url('/production/api/by-product') }}/"; // returns minimal batch list
   const productAvailUrl = "{{ route('sales.available') }}";           // returns { available, price }
+  const typesApiUrl     = "{{ route('sales.api.types') }}";           // returns { ok, list:[], next:"Type N" }
 
   function updateTotal() {
     const q = parseFloat(qtyInput.value || 0);
@@ -217,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function resetBatchUI() {
-    batchSel.innerHTML = '<option value="">-- Select Batch --</option>';
+    batchSel.innerHTML = '<option value="">— Select batch —</option>';
     batchSel.disabled = true;
     batchInfo.classList.add('hidden');
     qtyInput.removeAttribute('max');
@@ -230,7 +220,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!res.ok) return;
       const data = await res.json();
 
-      // availability + qty cap
       if (typeof data.available !== 'undefined') {
         availQtyEl.textContent = data.available;
         pill.classList.remove('hidden');
@@ -240,7 +229,6 @@ document.addEventListener('DOMContentLoaded', function () {
         qtyInput.removeAttribute('max');
       }
 
-      // show a price hint if empty (can still leave blank for auto at server)
       if ((priceInput.value==='' || +priceInput.value===0) && typeof data.price !== 'undefined') {
         priceInput.value = data.price;
       } else if (priceInput.value==='') {
@@ -249,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       updateTotal();
-    } catch (e) { /* silent */ }
+    } catch {}
   }
 
   async function loadBatches(productId) {
@@ -268,11 +256,33 @@ document.addEventListener('DOMContentLoaded', function () {
         const inv  = (b.current_inventory ?? 0);
         opt.value = b.id;
         opt.textContent = `${b.batch_number ?? 'Batch'} — Qty ${qty} — Inv ${inv}${date ? ' — ' + date : ''}`;
-        opt.dataset.inv = inv; // used to cap qty
+        opt.dataset.inv = inv;
         batchSel.appendChild(opt);
       });
       batchSel.disabled = false;
-    } catch (e) { /* silent */ }
+    } catch {}
+  }
+
+  async function loadTypes(productId) {
+    typeList.innerHTML = '';
+    nextTypeTxt.textContent = 'Type 1';
+    if (!productId) return;
+
+    try {
+      const url = typesApiUrl + "?product_id=" + encodeURIComponent(productId);
+      const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      if (!res.ok) return;
+
+      const data = await res.json();
+      if (Array.isArray(data.list)) {
+        data.list.forEach(lbl => {
+          const opt = document.createElement('option');
+          opt.value = lbl;
+          typeList.appendChild(opt);
+        });
+      }
+      if (data.next) nextTypeTxt.textContent = data.next;
+    } catch {}
   }
 
   productSel?.addEventListener('change', function () {
@@ -292,6 +302,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (hasValue) {
       fetchProductAvailability(this.value);
       loadBatches(this.value);
+      loadTypes(this.value); // <<— load Type suggestions + next "Type N"
+    } else {
+      typeList.innerHTML = '';
+      nextTypeTxt.textContent = 'Type 1';
     }
   });
 
@@ -322,11 +336,6 @@ document.addEventListener('DOMContentLoaded', function () {
   priceInput?.addEventListener('input', updateTotal);
   unitType?.addEventListener('change', updateTotal);
 
-  // initial total
   updateTotal();
 });
 </script>
-
-<style>
-@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-</style>

@@ -36,13 +36,20 @@ class Sale extends Model
      * but keep $fillable in prod for safety.
      */
     protected $fillable = [
-        // New schema
+        // Current schema columns
         'product_id',
         'production_id',
+        'invoice_number',
         'order_number',
         'order_date',
+        'product',          // legacy string label
+        'product_name',     // (exists in your table screenshot)
+        'type_label',       // <<— important for dashboard “Type”
+        'quantity',
         'quantity_kg',
         'unit_price',
+        'price',
+        'total',
         'total_price',
         'status',
         'customer_name',
@@ -52,17 +59,12 @@ class Sale extends Model
         'production_date',
         'expiration_date',
 
-        // Legacy (kept for backward compatibility)
-        'invoice_number',
-        'product',
+        // Legacy date
         'date',
-        'quantity',
-        'price',
-        'total',
     ];
 
     protected $casts = [
-        // New
+        // New-ish
         'order_date'      => 'date',
         'quantity_kg'     => 'decimal:3',
         'unit_price'      => 'decimal:2',
@@ -84,8 +86,9 @@ class Sale extends Model
         'display_product',
         'sale_date',
         'is_paid',
-        'total_value',     // add a direct accessor for API use
+        'total_value',     // direct accessor for API use
         'invoice',         // unified invoice/order number
+        'sale_type',       // <<— normalized type for dashboard
     ];
 
     /* ----------------------------- Relationships ----------------------------- */
@@ -103,7 +106,6 @@ class Sale extends Model
 
     public function allocations()
     {
-        // If you have a concrete BatchAllocation model, confirm the FK ('sale_id') matches your schema.
         return $this->hasMany(\App\Models\BatchAllocation::class);
     }
 
@@ -146,6 +148,8 @@ class Sale extends Model
                ->orWhere('invoice_number', 'like', "%{$term}%")
                ->orWhere('customer_name', 'like', "%{$term}%")
                ->orWhere('product', 'like', "%{$term}%")
+               ->orWhere('product_name', 'like', "%{$term}%")
+               ->orWhere('type_label', 'like', "%{$term}%")
                ->orWhere('notes', 'like', "%{$term}%");
         });
     }
@@ -178,15 +182,16 @@ class Sale extends Model
         return $this->totalValue();
     }
 
-    /** Display product: prefer legacy string, fallback to relation */
+    /** Display product: prefer explicit product_name, then legacy string, then relation */
     public function getDisplayProductAttribute(): string
     {
-        if (!empty($this->product)) return (string) $this->product;
+        if (!empty($this->product_name)) return (string) $this->product_name;
+        if (!empty($this->product))      return (string) $this->product;
         return optional($this->productRef)->product_name ?? '';
     }
 
     /** Unified sale date: prefer new order_date, then legacy date */
-    public function getSaleDateAttribute(): ?\Illuminate\Support\Carbon
+    public function getSaleDateAttribute(): ?Carbon
     {
         return $this->order_date ?? $this->date ?? null;
     }
@@ -203,11 +208,39 @@ class Sale extends Model
         return ($this->status ?? '') === self::STATUS_PAID;
     }
 
+    /**
+     * Normalized sale type for dashboard:
+     * 1) honors a selected SQL alias `sale_type` (from controller queries)
+     * 2) falls back to `type_label`
+     * 3) as a last resort, checks a few optional columns if they exist
+     */
+    public function getSaleTypeAttribute(): ?string
+    {
+        // 1) If the controller selected "... as sale_type", use that raw attribute.
+        if (array_key_exists('sale_type', $this->attributes)) {
+            $aliased = trim((string) $this->attributes['sale_type']);
+            if ($aliased !== '') return $aliased;
+        }
+
+        // 2) Native column stored by forms / add order
+        $val = trim((string) ($this->type_label ?? ''));
+        if ($val !== '') return $val;
+
+        // 3) Safe fallbacks (only if columns exist)
+        foreach (['product_type', 'type', 'variant_name', 'variant'] as $col) {
+            if (Schema::hasColumn($this->getTable(), $col)) {
+                $v = trim((string) ($this->getAttribute($col) ?? ''));
+                if ($v !== '') return $v;
+            }
+        }
+
+        return null;
+    }
+
     /* ------------------------------- Mutators -------------------------------- */
 
     public function setOrderDateAttribute($value): void
     {
-        // Accept strings/Carbon and normalize
         $this->attributes['order_date'] = $value ? Carbon::parse($value) : null;
     }
 
@@ -215,7 +248,6 @@ class Sale extends Model
     {
         $this->attributes['quantity_kg'] = is_null($value) ? null : (float) $value;
 
-        // Keep new total in sync if columns exist
         if (array_key_exists('unit_price', $this->attributes) && !is_null($this->attributes['unit_price'])) {
             $computed = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
             if (Schema::hasColumn('sales', 'total_price')) {
@@ -223,7 +255,6 @@ class Sale extends Model
             }
         }
 
-        // If legacy price is present, keep legacy total in sync too
         if (array_key_exists('price', $this->attributes) && !is_null($this->attributes['price'])) {
             $computedLegacy = round(($this->attributes['quantity_kg'] ?? $this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
             if (Schema::hasColumn('sales', 'total')) {
@@ -255,7 +286,6 @@ class Sale extends Model
             }
         }
 
-        // If only "quantity" was sent but you have quantity_kg column, mirror it
         if (Schema::hasColumn('sales', 'quantity_kg') && !isset($this->attributes['quantity_kg'])) {
             $this->attributes['quantity_kg'] = $this->attributes['quantity'];
         }
@@ -277,14 +307,11 @@ class Sale extends Model
 
     protected static function booted()
     {
-        // Before create: defaults + ensure a total exists + invoice/order number
         static::creating(function (self $m) {
-            // Default status
             if (!filled($m->status) || !in_array($m->status, self::STATUSES, true)) {
                 $m->status = self::STATUS_COMPLETED;
             }
 
-            // Default date
             if (!filled($m->order_date) && filled($m->date)) {
                 $m->order_date = Carbon::parse($m->date);
             }
@@ -292,7 +319,6 @@ class Sale extends Model
                 $m->order_date = now();
             }
 
-            // Generate readable numbers if missing
             if (!filled($m->order_number) && Schema::hasColumn($m->getTable(), 'order_number')) {
                 $m->order_number = static::generateInvoiceNumber();
             }
@@ -300,7 +326,6 @@ class Sale extends Model
                 $m->invoice_number = $m->order_number ?: static::generateInvoiceNumber();
             }
 
-            // Ensure totals exist (write to whichever columns are present)
             $qty  = $m->quantity_kg ?? $m->quantity ?? 0;
             $unit = $m->unit_price  ?? $m->price    ?? 0;
             $computed = round((float)$qty * (float)$unit, 2);
@@ -312,12 +337,10 @@ class Sale extends Model
             if ($hasLegacyTotal && is_null($m->total))     $m->total      = $computed;
         });
 
-        // After created → apply sale impact
         static::created(function (self $m) {
             static::withInventory(fn (InventoryService $svc) => $svc->applySale($m));
         });
 
-        // On update: revert old sale impact first if core fields changed
         static::updating(function (self $m) {
             $dirty = array_intersect(
                 array_keys($m->getDirty()),
@@ -335,17 +358,14 @@ class Sale extends Model
             }
         });
 
-        // Soft delete: return inventory
         static::deleted(function (self $m) {
             static::withInventory(fn (InventoryService $svc) => $svc->undoSale($m));
         });
 
-        // Restore: deduct again
         static::restored(function (self $m) {
             static::withInventory(fn (InventoryService $svc) => $svc->applySale($m));
         });
 
-        // Always keep cached product balance in sync
         static::saved(function (self $m) {
             if ($m->product_id) {
                 static::withInventory(fn (InventoryService $svc) => $svc->recomputeProductBalance((int) $m->product_id));
@@ -354,16 +374,14 @@ class Sale extends Model
     }
 
     /**
-     * Generates a human-friendly unique invoice number:
-     * INV-YYYYMMDD-### (sequence per day, with DB-safe increment).
-     * If "invoice_sequences" does not exist, falls back to scanning "sales".
+     * Generates a human-friendly unique invoice number: INV-YYYYMMDD-###.
+     * Uses invoice_sequences table if present; otherwise scans sales.
      */
     public static function generateInvoiceNumber(): string
     {
         $ymd = now()->format('Ymd');
         $prefix = 'INV-' . $ymd . '-';
 
-        // Use dedicated sequence table if available
         if (Schema::hasTable('invoice_sequences')) {
             try {
                 return DB::transaction(function () use ($ymd, $prefix) {
@@ -393,11 +411,10 @@ class Sale extends Model
                     return $prefix . str_pad((string) $seq, 3, '0', STR_PAD_LEFT);
                 }, 3);
             } catch (\Throwable $e) {
-                // fall through to MAX()-based fallback
+                // fall through
             }
         }
 
-        // Fallback: scan existing sales for today and increment the tail
         $dateCol   = Schema::hasColumn('sales', 'order_date') ? 'order_date' : (Schema::hasColumn('sales', 'date') ? 'date' : null);
         $numberCol = Schema::hasColumn('sales', 'invoice_number') ? 'invoice_number' : (Schema::hasColumn('sales', 'order_number') ? 'order_number' : null);
 
@@ -420,10 +437,6 @@ class Sale extends Model
 
     /* ----------------------------- Internal utils ---------------------------- */
 
-    /**
-     * Run a closure if InventoryService is bound; prevents errors in tests or
-     * environments where inventory logic is not registered.
-     */
     protected static function withInventory(\Closure $fn): void
     {
         if (App::bound(InventoryService::class)) {

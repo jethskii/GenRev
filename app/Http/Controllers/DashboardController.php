@@ -43,24 +43,30 @@ class DashboardController extends Controller
         $start = Carbon::now()->startOfWeek(); // Mon 00:00
         $end   = Carbon::now()->endOfWeek();   // Sun 23:59
 
+        // ==== SAFE SQL pieces that match your table ====
+        $QTY   = 'COALESCE(sales.quantity_kg, sales.quantity, 0)';
+        $UNIT  = 'COALESCE(sales.unit_price, sales.price, 0)';
+        $REVEX = "$QTY * $UNIT";
+        $TYPEX = "NULLIF(TRIM(sales.type_label), '')";
+
         /* ======================== KPI cards ======================== */
         $totalProducts        = (int) Product::count();
         $totalMaterialsWeight = (float) (Material::sum('quantity_kg') ?? 0); // on-hand stock
-        $totalRevenue         = (float) (Sale::selectRaw('SUM(quantity * price) as rev')->value('rev') ?? 0);
+        $totalRevenue         = (float) (Sale::selectRaw("SUM($REVEX) as rev")->value('rev') ?? 0);
         $totalSales           = (int) Sale::count();
 
         /* ===================== Recent sales table ==================== */
-        $recentSales = Sale::with('productRef:id,product_name')
-            ->orderByDesc('date')
-            ->orderByDesc('id')
+        $recentSales = Sale::leftJoin('products as p', 'p.id', '=', 'sales.product_id')
+            ->orderByDesc('sales.date')
+            ->orderByDesc('sales.id')
             ->take(8)
-            ->get()
-            ->map(function ($s) {
-                $s->product_name = $s->productRef->product_name ?? ($s->product ?? 'Product');
-                $s->quantity     = (float) ($s->quantity ?? 0);
-                $s->price        = (float) ($s->price ?? 0);
-                return $s;
-            });
+            ->get([
+                DB::raw("COALESCE(p.product_name, sales.product, 'Product') as product_name"),
+                DB::raw("$TYPEX as sale_type"),
+                DB::raw("$QTY  as quantity"),
+                DB::raw("$UNIT as unit_price"),
+                DB::raw("DATE(sales.date) as date"),
+            ]);
 
         /* ===================== Labels Mon..Sun ======================= */
         $labels = [];
@@ -86,7 +92,7 @@ class DashboardController extends Controller
 
         /* =================== Weekly Sales (qty/rev) ================= */
         $salesDaily = Sale::whereBetween(DB::raw('DATE(date)'), [$start->toDateString(), $end->toDateString()])
-            ->selectRaw('DATE(date) as d, SUM(quantity) as qty, SUM(quantity * price) as rev')
+            ->selectRaw("DATE(date) as d, SUM($QTY) as qty, SUM($REVEX) as rev")
             ->groupBy('d')
             ->get()
             ->keyBy('d');
@@ -175,16 +181,27 @@ class DashboardController extends Controller
             $cursor->addDay();
         }
 
-        /* ============== Top 5 products by revenue (this week) ============== */
+        /* ============== Most Sold Products & Types (this week) ============== */
+        $weekRevenue = (float) (Sale::whereBetween(DB::raw('DATE(sales.date)'), [$start->toDateString(), $end->toDateString()])
+            ->selectRaw("SUM($REVEX) as rev")
+            ->value('rev') ?? 0);
+
         $topProducts = Sale::join('products as p', 'p.id', '=', 'sales.product_id')
             ->whereBetween(DB::raw('DATE(sales.date)'), [$start->toDateString(), $end->toDateString()])
-            ->groupBy('sales.product_id', 'p.product_name')
-            ->selectRaw('sales.product_id, p.product_name, SUM(sales.quantity) as quantity, SUM(sales.quantity * sales.price) as revenue')
+            ->selectRaw("
+                sales.product_id,
+                p.product_name,
+                $TYPEX as sale_type,
+                SUM($QTY)   as quantity,
+                SUM($REVEX) as revenue
+            ")
+            // ✅ Use the alias in GROUP BY to satisfy ONLY_FULL_GROUP_BY
+            ->groupByRaw('sales.product_id, p.product_name, sale_type')
             ->orderByDesc('revenue')
             ->limit(5)
             ->get()
-            ->map(function ($row) use ($totalRevenue) {
-                $row->revenue_share = $totalRevenue > 0 ? round(($row->revenue / $totalRevenue) * 100, 1) : 0.0;
+            ->map(function ($row) use ($weekRevenue) {
+                $row->revenue_share = $weekRevenue > 0 ? round(($row->revenue / $weekRevenue) * 100, 1) : 0.0;
                 return $row;
             });
 
@@ -248,13 +265,17 @@ class DashboardController extends Controller
     }
 
     /**
-     * Optional JSON endpoint your routes already expose: /dashboard/data
+     * Optional JSON endpoint: /dashboard/data
      * Returns the same series so you can fetch via AJAX if you want later.
      */
     public function data()
     {
         $start = Carbon::now()->startOfWeek();
         $end   = Carbon::now()->endOfWeek();
+
+        $QTY   = 'COALESCE(sales.quantity_kg, sales.quantity, 0)';
+        $UNIT  = 'COALESCE(sales.unit_price, sales.price, 0)';
+        $REVEX = "$QTY * $UNIT";
 
         // Labels
         $labels = [];
@@ -280,7 +301,7 @@ class DashboardController extends Controller
 
         // Sales (current week)
         $salesDaily = Sale::whereBetween(DB::raw('DATE(date)'), [$start->toDateString(), $end->toDateString()])
-            ->selectRaw('DATE(date) as d, SUM(quantity) as qty, SUM(quantity * price) as rev')
+            ->selectRaw("DATE(date) as d, SUM($QTY) as qty, SUM($REVEX) as rev")
             ->groupBy('d')
             ->get()
             ->keyBy('d');

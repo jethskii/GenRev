@@ -211,6 +211,9 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Sales'])->group(funct
 
     // Alias
     Route::redirect('/sales-alias', '/sales')->name('sales');
+    
+    Route::get('/sales/api/types', [SalesController::class, 'apiTypes'])
+    ->name('sales.api.types'); // ?product_id=123
 });
 
 /*
