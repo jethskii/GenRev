@@ -26,6 +26,11 @@
   tfoot th,tfoot td{border-top:2px solid var(--line);background:#fafafa}
   @keyframes fadeIn { from{opacity:0;transform:scale(.98)} to{opacity:1;transform:scale(1)} }
   .animate-fadeIn{ animation:fadeIn .18s ease-out }
+
+  /* small stock pill */
+  .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.15rem .5rem;border-radius:999px;font-size:.72rem;font-weight:700;border:1px solid}
+  .pill-green{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+  .pill-red{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
 </style>
 @endsection
 
@@ -87,6 +92,7 @@
           <th class="py-3 px-4">Type</th>
           <th class="py-3 px-4">Forecasted</th>
           <th class="py-3 px-4">Produced</th>
+          <th class="py-3 px-4">Stock</th> {{-- NEW --}}
           <th class="py-3 px-4">Unit Cost</th>
           <th class="py-3 px-4">Price/Pack</th>
           <th class="py-3 px-4">Price/Bag</th>
@@ -99,10 +105,12 @@
         @forelse ($orders as $o)
           @php
             $batch = (string)($o->batch_number ?? '');
-            $type  = $o->type_name;  // from accessor -> uses saved snapshot
+            $type  = $o->type_name;  // accessor → saved snapshot
             $hay   = $o->type_keywords ?: \Illuminate\Support\Str::lower(
                         trim($batch.' '.($o->product_name_snapshot ?? $o->product->product_name ?? '').' '.($o->notes ?? ''))
                      );
+            $produced = (float)($o->quantity ?? $o->current_inventory);
+            $stock = (float)($o->current_inventory ?? 0);
           @endphp
           <tr id="order-row-{{ $o->id }}"
               data-type="{{ \Illuminate\Support\Str::lower($type) }}"
@@ -110,7 +118,12 @@
             <td class="py-3 px-4 font-mono text-xs">{{ $batch }}</td>
             <td class="py-3 px-4">{{ $type }}</td>
             <td class="py-3 px-4">{{ number_format((float)$o->forecasted_demand, 3) }} kg</td>
-            <td class="py-3 px-4">{{ number_format((float)($o->quantity ?? $o->current_inventory), 3) }} kg</td>
+            <td class="py-3 px-4">{{ number_format($produced, 3) }} kg</td>
+            <td class="py-3 px-4">
+              <span class="pill {{ $stock>0 ? 'pill-green' : 'pill-red' }}">
+                {{ number_format($stock, 3) }} kg
+              </span>
+            </td>
             <td class="py-3 px-4">₱{{ number_format((float)$o->unit_cost, 2) }}</td>
             <td class="py-3 px-4">₱{{ number_format((float)($o->unit_price_pack ?? 0), 2) }}</td>
             <td class="py-3 px-4">₱{{ number_format((float)($o->unit_price_bag  ?? 0), 2) }}</td>
@@ -128,7 +141,7 @@
             </td>
           </tr>
         @empty
-          <tr><td colspan="10" class="py-4 text-center text-[color:var(--muted)]">No production orders yet.</td></tr>
+          <tr><td colspan="11" class="py-4 text-center text-[color:var(--muted)]">No production orders yet.</td></tr>
         @endforelse
       </tbody>
       <tfoot>
@@ -136,6 +149,7 @@
           <th class="py-3 px-4 text-right" colspan="2">Totals (visible)</th>
           <td class="py-3 px-4"><span id="tForecast">0</span> kg</td>
           <td class="py-3 px-4"><span id="tProduced">0</span> kg</td>
+          <td class="py-3 px-4"><span id="tStock">0</span> kg</td> {{-- NEW --}}
           <td class="py-3 px-4">—</td>
           <td class="py-3 px-4">₱<span id="tPack">0.00</span></td>
           <td class="py-3 px-4">₱<span id="tBag">0.00</span></td>
@@ -159,6 +173,7 @@
   const countBadge = $$('#countBadge');
   const tForecast = $$('#tForecast');
   const tProduced = $$('#tProduced');
+  const tStock = $$('#tStock');      // NEW
   const tPack = $$('#tPack');
   const tBag = $$('#tBag');
 
@@ -168,7 +183,7 @@
 
   function applyFilter(){
     const q = (filterInput?.value || '').trim().toLowerCase();
-    let vis = 0, f=0, p=0, pack=0, bag=0;
+    let vis = 0, f=0, p=0, s=0, pack=0, bag=0;
 
     [...body.querySelectorAll('tr[id^="order-row-"]')].forEach(tr=>{
       const hay = tr.dataset.hay || '';
@@ -177,16 +192,20 @@
       if(match){
         vis++;
         const cells = tr.children;
+        // indexes after adding the Stock column:
+        // 0 Batch | 1 Type | 2 Forecasted | 3 Produced | 4 Stock | 5 Unit Cost | 6 Price/Pack | 7 Price/Bag | 8 Prod Date | 9 Expiry | 10 Actions
         f   += num(cells[2].innerText);
         p   += num(cells[3].innerText);
-        pack+= num(cells[5].innerText);
-        bag += num(cells[6].innerText);
+        s   += num(cells[4].innerText);
+        pack+= num(cells[6].innerText);
+        bag += num(cells[7].innerText);
       }
     });
 
     countBadge.textContent = `${vis} ${vis===1?'batch':'batches'}`;
     tForecast.textContent  = kgFmt(f);
     tProduced.textContent  = kgFmt(p);
+    tStock.textContent     = kgFmt(s);
     tPack.textContent      = pesoFmt(pack);
     tBag.textContent       = pesoFmt(bag);
   }

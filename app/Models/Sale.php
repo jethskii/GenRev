@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Carbon;
 
 class Sale extends Model
@@ -303,11 +304,37 @@ class Sale extends Model
         }
     }
 
+    /* ----------------------------- Stock Utilities ------------------------------ */
+
+    /**
+     * Returns available stock (kg) for a product, optionally narrowed to a batch/production.
+     * Available = Produced - Sold (soft-deletes ignored).
+     */
+    public static function availableKg(int $productId, ?int $productionId = null): float
+    {
+        // Produced (kg): from productions.quantity
+        $produced = DB::table('productions')
+            ->whereNull('deleted_at')
+            ->when($productionId, fn($q) => $q->where('id', $productionId))
+            ->when(!$productionId, fn($q) => $q->where('product_id', $productId))
+            ->sum(DB::raw('COALESCE(quantity,0)'));
+
+        // Sold (kg): prefer normalized quantity_kg, fall back to quantity
+        $sold = DB::table('sales')
+            ->whereNull('deleted_at')
+            ->where('product_id', $productId)
+            ->when($productionId, fn($q) => $q->where('production_id', $productionId))
+            ->sum(DB::raw('COALESCE(quantity_kg, quantity, 0)'));
+
+        return (float) ($produced - $sold);
+    }
+
     /* ------------------------- Inventory Side-Effects ------------------------- */
 
     protected static function booted()
     {
         static::creating(function (self $m) {
+            // Defaults / normalization
             if (!filled($m->status) || !in_array($m->status, self::STATUSES, true)) {
                 $m->status = self::STATUS_COMPLETED;
             }
@@ -326,6 +353,30 @@ class Sale extends Model
                 $m->invoice_number = $m->order_number ?: static::generateInvoiceNumber();
             }
 
+            // ⛔ Server-side guard: block save if no stock or oversell
+            $requestedQty = (float) ($m->quantity_kg ?? $m->quantity ?? 0);
+            $pid          = (int) ($m->product_id ?? 0);
+            $prodId       = $m->production_id ? (int) $m->production_id : null;
+
+            if ($pid > 0 && $requestedQty > 0) {
+                $available = self::availableKg($pid, $prodId);
+
+                if ($available <= 0) {
+                    throw ValidationException::withMessages([
+                        'quantity' => 'Cannot add this sale because stock is currently 0 for the selected product' .
+                                      ($prodId ? ' / batch.' : '.'),
+                    ]);
+                }
+
+                if ($requestedQty > $available) {
+                    throw ValidationException::withMessages([
+                        'quantity' => 'Requested quantity exceeds available stock. Available: ' .
+                                      number_format($available, 3) . ' kg.',
+                    ]);
+                }
+            }
+
+            // Compute totals if missing
             $qty  = $m->quantity_kg ?? $m->quantity ?? 0;
             $unit = $m->unit_price  ?? $m->price    ?? 0;
             $computed = round((float)$qty * (float)$unit, 2);

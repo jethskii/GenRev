@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use App\Models\Product;
 use App\Models\Sale;
 
@@ -99,6 +100,24 @@ class Production extends Model
     public function scopeArchived($q)
     {
         return $q->onlyTrashed();
+    }
+
+    /**
+     * Explicitly hide archived (even inside complex joins that bypass SoftDeletingScope).
+     * Use: Production::visible()->get()
+     */
+    public function scopeVisible($q)
+    {
+        $table = $this->getTable();
+        return $q->whereNull("$table.deleted_at");
+    }
+
+    /**
+     * Alias for visible()
+     */
+    public function scopeNotArchived($q)
+    {
+        return $this->scopeVisible($q);
     }
 
     public function scopeByProduct($q, int $productId)
@@ -409,5 +428,27 @@ class Production extends Model
             'stock_status'    => $balance > 0 ? 'in_stock' : 'out_of_stock',
             'production_date' => $latestProdDate,
         ]);
+    }
+
+    /* ============================ Convenience ============================ */
+
+    /**
+     * Soft-delete by id with a quick guard (returns bool).
+     * Handy in controllers: Production::archiveById($id);
+     */
+    public static function archiveById(int $id): bool
+    {
+        $row = static::find($id);
+        if (!$row) return false;
+        return (bool) $row->delete();
+    }
+
+    /**
+     * Ensure a query never shows archived items, even if someone used joins or withTrashed.
+     * Use: Production::query()->visible()->get();
+     */
+    public static function visibleQuery()
+    {
+        return static::query()->visible();
     }
 }

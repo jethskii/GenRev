@@ -41,6 +41,12 @@
         </div>
       @endif
 
+      {{-- ⚠️ No-stock banner (hidden by default) --}}
+      <div id="noStockBanner"
+           class="hidden rounded-xl border border-amber-300 bg-amber-50 text-amber-800 p-3 text-sm font-semibold">
+        ⚠️ There’s no stock in production for the selected item<span id="bannerBatchSuffix" class="hidden"> / batch</span>.
+      </div>
+
       <form action="{{ route('sales.store') }}" method="POST" class="space-y-4" novalidate>
         @csrf
 
@@ -162,8 +168,9 @@
                   class="rounded-xl px-4 py-2 text-gray-700 border border-gray-300 bg-white hover:bg-gray-50">
             Cancel
           </button>
-          <button type="submit"
-                  class="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-blue-600 text-white hover:bg-blue-700">
+          <button id="btnSaveSale" type="submit"
+                  class="inline-flex items-center gap-2 rounded-xl px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                  disabled>
             Save Sale
           </button>
         </div>
@@ -195,9 +202,60 @@ document.addEventListener('DOMContentLoaded', function () {
   const typeList    = document.getElementById('typeList');
   const nextTypeTxt = document.getElementById('nextTypeText');
 
+  const btnSave   = document.getElementById('btnSaveSale');
+  const banner    = document.getElementById('noStockBanner');
+  const bannerBatchSuffix = document.getElementById('bannerBatchSuffix');
+
   const batchesUrlBase  = "{{ url('/production/api/by-product') }}/"; // returns minimal batch list (now includes prices)
   const productAvailUrl = "{{ route('sales.available') }}";           // returns { available, price }
   const typesApiUrl     = "{{ route('sales.api.types') }}";           // returns { ok, list:[], next:"Type N" }
+
+  let productAvailable = 0;  // product-level available kg
+  let batchAvailable   = null; // when a batch is selected; null = not using batch
+
+  function setSaveEnabled(enabled){
+    btnSave.disabled = !enabled;
+  }
+
+  function showNoStockBanner(show, isBatch){
+    banner.classList.toggle('hidden', !show);
+    bannerBatchSuffix.classList.toggle('hidden', !isBatch);
+  }
+
+  function recomputeNoStockUI(){
+    // Prefer batch availability when a batch is picked, else use product
+    const usingBatch = batchAvailable !== null;
+    const avail = usingBatch ? (parseFloat(batchAvailable)||0) : (parseFloat(productAvailable)||0);
+
+    // Update pill text (product-level)
+    if (!usingBatch) {
+      if (pill && availQtyEl){
+        if (isFinite(avail) && avail >= 0){
+          availQtyEl.textContent = avail.toLocaleString(undefined,{maximumFractionDigits:3});
+          pill.classList.remove('hidden');
+        } else {
+          pill.classList.add('hidden');
+        }
+      }
+    }
+
+    // Show banner + disable Save when availability <= 0
+    const noStock = !isFinite(avail) || avail <= 0;
+    showNoStockBanner(noStock, usingBatch);
+    setSaveEnabled(!noStock);
+
+    // Clamp max on quantity
+    if (noStock){
+      qtyInput.setAttribute('max', 0);
+      if (qtyInput.value) qtyInput.value = '';
+    } else {
+      qtyInput.setAttribute('max', String(avail));
+      // If user-entered qty > avail, clamp
+      const q = parseFloat(qtyInput.value||'0');
+      if (q > avail) qtyInput.value = avail;
+    }
+    updateTotal();
+  }
 
   function updateTotal() {
     const q = parseFloat(qtyInput.value || 0);
@@ -210,22 +268,19 @@ document.addEventListener('DOMContentLoaded', function () {
     batchSel.innerHTML = '<option value="">— Select batch —</option>';
     batchSel.disabled = true;
     batchInfo.classList.add('hidden');
-    qtyInput.removeAttribute('max');
+    batchAvailable = null;
   }
 
-  // --- NEW: helpers for automatic unit price --------------------------------
+  // --- helpers for automatic unit price --------------------------------
   function currentUnitType() {
     return (unitType?.value || '').toLowerCase().trim();
   }
-
   function selectedBatchOption() {
     return batchSel?.options?.[batchSel.selectedIndex] || null;
   }
-
   function selectedProductOption() {
     return productSel?.options?.[productSel.selectedIndex] || null;
   }
-
   function getSuggestedPriceFor(unit) {
     const opt = selectedBatchOption();
     if (opt) {
@@ -236,7 +291,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return parseFloat(opt.dataset.bag);
       }
     }
-    // Fallback to product default price
     const pOpt = selectedProductOption();
     if (pOpt) {
       const prodPrice = parseFloat(pOpt.getAttribute('data-price') || 'NaN');
@@ -244,9 +298,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     return null;
   }
-
-  // Set price from the currently selected unit/batch.
-  // If force=true, overwrite whatever is there; else only fill if blank/zero.
   function applyUnitPriceFromSelection(force = false) {
     const unit = currentUnitType();
     if (!unit) { updateTotal(); return; } // 'Auto' → do nothing
@@ -258,7 +309,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     updateTotal();
   }
-  // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------
 
   async function fetchProductAvailability(productId) {
     try {
@@ -267,24 +318,20 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!res.ok) return;
       const data = await res.json();
 
-      if (typeof data.available !== 'undefined') {
-        availQtyEl.textContent = data.available;
-        pill.classList.remove('hidden');
-        qtyInput.setAttribute('max', data.available);
-      } else {
-        pill.classList.add('hidden');
-        qtyInput.removeAttribute('max');
-      }
+      // product-level availability (used when no batch selected)
+      productAvailable = parseFloat(data.available ?? 0) || 0;
 
-      // Only set a base price if price is empty and unit type is not Pack/Bag, the specific
-      // per-unit setting will happen via applyUnitPriceFromSelection when user picks unit.
+      // base price if empty
       if (priceInput.value === '') {
         const opt = selectedProductOption();
         priceInput.value = (opt?.getAttribute('data-price') || (typeof data.price !== 'undefined' ? data.price : '') );
       }
-
       updateTotal();
-    } catch {}
+      recomputeNoStockUI();
+    } catch {
+      productAvailable = 0;
+      recomputeNoStockUI();
+    }
   }
 
   async function loadBatches(productId) {
@@ -293,14 +340,13 @@ document.addEventListener('DOMContentLoaded', function () {
       const res = await fetch(batchesUrlBase + encodeURIComponent(productId), {
         headers: { 'X-Requested-With': 'XMLHttpRequest' }
       });
-      if (!res.ok) return;
+      if (!res.ok) { recomputeNoStockUI(); return; }
 
       const batches = await res.json();
       batches.forEach(b => {
         const opt = document.createElement('option');
 
-        // NEW: persist per-pack and per-bag prices on the option
-        // so we can read them when user chooses Pack/Bag.
+        // keep per-unit prices on the option
         opt.dataset.pack = (b.unit_price_pack ?? '') === '' ? '' : String(b.unit_price_pack);
         opt.dataset.bag  = (b.unit_price_bag  ?? '') === '' ? '' : String(b.unit_price_bag);
 
@@ -315,9 +361,12 @@ document.addEventListener('DOMContentLoaded', function () {
       });
       batchSel.disabled = false;
 
-      // If a unit type is already chosen, try to auto-apply its price now.
-      applyUnitPriceFromSelection(/*force*/ false);
-    } catch {}
+      applyUnitPriceFromSelection(false);
+      // When batches load, if none available, keep using product availability
+      recomputeNoStockUI();
+    } catch {
+      recomputeNoStockUI();
+    }
   }
 
   async function loadTypes(productId) {
@@ -362,28 +411,39 @@ document.addEventListener('DOMContentLoaded', function () {
       loadBatches(this.value);
       loadTypes(this.value);
     } else {
+      productAvailable = 0;
       typeList.innerHTML = '';
       nextTypeTxt.textContent = 'Type 1';
+      recomputeNoStockUI();
     }
   });
 
   batchSel?.addEventListener('change', function () {
     const selOpt = selectedBatchOption();
-    const inv = selOpt?.dataset?.inv ?? '';
-    if (inv !== '') {
+    const invStr = selOpt?.dataset?.inv ?? '';
+    const inv = invStr === '' ? null : parseFloat(invStr);
+
+    if (inv !== null) {
       batchInfo.textContent = `Batch available inventory: ${inv}`;
       batchInfo.classList.remove('hidden');
-      qtyInput.setAttribute('max', inv);
-      if (qtyInput.value && parseFloat(qtyInput.value) > parseFloat(inv)) {
+      batchAvailable = inv;
+    } else {
+      batchInfo.classList.add('hidden');
+      batchAvailable = null;
+    }
+
+    // clamp qty to batch inv and re-apply price for unit
+    if (inv !== null) {
+      qtyInput.setAttribute('max', String(inv));
+      if (qtyInput.value && parseFloat(qtyInput.value) > inv) {
         qtyInput.value = inv;
       }
     } else {
-      batchInfo.classList.add('hidden');
       qtyInput.removeAttribute('max');
     }
 
-    // NEW: when batch changes, re-apply price for current Pack/Bag selection
-    applyUnitPriceFromSelection(/*force*/ true);
+    applyUnitPriceFromSelection(true);
+    recomputeNoStockUI();
   });
 
   qtyInput?.addEventListener('input', function () {
@@ -395,12 +455,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
   priceInput?.addEventListener('input', updateTotal);
 
-  // NEW: when user picks Pack/Bag, set the correct price from the selected batch
+  // When user picks Pack/Bag, set the correct price from the selected batch
   unitType?.addEventListener('change', function () {
-    applyUnitPriceFromSelection(/*force*/ true);
+    applyUnitPriceFromSelection(true);
   });
 
-  // Initial compute
+  // Init state
+  setSaveEnabled(false);
   updateTotal();
 });
 </script>
