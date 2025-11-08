@@ -28,17 +28,18 @@ class SalesController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $products = Product::select('id','product_name','unit_cost','shelf_life_days')
+        $products = Product::select('id','product_name','unit_cost','shelf_life_days','default_price')
             ->orderBy('product_name')
             ->get()
             ->map(function ($p) {
                 $p->name  = $p->product_name;
-                $p->price = $p->unit_cost ?? 0;
+                // prefer default_price if present, else unit_cost
+                $p->price = is_numeric($p->default_price) ? (float)$p->default_price : ((float)($p->unit_cost ?? 0));
                 return $p;
             });
 
         $statusOptions    = ['Pending','Completed','Cancelled','Paid'];
-        $unitTypeOptions  = ['kg','pack','bag']; // include kg
+        $unitTypeOptions  = ['kg','pack','bag'];
         $nextInvoice      = $this->peekNextInvoiceNumber();
 
         // ----- Dashboard data -----
@@ -233,8 +234,8 @@ class SalesController extends Controller
         $validated = $request->validate([
             'product_id'      => ['required','integer','exists:products,id'],
             'production_id'   => ['nullable','integer','exists:productions,id'],
-            'unit_type'       => ['nullable','in:kg,pack,bag'], // allow kg
-            'type_label'      => ['nullable','string','max:255'], // NEW
+            'unit_type'       => ['nullable','in:kg,pack,bag'],
+            'type_label'      => ['nullable','string','max:255'],
             'date'            => ['nullable','date'],
             'order_date'      => ['nullable','date'],
             'quantity'        => ['required','numeric','min:0.001'],
@@ -261,14 +262,23 @@ class SalesController extends Controller
             }
         }
 
-        $product     = Product::select('id','product_name','shelf_life_days')->findOrFail($validated['product_id']);
+        $product     = Product::select('id','product_name','shelf_life_days','default_price','unit_cost')->findOrFail($validated['product_id']);
         $displayName = $validated['product'] ?? $product->product_name;
         $invoice     = $this->nextInvoiceNumber();
-        $qty         = (float) $validated['quantity'];
+        $qtyRaw      = (float) $validated['quantity'];
         $unitType    = $validated['unit_type'] ?? null;
 
+        // clamp integers for pack/bag (UI safety; real enforcement happens in model too)
+        if (in_array($unitType, ['pack','bag'], true)) {
+            $qty = (float) (int) round($qtyRaw);
+        } else {
+            $qty = round($qtyRaw, 3);
+        }
+
         // Soft UX guards
-        if ($qty > 5000) session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
+        if ($qty > 5000 && ($unitType === null || $unitType === 'kg')) {
+            session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
+        }
         if (isset($validated['price']) && (float)$validated['price'] === 0.0) {
             session()->flash('info', 'Unit price is zero. If this is intentional, you can ignore this note.');
         }
@@ -331,9 +341,11 @@ class SalesController extends Controller
                 }
 
                 Log::info("[sales.store] PAYLOAD {$debugUuid}", $payload);
+                // Sale model will validate stock & deduct via InventoryService hooks.
                 $createdSale = Sale::create($payload);
                 Log::info("[sales.store] CREATED {$debugUuid}", ['id' => $createdSale->id]);
 
+                // Recompute cached product balance for quick UI stats (non-critical)
                 $this->recomputeProductBalance((int)$product->id);
             });
 
@@ -373,11 +385,11 @@ class SalesController extends Controller
     public function edit(Sale $sale)
     {
         $sale->load([
-            'productRef:id,product_name,shelf_life_days,unit_cost',
+            'productRef:id,product_name,shelf_life_days,unit_cost,default_price',
             'production:id,product_id,batch_number,production_date,expiration_date,unit_price_pack,unit_price_bag,product_name_snapshot',
         ]);
 
-        $products = Product::orderBy('product_name')->get(['id','product_name','unit_cost','shelf_life_days']);
+        $products = Product::orderBy('product_name')->get(['id','product_name','unit_cost','default_price','shelf_life_days']);
 
         $batches = Production::where('product_id', $sale->product_id)
             ->orderByDesc('production_date')->orderByDesc('id')
@@ -434,12 +446,16 @@ class SalesController extends Controller
         }
 
         $oldProductId = (int)$sale->product_id;
-        $product      = Product::select('id','product_name','shelf_life_days')->findOrFail($validated['product_id']);
+        $product      = Product::select('id','product_name','shelf_life_days','default_price','unit_cost')->findOrFail($validated['product_id']);
         $displayName  = $validated['product'] ?? $product->product_name;
-        $qty          = (float) $validated['quantity'];
-        $unitType     = $validated['unit_type'] ?? $this->readUnitTypeFromSale($sale);
 
-        if ($qty > 5000) session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
+        $unitType     = $validated['unit_type'] ?? $this->readUnitTypeFromSale($sale);
+        $qtyRaw       = (float) $validated['quantity'];
+        $qty          = in_array($unitType, ['pack','bag'], true) ? (float) (int) round($qtyRaw) : round($qtyRaw, 3);
+
+        if ($qty > 5000 && ($unitType === null || $unitType === 'kg')) {
+            session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
+        }
         if (isset($validated['price']) && (float)$validated['price'] === 0.0) {
             session()->flash('info', 'Unit price is zero. If this is intentional, you can ignore this note.');
         }
@@ -495,6 +511,7 @@ class SalesController extends Controller
                 }
 
                 Log::info("[sales.update] PAYLOAD {$debugUuid}", $payload);
+                // Sale model hooks will undo old allocation and re-apply as needed.
                 $sale->update($payload);
             });
 
@@ -534,8 +551,8 @@ class SalesController extends Controller
     }
 
     /**
-     * Soft-delete the sale AND also archive the linked Production batch (soft delete),
-     * then redirect straight to the Production Archive page so both are visible there.
+     * Soft-delete the sale; also archives the linked Production batch (soft delete) if present.
+     * Inventory reversion is handled by the Sale model events.
      */
     public function destroy(Sale $sale)
     {
@@ -543,10 +560,8 @@ class SalesController extends Controller
         $productionId  = (int) ($sale->production_id ?? 0);
 
         DB::transaction(function () use ($sale, $productionId) {
-            // Soft delete sale
             $sale->delete();
 
-            // Also archive the linked production batch (soft delete), if any
             if ($productionId > 0) {
                 $batch = Production::withTrashed()->find($productionId);
                 if ($batch && is_null($batch->deleted_at)) {
@@ -557,7 +572,6 @@ class SalesController extends Controller
 
         $this->recomputeProductBalance($productId);
 
-        // Redirect to Production Archive so user sees both archived entities together
         return redirect()->route('production.archived')->with('success', 'Sale archived and related batch moved to Production archive.');
     }
 
@@ -652,7 +666,7 @@ class SalesController extends Controller
 
         return response()->json([
             'available' => (float) ($product->available_stock_kg ?? 0),
-            'price'     => (float) ($product->unit_cost ?? 0),
+            'price'     => (float) ($product->default_price ?? $product->unit_cost ?? 0),
         ]);
     }
 
@@ -670,10 +684,12 @@ class SalesController extends Controller
         ]);
 
         $product   = Product::findOrFail((int)$validated['product_id']);
-        $quantity  = (float)($validated['quantity'] ?? 1);
+        $qtyRaw    = (float)($validated['quantity'] ?? 1);
+        $unitType  = $validated['unit_type'] ?? null;
+        $quantity  = in_array($unitType, ['pack','bag'], true) ? (float) (int) round($qtyRaw) : round($qtyRaw, 3);
+
         $dateInput = $validated['date'] ?? $validated['order_date'] ?? now()->toDateString();
         $date      = Carbon::parse($dateInput)->toDateString();
-        $unitType  = $validated['unit_type'] ?? null;
 
         // Prefer provided batch; fallback to latest
         $batch = null;
@@ -732,7 +748,7 @@ class SalesController extends Controller
 
             Log::info("[sales.quickStore] PAYLOAD {$debugUuid}", $payload);
 
-            $sale = Sale::create($payload);
+            $sale = Sale::create($payload); // model handles deduction
 
             Log::info("[sales.quickStore] CREATED {$debugUuid}", ['id' => $sale->id]);
 
@@ -909,7 +925,7 @@ class SalesController extends Controller
      * 2) If unit_type == 'pack' and batch has unit_price_pack, use it.
      * 3) If unit_type == 'bag'  and batch has unit_price_bag,  use it.
      * 4) If unit_type omitted: prefer batch->unit_price_pack (if exists), else batch->unit_price_bag.
-     * 5) Else fallback to product->price/defaults or 0.
+     * 5) Else fallback to product->default_price -> unit_cost -> 0.
      */
     protected function determineUnitPrice(Product $product, ?Production $batch, ?string $unitType, ?float $override, ?float $fallbackCurrent = null): float
     {
@@ -932,8 +948,7 @@ class SalesController extends Controller
 
         if ($fallbackCurrent !== null) return (float)$fallbackCurrent;
 
-        $candidates = ['price','default_price','unit_cost'];
-        foreach ($candidates as $c) {
+        foreach (['default_price','unit_cost','price'] as $c) {
             if (isset($product->{$c}) && is_numeric($product->{$c})) {
                 return (float)$product->{$c};
             }

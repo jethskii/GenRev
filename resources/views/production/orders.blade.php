@@ -8,7 +8,6 @@
   .label{font-size:.85rem;color:var(--muted);margin-bottom:.35rem;display:block}
   .input,.select,.textarea{width:100%;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:.75rem;padding:.6rem .8rem;line-height:1.35;transition:box-shadow .15s ease,border-color .15s ease}
   .input:focus,.select:focus,.textarea:focus{outline:0;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-  .help{font-size:.75rem;color:#64748b}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;border-radius:.75rem;padding:.6rem .9rem;font-weight:700;border:1px solid transparent;transition:filter .12s ease}
   .btn:disabled{opacity:.6;cursor:not-allowed}
   .btn-primary{background:var(--red);color:#fff}
@@ -27,10 +26,10 @@
   @keyframes fadeIn { from{opacity:0;transform:scale(.98)} to{opacity:1;transform:scale(1)} }
   .animate-fadeIn{ animation:fadeIn .18s ease-out }
 
-  /* small stock pill */
+  /* small availability pill */
   .pill{display:inline-flex;align-items:center;gap:.4rem;padding:.15rem .5rem;border-radius:999px;font-size:.72rem;font-weight:700;border:1px solid}
-  .pill-green{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
-  .pill-red{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
+  .pill-ok{background:#ecfdf5;border-color:#a7f3d0;color:#065f46}
+  .pill-zero{background:#fef2f2;border-color:#fecaca;color:#7f1d1d}
 </style>
 @endsection
 
@@ -42,7 +41,7 @@
     <div>
       <h2 id="productTitle" class="text-2xl font-bold tracking-wide">{{ $product->product_name }}</h2>
       <p class="text-sm text-[color:var(--muted)]">
-        Category: <span id="productCategory">{{ $product->category ?? 'Uncategorized' }}</span>
+        Types of Product: <span id="productCategory">{{ $product->category ?? 'Uncategorized' }}</span>
       </p>
     </div>
     <img id="productImage" src="{{ $product->image_url ?? '/images/default-burger.png' }}"
@@ -57,7 +56,7 @@
       <span id="countBadge" class="chip" title="Visible batches">0 batches</span>
     </div>
     <div class="flex items-center gap-2">
-      <input id="filterInput" class="input" placeholder="Search type, product, batch no., notes…" style="max-width:320px">
+      <input id="filterInput" class="input" placeholder="Search type, product, batch no., remarks…" style="max-width:320px">
       <div class="hidden sm:flex items-center gap-1">
         @php $chips=['regular','special','garlic','chicken','beef','hamonado']; @endphp
         @foreach($chips as $c)
@@ -90,11 +89,9 @@
         <tr>
           <th class="py-3 px-4">Batch #</th>
           <th class="py-3 px-4">Type</th>
-          <th class="py-3 px-4">Forecasted</th>
-          <th class="py-3 px-4">Produced</th>
-          <th class="py-3 px-4">Stock</th> {{-- NEW --}}
-          <th class="py-3 px-4">Unit Cost</th>
+          <th class="py-3 px-4">Avail Pack</th>
           <th class="py-3 px-4">Price/Pack</th>
+          <th class="py-3 px-4">Avail Bag</th>
           <th class="py-3 px-4">Price/Bag</th>
           <th class="py-3 px-4">Prod. Date</th>
           <th class="py-3 px-4">Expiry</th>
@@ -104,29 +101,32 @@
       <tbody id="ordersBody">
         @forelse ($orders as $o)
           @php
-            $batch = (string)($o->batch_number ?? '');
-            $type  = $o->type_name;  // accessor → saved snapshot
-            $hay   = $o->type_keywords ?: \Illuminate\Support\Str::lower(
-                        trim($batch.' '.($o->product_name_snapshot ?? $o->product->product_name ?? '').' '.($o->notes ?? ''))
-                     );
-            $produced = (float)($o->quantity ?? $o->current_inventory);
-            $stock = (float)($o->current_inventory ?? 0);
+            $batch   = (string)($o->batch_number ?? '');
+            $type    = $o->type_name; // accessor
+            $availP  = (int)($o->available_pack ?? 0);
+            $availB  = (int)($o->available_bag  ?? 0);
+            $priceP  = (float)($o->unit_price_pack ?? 0);
+            $priceB  = (float)($o->unit_price_bag  ?? 0);
+            $hay     = $o->type_keywords ?: \Illuminate\Support\Str::lower(
+                          trim($batch.' '.($o->product_name_snapshot ?? $o->product->product_name ?? '').' '.($o->remarks ?? ''))
+                       );
           @endphp
           <tr id="order-row-{{ $o->id }}"
               data-type="{{ \Illuminate\Support\Str::lower($type) }}"
               data-hay="{{ $hay }}">
             <td class="py-3 px-4 font-mono text-xs">{{ $batch }}</td>
             <td class="py-3 px-4">{{ $type }}</td>
-            <td class="py-3 px-4">{{ number_format((float)$o->forecasted_demand, 3) }} kg</td>
-            <td class="py-3 px-4">{{ number_format($produced, 3) }} kg</td>
+
             <td class="py-3 px-4">
-              <span class="pill {{ $stock>0 ? 'pill-green' : 'pill-red' }}">
-                {{ number_format($stock, 3) }} kg
-              </span>
+              <span class="pill {{ $availP>0 ? 'pill-ok' : 'pill-zero' }}">{{ number_format($availP) }}</span>
             </td>
-            <td class="py-3 px-4">₱{{ number_format((float)$o->unit_cost, 2) }}</td>
-            <td class="py-3 px-4">₱{{ number_format((float)($o->unit_price_pack ?? 0), 2) }}</td>
-            <td class="py-3 px-4">₱{{ number_format((float)($o->unit_price_bag  ?? 0), 2) }}</td>
+            <td class="py-3 px-4">₱{{ number_format($priceP, 2) }}</td>
+
+            <td class="py-3 px-4">
+              <span class="pill {{ $availB>0 ? 'pill-ok' : 'pill-zero' }}">{{ number_format($availB) }}</span>
+            </td>
+            <td class="py-3 px-4">₱{{ number_format($priceB, 2) }}</td>
+
             <td class="py-3 px-4">{{ \Carbon\Carbon::parse($o->production_date)->format('M d, Y') }}</td>
             <td class="py-3 px-4">{{ $o->expiration_date ? \Carbon\Carbon::parse($o->expiration_date)->format('M d, Y') : '—' }}</td>
             <td class="py-3 px-4">
@@ -141,18 +141,16 @@
             </td>
           </tr>
         @empty
-          <tr><td colspan="11" class="py-4 text-center text-[color:var(--muted)]">No production orders yet.</td></tr>
+          <tr><td colspan="9" class="py-4 text-center text-[color:var(--muted)]">No production orders yet.</td></tr>
         @endforelse
       </tbody>
       <tfoot>
         <tr>
           <th class="py-3 px-4 text-right" colspan="2">Totals (visible)</th>
-          <td class="py-3 px-4"><span id="tForecast">0</span> kg</td>
-          <td class="py-3 px-4"><span id="tProduced">0</span> kg</td>
-          <td class="py-3 px-4"><span id="tStock">0</span> kg</td> {{-- NEW --}}
+          <td class="py-3 px-4"><span id="tAvailPack">0</span></td>
           <td class="py-3 px-4">—</td>
-          <td class="py-3 px-4">₱<span id="tPack">0.00</span></td>
-          <td class="py-3 px-4">₱<span id="tBag">0.00</span></td>
+          <td class="py-3 px-4"><span id="tAvailBag">0</span></td>
+          <td class="py-3 px-4">—</td>
           <td class="py-3 px-4" colspan="3"></td>
         </tr>
       </tfoot>
@@ -171,19 +169,15 @@
   const filterInput = $$('#filterInput');
   const body = $$('#ordersBody');
   const countBadge = $$('#countBadge');
-  const tForecast = $$('#tForecast');
-  const tProduced = $$('#tProduced');
-  const tStock = $$('#tStock');      // NEW
-  const tPack = $$('#tPack');
-  const tBag = $$('#tBag');
+  const tAvailPack = $$('#tAvailPack');
+  const tAvailBag  = $$('#tAvailBag');
 
   function num(s){ const n = parseFloat(String(s).replace(/[^\d.-]/g,'')); return isNaN(n)?0:n; }
-  function kgFmt(n){ return Number(n||0).toLocaleString(undefined,{maximumFractionDigits:3}); }
-  function pesoFmt(n){ return Number(n||0).toFixed(2); }
+  function intFmt(n){ return Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0}); }
 
   function applyFilter(){
     const q = (filterInput?.value || '').trim().toLowerCase();
-    let vis = 0, f=0, p=0, s=0, pack=0, bag=0;
+    let vis = 0, tp=0, tb=0;
 
     [...body.querySelectorAll('tr[id^="order-row-"]')].forEach(tr=>{
       const hay = tr.dataset.hay || '';
@@ -192,22 +186,15 @@
       if(match){
         vis++;
         const cells = tr.children;
-        // indexes after adding the Stock column:
-        // 0 Batch | 1 Type | 2 Forecasted | 3 Produced | 4 Stock | 5 Unit Cost | 6 Price/Pack | 7 Price/Bag | 8 Prod Date | 9 Expiry | 10 Actions
-        f   += num(cells[2].innerText);
-        p   += num(cells[3].innerText);
-        s   += num(cells[4].innerText);
-        pack+= num(cells[6].innerText);
-        bag += num(cells[7].innerText);
+        // 0 Batch | 1 Type | 2 Avail Pack | 3 Price/Pack | 4 Avail Bag | 5 Price/Bag | 6 Prod | 7 Exp | 8 Actions
+        tp += num(cells[2].innerText);
+        tb += num(cells[4].innerText);
       }
     });
 
     countBadge.textContent = `${vis} ${vis===1?'batch':'batches'}`;
-    tForecast.textContent  = kgFmt(f);
-    tProduced.textContent  = kgFmt(p);
-    tStock.textContent     = kgFmt(s);
-    tPack.textContent      = pesoFmt(pack);
-    tBag.textContent       = pesoFmt(bag);
+    tAvailPack.textContent = intFmt(tp);
+    tAvailBag.textContent  = intFmt(tb);
   }
 
   filterInput?.addEventListener('input', applyFilter);

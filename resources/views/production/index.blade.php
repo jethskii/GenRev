@@ -108,11 +108,11 @@
 </div>
 
 {{-- Add Production Modal (updated) --}}
-<div id="addModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/40">
+<div id="addModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="addProdTitle">
   <div class="w-full max-w-2xl mx-4 rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
     <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-      <h3 class="text-gray-900 font-semibold text-lg">Add Production</h3>
-      <button type="button" class="text-gray-500 hover:text-gray-700" onclick="closeAddModal()">✕</button>
+      <h3 id="addProdTitle" class="text-gray-900 font-semibold text-lg">Add Production</h3>
+      <button type="button" class="text-gray-500 hover:text-gray-700" onclick="closeAddModal()" aria-label="Close">✕</button>
     </div>
 
     <form id="ajaxProdForm" action="{{ route('production.store') }}" method="POST" enctype="multipart/form-data" class="px-5 py-4 space-y-4">
@@ -120,7 +120,7 @@
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="md:col-span-2">
-          <label class="block text-sm text-gray-600 mb-1">Product</label>
+          <label class="block text-sm text-gray-600 mb-1" for="product_id">Product</label>
 
           {{-- existing product --}}
           <select id="product_id" name="product_id" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
@@ -131,83 +131,99 @@
           </select>
 
           {{-- new product --}}
-          <input type="text" id="product_name" name="product_name" class="hidden w-full mt-2 rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="Or enter new product name">
+          <input type="text" id="product_name" name="product_name" class="hidden w-full mt-2 rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="Or enter new product name" autocomplete="off">
 
-          <button type="button" id="toggleNewBtn" class="text-xs text-blue-700 mt-1">+ Add new product</button>
+          <button type="button" id="toggleNewBtn" class="text-xs text-blue-700 mt-1" aria-expanded="false">+ Add new product</button>
         </div>
 
         <div>
-          <label class="block text-sm text-gray-600 mb-1">Category (optional)</label>
-          <input type="text" id="category" name="category" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="e.g., Pork, Beef">
+          <label class="block text-sm text-gray-600 mb-1" for="category">Type of Product</label>
+          <input type="text" id="category" name="category" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="e.g., Pork, Beef" autocomplete="off">
         </div>
       </div>
 
       {{-- Shelf life only matters when creating a new product --}}
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3 new-only hidden" id="shelfRow">
         <div>
-          <label class="block text-sm text-gray-600 mb-1">Shelf Life (days)</label>
+          <label class="block text-sm text-gray-600 mb-1" for="shelf_life_days">Shelf Life (days)</label>
           <input type="number" min="1" max="365" id="shelf_life_days" name="shelf_life_days" value="7" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="block text-sm text-gray-600 mb-1">Batch Number</label>
-          <input type="text" id="batch_number" name="batch_number" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="Auto if empty">
+          <label class="block text-sm text-gray-600 mb-1" for="batch_number">Batch Number</label>
+          <input type="text" id="batch_number" name="batch_number" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="Auto if empty" autocomplete="off">
         </div>
         <div>
-          <label class="block text-sm text-gray-600 mb-1">Production Date</label>
+          <label class="block text-sm text-gray-600 mb-1" for="production_date">Production Date</label>
           <input type="date" id="production_date" name="production_date" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" value="{{ now()->toDateString() }}" required>
         </div>
         <div>
-          <label class="block text-sm text-gray-600 mb-1">Expiration (optional)</label>
+          <label class="block text-sm text-gray-600 mb-1" for="expiration_date">Expiration (optional)</label>
           <input type="date" id="expiration_date" name="expiration_date" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
         </div>
       </div>
 
+      {{-- Forecast only (removed Produced Qty & Unit Cost) --}}
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="block text-sm text-gray-600 mb-1">Produced Qty (kg)</label>
-          {{-- INT to match controller/model --}}
-          <input type="number" step="1" min="1" id="current_inventory" name="current_inventory" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" required>
-        </div>
-        <div>
-          <label class="block text-sm text-gray-600 mb-1">Forecasted Demand</label>
+          <label class="block text-sm text-gray-600 mb-1" for="forecasted_demand">Forecasted Demand</label>
           <input type="number" step="0.01" min="0" id="forecasted_demand" name="forecasted_demand" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
         </div>
-        <div>
-          <label class="block text-sm text-gray-600 mb-1">Unit Cost</label>
-          <input type="number" step="0.01" min="0" id="unit_cost" name="unit_cost" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
-        </div>
       </div>
 
-      {{-- Prices per pack/bag --}}
+      {{-- Prices per pack/bag + Availability (accented via utilities, no <style>) --}}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm text-gray-600 mb-1">Price per Pack (₱)</label>
-          <input type="number" step="0.01" min="0" id="unit_price_pack" name="unit_price_pack" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
+        {{-- Pack (yellow) --}}
+        <div class="rounded-xl p-3 border border-yellow-300/60 shadow-[inset_0_0_0_1px_rgba(234,179,8,0.18)]">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-sm text-gray-700 m-0">Per Pack</label>
+            <span class="inline-flex items-center font-bold text-xs rounded-md px-2 py-0.5 bg-yellow-400 text-gray-900 select-none">PACK</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1" for="unit_price_pack">Price per Pack (₱)</label>
+              <input type="number" step="0.01" min="0" id="unit_price_pack" name="unit_price_pack"
+                     class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="0.00">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1" for="available_pack">Available Packs</label>
+              <input type="number" step="1" min="0" id="available_pack" name="available_pack"
+                     class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2 text-center font-semibold" placeholder="Qty" value="0">
+            </div>
+          </div>
         </div>
-        <div>
-          <label class="block text-sm text-gray-600 mb-1">Price per Bag (₱)</label>
-          <input type="number" step="0.01" min="0" id="unit_price_bag" name="unit_price_bag" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
+
+        {{-- Bag (red) --}}
+        <div class="rounded-xl p-3 border border-red-400/60 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.18)]">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-sm text-gray-700 m-0">Per Bag</label>
+            <span class="inline-flex items-center font-bold text-xs rounded-md px-2 py-0.5 bg-red-600 text-white select-none">BAG</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1" for="unit_price_bag">Price per Bag (₱)</label>
+              <input type="number" step="0.01" min="0" id="unit_price_bag" name="unit_price_bag"
+                     class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="0.00">
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1" for="available_bag">Available Bags</label>
+              <input type="number" step="1" min="0" id="available_bag" name="available_bag"
+                     class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2 text-center font-semibold" placeholder="Qty" value="0">
+            </div>
+          </div>
         </div>
       </div>
 
-      {{-- IMAGE UPLOAD --}}
+      {{-- Remarks --}}
       <div>
-        <div class="flex items-center justify-between">
-          <label for="image" class="block text-sm text-gray-600 mb-1">Image (optional)</label>
-          <span class="text-[11px] text-gray-500">Recommended: 4:3 • ≥ 300×300 • ≤ 4MB • JPG/PNG/WebP</span>
-        </div>
-        <input type="file" name="image" id="image" accept="image/png,image/jpeg,image/webp" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
-
-        {{-- live preview --}}
-        <div id="imagePreview" class="mt-3 hidden">
-          <div class="flex items-center gap-3">
-            <img id="imagePreviewImg" src="#" alt="Selected preview" class="w-40 h-28 object-cover rounded-xl border border-gray-200" width="160" height="112" loading="lazy" decoding="async">
-            <div class="text-xs text-gray-600" id="imageMeta"></div>
-          </div>
-          <button type="button" id="clearImageBtn" class="mt-2 text-xs text-red-600 underline">Remove image</button>
+        <label for="remarks" class="block text-sm text-gray-600 mb-1">Remarks (optional)</label>
+        <textarea id="remarks" name="remarks" rows="3" maxlength="500"
+                  class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2"
+                  placeholder="Any internal notes about this batch"></textarea>
+        <div class="mt-1 text-[11px] text-gray-500">
+          <span id="remarksCount">0</span>/500 characters
         </div>
       </div>
 
@@ -267,8 +283,11 @@
     };
 
     function ensureBatchNumber() {
-        if (!batchInput || batchInput.value) return;
-        // keep typed value if present
+        if (!batchInput) return;
+        if (batchInput.value && batchInput.value.trim().length > 0) return;
+        const now = new Date();
+        const pad = n => n.toString().padStart(2,'0');
+        batchInput.value = `B-${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     }
 
     function resetModalFields() {
@@ -278,23 +297,24 @@
         productName.classList.add('hidden');
         shelfRow.classList.add('hidden');
         toggleNewBtn.textContent = '+ Add new product';
-        batchInput.value = '';
-        const now = new Date();
-        const pad = n => n.toString().padStart(2,'0');
-        batchInput.value = `B-${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+        toggleNewBtn.setAttribute('aria-expanded', 'false');
+        if (batchInput) batchInput.value = '';
+        // init remarks counter after reset
+        updateRemarksCount();
     }
 
     toggleNewBtn.addEventListener('click', () => {
         productIdSel.classList.toggle('hidden');
         productName.classList.toggle('hidden');
         shelfRow.classList.toggle('hidden');
-        if (productName.classList.contains('hidden')) {
-            toggleNewBtn.textContent = '+ Add new product';
-            productName.value = '';
+        const expanded = !productName.classList.contains('hidden');
+        toggleNewBtn.textContent = expanded ? 'Use existing product' : '+ Add new product';
+        toggleNewBtn.setAttribute('aria-expanded', String(expanded));
+        if (expanded) {
+          productIdSel.value = '';
+          productName.focus();
         } else {
-            toggleNewBtn.textContent = 'Use existing product';
-            productIdSel.value = '';
-            productName.focus();
+          productName.value = '';
         }
     });
 
@@ -344,6 +364,15 @@
       imageInput.value = '';
       hidePreview();
     });
+
+    // Remarks counter
+    const remarks = document.getElementById('remarks');
+    const remarksCount = document.getElementById('remarksCount');
+    function updateRemarksCount(){
+      if (remarks && remarksCount) remarksCount.textContent = String(remarks.value.length || 0);
+    }
+    remarks?.addEventListener('input', updateRemarksCount);
+    updateRemarksCount();
 
     // AJAX submit
     form.addEventListener('submit', async (e) => {

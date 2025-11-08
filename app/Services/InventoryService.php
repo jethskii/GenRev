@@ -7,148 +7,287 @@ use App\Models\Production;
 use App\Models\Sale;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema; // <-- required
+use Illuminate\Support\Facades\Schema;
 
 class InventoryService
 {
+    /* =========================================================================
+     |  PUBLIC API (called by Sale model events you already wired)
+     * ========================================================================= */
+
+    /** Apply the effect of a sale (create/restore or after update). */
     public function applySale(Sale $sale): void
     {
-        DB::transaction(function () use ($sale) {
-            $qty = (float) ($sale->quantity ?? $sale->quantity_kg ?? 0);
-            if ($qty <= 0) return;
+        $productId = (int) ($sale->product_id ?? 0);
+        if ($productId <= 0) return;
 
-            $q = Production::where('product_id', $sale->product_id)
-                ->orderBy('production_date')
-                ->orderBy('id');
+        DB::transaction(function () use ($sale, $productId) {
 
-            if (!empty($sale->production_id)) {
-                $q->where('id', $sale->production_id);
+            // 1) Batch-level adjustments (if a batch is specified OR kg FIFO)
+            $unitType = $this->readUnitType($sale);  // 'kg' | 'pack' | 'bag'
+            $qty      = $this->readQty($sale);       // numeric (int for pack/bag)
+
+            if ($qty > 0) {
+                if ($sale->production_id) {
+                    // Explicit batch → adjust that single batch
+                    $this->decrementBatch((int) $sale->production_id, $unitType, $qty);
+                } else {
+                    // No batch selected
+                    if ($unitType === 'kg') {
+                        // FIFO across batches for kg only
+                        $this->decrementKgFifo($productId, $qty);
+                    }
+                    // For pack/bag we skip batch-level changes without an explicit batch,
+                    // because we cannot know which batch’s packs/bags to consume.
+                }
             }
 
-            $batches = $q->lockForUpdate()->get();
-            $left = $qty;
-
-            foreach ($batches as $b) {
-                $soldForBatch = (float) Sale::where('production_id', $b->id)
-                    ->where('id', '!=', $sale->id)
-                    ->sum('quantity');
-
-                $available = is_null($b->current_inventory)
-                    ? max(0.0, (float)$b->quantity - $soldForBatch)
-                    : max(0.0, (float)$b->current_inventory);
-
-                if ($available <= 0) continue;
-
-                $take = min($left, $available);
-                $left -= $take;
-
-                $b->current_inventory = is_null($b->current_inventory)
-                    ? max(0.0, (float)$b->quantity - $soldForBatch - $take)
-                    : max(0.0, (float)$b->current_inventory - $take);
-
-                $b->save();
-
-                if ($left <= 0) break;
-            }
-
-            if ($left > 0) {
-                throw new \RuntimeException('Not enough total inventory for product.');
-            }
-
-            $this->recomputeProductBalance($sale->product_id);
+            // 2) Product-level recompute (kg)
+            $this->recomputeProductBalance($productId);
         });
     }
 
+    /** Undo the effect of a sale (delete, or before update). */
     public function undoSale(Sale $sale): void
     {
-        DB::transaction(function () use ($sale) {
-            $qty = (float) ($sale->quantity ?? $sale->quantity_kg ?? 0);
-            if ($qty <= 0) return;
+        $productId = (int) ($sale->product_id ?? 0);
+        if ($productId <= 0) return;
 
-            $q = Production::where('product_id', $sale->product_id)
-                ->orderByDesc('production_date')
-                ->orderByDesc('id');
+        DB::transaction(function () use ($sale, $productId) {
 
-            if (!empty($sale->production_id)) {
-                $q->where('id', $sale->production_id);
+            $unitType = $this->readUnitType($sale);  // 'kg' | 'pack' | 'bag'
+            $qty      = $this->readQty($sale);
+
+            if ($qty > 0) {
+                if ($sale->production_id) {
+                    // Credit back to the exact batch previously used
+                    $this->incrementBatch((int) $sale->production_id, $unitType, $qty);
+                } else {
+                    // No batch recorded
+                    if ($unitType === 'kg') {
+                        // Simple LIFO credit for kg (newest-first)
+                        $this->incrementKgLifo($productId, $qty);
+                    }
+                    // For pack/bag we cannot safely credit without a specific batch
+                }
             }
 
-            $batches = $q->lockForUpdate()->get();
-
-            // credit back to the newest (simple LIFO) or the explicit batch
-            foreach ($batches as $b) {
-                $b->current_inventory = (float) ($b->current_inventory ?? 0) + $qty;
-                $b->save();
-                break;
-            }
-
-            $this->recomputeProductBalance($sale->product_id);
+            $this->recomputeProductBalance($productId);
         });
-    }
-
-    public function recomputeProductBalance(int $productId): void
-    {
-        $produced = (float) Production::where('product_id', $productId)->sum('quantity');
-        $sold     = (float) Sale::where('product_id', $productId)->sum('quantity');
-        $balance  = max(0.0, $produced - $sold);
-
-        Product::where('id', $productId)->update([
-            'quantity'     => $balance,
-            'stock_status' => $balance > 0 ? 'in_stock' : 'out_of_stock',
-        ]);
     }
 
     /**
-     * Material usage between two dates inclusive.
-     * Auto-detects:
-     * - product_recipes.{material_id|ingredient_id}
-     * - materials.{material_name|name}
-     * - price from {unit_price_snapshot|unit_price|0}
+     * Product kg balance = Σ(Production.quantity) - Σ(Sale.quantity_kg or quantity).
+     * Ignores soft-deleted rows and updates product stock flags + last production date.
      */
-    public function materialUsage(string $startDate, string $endDate): Collection
+    public function recomputeProductBalance(int $productId): void
     {
-        // Detect FK on product_recipes
-        $recipeFk = Schema::hasColumn('product_recipes', 'material_id')
-            ? 'material_id'
-            : (Schema::hasColumn('product_recipes', 'ingredient_id') ? 'ingredient_id' : null);
+        $produced = (float) DB::table('productions')
+            ->whereNull('deleted_at')
+            ->where('product_id', $productId)
+            ->sum(DB::raw('COALESCE(quantity,0)'));
 
-        if (!$recipeFk) {
-            throw new \RuntimeException("product_recipes needs 'material_id' or 'ingredient_id'.");
+        $qtyCol = Schema::hasColumn('sales', 'quantity_kg') ? 'quantity_kg'
+               : (Schema::hasColumn('sales', 'quantity')    ? 'quantity'    : null);
+
+        $sold = 0.0;
+        if ($qtyCol) {
+            $sold = (float) DB::table('sales')
+                ->whereNull('deleted_at')
+                ->where('product_id', $productId)
+                ->sum(DB::raw("COALESCE($qtyCol,0)"));
         }
 
-        // Detect label column on materials
-        $materialNameCol = Schema::hasColumn('materials', 'material_name')
-            ? 'material_name'
-            : (Schema::hasColumn('materials', 'name') ? 'name' : null);
+        $balance = max(0.0, $produced - $sold);
 
-        if (!$materialNameCol) {
-            throw new \RuntimeException("materials needs a label column: 'material_name' or 'name'.");
+        $latestProdDate = DB::table('productions')
+            ->whereNull('deleted_at')
+            ->where('product_id', $productId)
+            ->max('production_date');
+
+        DB::table('products')
+            ->where('id', $productId)
+            ->update([
+                'quantity'        => $balance,
+                'stock_status'    => $balance > 0 ? 'in_stock' : 'out_of_stock',
+                'production_date' => $latestProdDate,
+            ]);
+    }
+
+    /** Weekly material usage stub for InventoryController. */
+    public function materialUsage(string $fromDate, string $toDate): Collection
+    {
+        // Keep your previous implementation or return empty until you wire recipes.
+        return collect();
+    }
+
+    /* =========================================================================
+     |  INTERNALS — batch adjustment helpers
+     * ========================================================================= */
+
+    /** Decrement a specific batch by unit type. */
+    protected function decrementBatch(int $productionId, string $unitType, float $qty): void
+    {
+        /** @var Production|null $batch */
+        $batch = Production::whereKey($productionId)->lockForUpdate()->first();
+        if (!$batch) return;
+
+        switch ($unitType) {
+            case 'pack':
+                if ($this->hasColumn('productions', 'available_pack')) {
+                    $batch->available_pack = max(0, (int) ($batch->available_pack ?? 0) - (int) round($qty));
+                }
+                break;
+
+            case 'bag':
+                if ($this->hasColumn('productions', 'available_bag')) {
+                    $batch->available_bag = max(0, (int) ($batch->available_bag ?? 0) - (int) round($qty));
+                }
+                break;
+
+            default: // 'kg'
+                if ($this->hasColumn('productions', 'current_inventory')) {
+                    $batch->current_inventory = max(0.0, (float) ($batch->current_inventory ?? 0) - round($qty, 3));
+                } else {
+                    // Fallback: derive from total - other sales on this batch
+                    $soldOnBatch = (float) DB::table('sales')
+                        ->whereNull('deleted_at')
+                        ->where('production_id', $productionId)
+                        ->sum(DB::raw('COALESCE(quantity_kg, quantity, 0)'));
+                    $remaining = max(0.0, (float) ($batch->quantity ?? 0) - $soldOnBatch - round($qty, 3));
+                    $batch->current_inventory = $remaining;
+                }
+                break;
         }
 
-        // Detect price column on recipe/materials
-        $priceExpr = [];
-        if (Schema::hasColumn('product_recipes', 'unit_price_snapshot')) {
-            $priceExpr[] = 'r.unit_price_snapshot';
-        }
-        if (Schema::hasColumn('materials', 'unit_price')) {
-            $priceExpr[] = 'm.unit_price';
-        }
-        $unitPriceExpr = $priceExpr ? 'COALESCE(' . implode(',', $priceExpr) . ',0)' : '0';
+        $batch->save();
+    }
 
-        return DB::table('productions as p')
-            ->join('product_recipes as r', 'r.product_id', '=', 'p.product_id')
-            ->join('materials as m', function ($join) use ($recipeFk) {
-                $join->on('m.id', '=', DB::raw('r.' . $recipeFk));
-            })
-            ->whereBetween('p.production_date', [$startDate, $endDate])
-            ->groupBy('m.id', 'm.' . $materialNameCol)
-            ->select([
-                'm.id',
-                DB::raw('m.' . $materialNameCol . ' as material_name'),
-                DB::raw('SUM(p.quantity * r.qty) as qty_used'),
-                DB::raw('SUM(p.quantity * r.qty * ' . $unitPriceExpr . ') as cost_used'),
-            ])
-            ->orderByDesc('qty_used')
-            ->get();
+    /** Increment a specific batch by unit type (reverse of decrement). */
+    protected function incrementBatch(int $productionId, string $unitType, float $qty): void
+    {
+        /** @var Production|null $batch */
+        $batch = Production::whereKey($productionId)->lockForUpdate()->first();
+        if (!$batch) return;
+
+        switch ($unitType) {
+            case 'pack':
+                if ($this->hasColumn('productions', 'available_pack')) {
+                    $batch->available_pack = (int) ($batch->available_pack ?? 0) + (int) round($qty);
+                }
+                break;
+
+            case 'bag':
+                if ($this->hasColumn('productions', 'available_bag')) {
+                    $batch->available_bag = (int) ($batch->available_bag ?? 0) + (int) round($qty);
+                }
+                break;
+
+            default: // 'kg'
+                if ($this->hasColumn('productions', 'current_inventory')) {
+                    $batch->current_inventory = (float) ($batch->current_inventory ?? 0) + round($qty, 3);
+                } else {
+                    $batch->current_inventory = (float) ($batch->quantity ?? 0); // best-effort
+                }
+                break;
+        }
+
+        $batch->save();
+    }
+
+    /** FIFO consume kg across batches when no batch is chosen. */
+    protected function decrementKgFifo(int $productId, float $qty): void
+    {
+        $left = round(max(0.0, $qty), 3);
+        if ($left <= 0) return;
+
+        $batches = Production::whereNull('deleted_at')
+            ->where('product_id', $productId)
+            ->orderBy('production_date') // oldest first
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get(['id','quantity','current_inventory']);
+
+        foreach ($batches as $b) {
+            $available = (float) ($b->current_inventory ?? 0);
+
+            // If current_inventory is NULL, derive from total - sold on that batch
+            if (!$available && is_null($b->current_inventory)) {
+                $soldOnBatch = (float) DB::table('sales')
+                    ->whereNull('deleted_at')
+                    ->where('production_id', $b->id)
+                    ->sum(DB::raw('COALESCE(quantity_kg, quantity, 0)'));
+                $available = max(0.0, (float) ($b->quantity ?? 0) - $soldOnBatch);
+            }
+
+            if ($available <= 0) continue;
+
+            $take = (float) min($left, $available);
+            $left = round($left - $take, 3);
+
+            $b->current_inventory = round(max(0.0, $available - $take), 3);
+            $b->save();
+
+            if ($left <= 0) break;
+        }
+
+        if ($left > 0.0005) {
+            throw new \RuntimeException('Not enough total kg inventory for this product.');
+        }
+    }
+
+    /** LIFO credit kg back when no batch is known (best-effort for deletes/undo). */
+    protected function incrementKgLifo(int $productId, float $qty): void
+    {
+        $add = round(max(0.0, $qty), 3);
+        if ($add <= 0) return;
+
+        $batch = Production::whereNull('deleted_at')
+            ->where('product_id', $productId)
+            ->orderByDesc('production_date') // newest first
+            ->orderByDesc('id')
+            ->lockForUpdate()
+            ->first();
+
+        if ($batch) {
+            $cur = (float) ($batch->current_inventory ?? 0.0);
+            $batch->current_inventory = round($cur + $add, 3);
+            $batch->save();
+        }
+    }
+
+    /* =========================================================================
+     |  UTILITIES
+     * ========================================================================= */
+
+    protected function readQty(Sale $sale): float
+    {
+        $unit = $this->readUnitType($sale);
+        $q    = (float) ($sale->quantity_kg ?? $sale->quantity ?? 0);
+
+        // integerize for pack/bag
+        if ($unit === 'pack' || $unit === 'bag') {
+            return (float) (int) round($q);
+        }
+        return round($q, 3);
+    }
+
+    protected function readUnitType(Sale $sale): string
+    {
+        $col = Schema::hasColumn('sales','unit_type') ? 'unit_type'
+             : (Schema::hasColumn('sales','unit')     ? 'unit'      : null);
+
+        $val = $col ? strtolower((string) ($sale->{$col} ?? '')) : '';
+        return in_array($val, ['kg','pack','bag'], true) ? $val : 'kg';
+    }
+
+    protected function hasColumn(string $table, string $column): bool
+    {
+        static $cache = [];
+        $key = "$table.$column";
+        if (!array_key_exists($key, $cache)) {
+            $cache[$key] = Schema::hasColumn($table, $column);
+        }
+        return $cache[$key];
     }
 }

@@ -164,6 +164,10 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production'])->group(
         Route::get('/api/by-product/{product}', 'apiByProduct')->whereNumber('product')->name('api.byProduct');
         Route::get('/{product}/batches',        'apiByProduct')->whereNumber('product')->name('batches.byProduct');
 
+        // 🔹 Lightweight types endpoints
+        Route::get('/sales-types', 'salesTypes')->name('sales.types'); // ?product_id=123
+        Route::get('/{parent}/types', 'suggestTypes')->whereNumber('parent')->name('types');
+
         // Orders under a parent product
         Route::get('/orders/{id}', 'showOrders')->whereNumber('id')->name('orders');
         Route::post('/orders',     'storeOrder')->name('orders.store');
@@ -188,9 +192,6 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production'])->group(
         // PDF (keep before catch-all show)
         Route::get('/{id}/pdf', 'pdf')->whereNumber('id')->name('pdf');
 
-        // Type suggestions for parent product (single, canonical route)
-        Route::get('/{parent}/types', 'suggestTypes')->whereNumber('parent')->name('types');
-
         // Show a single production/batch/product view (keep last)
         Route::get('/{id}', 'show')->whereNumber('id')->name('show');
     });
@@ -210,7 +211,7 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production'])->group(
 */
 Route::middleware(['auth', RoleMiddleware::class . ':Admin,Sales'])->group(function () {
 
-    // Resource uses destroy() → which soft-deletes sale and also archives linked Production batch, then redirects to production.archived
+    // Sales resource
     Route::resource('sales', SalesController::class)->except(['create', 'show']);
 
     // Availability endpoint (GET/POST)

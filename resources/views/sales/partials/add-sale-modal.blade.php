@@ -15,20 +15,31 @@
     $nextInvoice      = $nextInvoice ?? '';
 @endphp
 
-<div id="addSaleModal" class="fixed inset-0 z-50 hidden items-center justify-center">
+<style>
+  /* full-width, clean cards */
+  #addSaleModal .sheet { width:100%; max-width:1280px; }
+  .insight { border-radius:14px; padding:16px; border:1px solid; }
+  .insight h4 { font-size:.9rem; margin:0 0 .25rem; }
+  .insight .big { font-size:2rem; line-height:1.1; font-weight:800; letter-spacing:.5px; }
+  .insight .hint { font-size:.78rem; opacity:.8 }
+  .insight .right { margin-left:auto; text-align:right }
+  .insight-pack { background:#FFFCF0; border-color:#F6E9A8; color:#6B4C00; }
+  .insight-bag  { background:#FFF5F6; border-color:#F5C5CA; color:#831843; }
+  .muted { color:#64748b }
+</style>
+
+<div id="addSaleModal" class="fixed inset-0 z-50 hidden items-start justify-center p-4 sm:p-6 md:p-8">
   {{-- Backdrop --}}
   <div class="absolute inset-0 bg-black/30" onclick="toggleAddSaleModal(false)"></div>
 
-  {{-- Modal Card - LIGHT --}}
-  <div class="relative w-full max-w-xl mx-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+  {{-- Modal Sheet --}}
+  <div class="relative sheet mx-auto overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
     {{-- Title bar --}}
-    <div class="px-6 py-5 border-b border-gray-200 bg-white">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-gray-900">Add New Sale</h2>
-        <button type="button" onclick="toggleAddSaleModal(false)"
-                class="grid h-9 w-9 place-items-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50"
-                aria-label="Close">✖</button>
-      </div>
+    <div class="px-6 py-5 border-b border-gray-200 bg-white flex items-center justify-between">
+      <h2 class="text-lg font-semibold text-gray-900">Add New Sale</h2>
+      <button type="button" onclick="toggleAddSaleModal(false)"
+              class="grid h-9 w-9 place-items-center rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50"
+              aria-label="Close">✖</button>
     </div>
 
     {{-- Body --}}
@@ -41,93 +52,98 @@
         </div>
       @endif
 
-      {{-- ⚠️ No-stock banner (hidden by default) --}}
+      {{-- No-stock banner --}}
       <div id="noStockBanner"
            class="hidden rounded-xl border border-amber-300 bg-amber-50 text-amber-800 p-3 text-sm font-semibold">
-        ⚠️ There’s no stock in production for the selected item<span id="bannerBatchSuffix" class="hidden"> / batch</span>.
+        ⚠️ There’s no stock for the current selection<span id="bannerBatchSuffix" class="hidden"> / batch</span>.
       </div>
 
       <form action="{{ route('sales.store') }}" method="POST" class="space-y-4" novalidate>
         @csrf
 
-        {{-- Product --}}
-        <div>
-          <label for="product_id" class="block text-sm text-gray-700 mb-1">Product</label>
-          <select
-            name="product_id" id="product_id" required
-            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
-            <option value="">— Select product —</option>
-            @foreach ($products as $p)
-              <option value="{{ $p->id }}" data-price="{{ (float) ($p->price ?? 0) }}">
-                {{ $p->name ?? $p->product_name }}
-              </option>
-            @endforeach
-          </select>
+        {{-- Row: Product / Batch / Date --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label for="product_id" class="block text-sm text-gray-700 mb-1">Product</label>
+            <select
+              name="product_id" id="product_id" required
+              class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
+              <option value="">— Select product —</option>
+              @foreach ($products as $p)
+                <option value="{{ $p->id }}" data-price="{{ (float) ($p->price ?? 0) }}">
+                  {{ $p->name ?? $p->product_name }}
+                </option>
+              @endforeach
+            </select>
+          </div>
 
-          {{-- Availability pill --}}
-          <div id="availabilityPill" class="mt-2 hidden">
-            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs border border-emerald-200 bg-emerald-50 text-emerald-800">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M20 7l-9 9-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span><span id="availQty">0</span> available</span>
-            </span>
+          <div>
+            <label for="production_id" class="block text-sm text-gray-700 mb-1">Batch</label>
+            <select
+              name="production_id" id="production_id" disabled
+              class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none disabled:opacity-60 disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-300">
+              <option value="">— Select batch —</option>
+            </select>
+            <p id="batchInfo" class="text-xs text-gray-500 mt-1 hidden"></p>
+          </div>
+
+          <div>
+            <label class="block text-sm text-gray-700 mb-1">Date</label>
+            <input
+              type="date" name="date" value="{{ old('date', now()->format('Y-m-d')) }}" required
+              class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
           </div>
         </div>
 
-        {{-- Batch --}}
-        <div>
-          <label for="production_id" class="block text-sm text-gray-700 mb-1">Batch</label>
-          <select
-            name="production_id" id="production_id" disabled
-            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none disabled:opacity-60 disabled:cursor-not-allowed focus:ring-2 focus:ring-blue-300">
-            <option value="">— Select batch —</option>
-          </select>
-          <p id="batchInfo" class="text-xs text-gray-500 mt-1 hidden"></p>
+        {{-- Insight cards (Pack / Bag) --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="insight insight-pack flex items-start gap-4">
+            <div>
+              <h4>Pack Availability</h4>
+              <div class="big"><span id="packsAvail">0</span> <span class="text-base font-semibold">packs</span></div>
+              <div id="packHint" class="hint">Based on latest batches with price.</div>
+            </div>
+            <div class="right">
+              <div class="text-sm font-medium opacity-80">Suggested Price</div>
+              <div class="text-xl font-extrabold">₱<span id="packPrice">0.00</span></div>
+            </div>
+          </div>
+
+          <div class="insight insight-bag flex items-start gap-4">
+            <div>
+              <h4>Bag Availability</h4>
+              <div class="big"><span id="bagsAvail">0</span> <span class="text-base font-semibold">bags</span></div>
+              <div id="bagHint" class="hint">Based on latest batches with price.</div>
+            </div>
+            <div class="right">
+              <div class="text-sm font-medium opacity-80">Suggested Price</div>
+              <div class="text-xl font-extrabold">₱<span id="bagPrice">0.00</span></div>
+            </div>
+          </div>
         </div>
 
-        {{-- Date --}}
-        <div>
-          <label class="block text-sm text-gray-700 mb-1">Date</label>
-          <input
-            type="date" name="date" value="{{ old('date', now()->format('Y-m-d')) }}" required
-            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
-        </div>
+        {{-- Unit Type / Qty / Unit Price --}}
+          <div class="md:col-span-1">
+            <label class="block text-sm text-gray-700 mb-1">Unit Type</label>
+            <select
+              name="unit_type" id="unit_type"
+              class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
+              <option value="">Auto</option>
+              @foreach ($unitTypeOptions as $opt)
+                <option value="{{ $opt }}">{{ ucfirst($opt) }}</option>
+              @endforeach
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Leave on Auto to let the server choose based on the batch.</p>
+          </div>
 
-        {{-- Type (auto-suggest + auto-increment when blank) --}}
-        <div>
-          <label class="block text-sm text-gray-700 mb-1">Type</label>
-          <input
-            type="text" name="type_label" id="type_label" list="typeList"
-            placeholder="Leave blank for Auto"
-            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
-          <datalist id="typeList"></datalist>
-          <p id="typeAutoHint" class="text-xs text-gray-500 mt-1">Auto will become: <span class="font-medium" id="nextTypeText">Type 1</span></p>
-        </div>
-
-        {{-- Unit Type --}}
-        <div>
-          <label class="block text-sm text-gray-700 mb-1">Unit Type</label>
-          <select
-            name="unit_type" id="unit_type"
-            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
-            <option value="">Auto</option>
-            @foreach ($unitTypeOptions as $opt)
-              <option value="{{ $opt }}">{{ ucfirst($opt) }}</option>
-            @endforeach
-          </select>
-          <p class="text-xs text-gray-500 mt-1">Leave on Auto to let the server choose based on the batch.</p>
-        </div>
-
-        {{-- Qty & Price --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
+          <div class="md:col-span-1">
             <label class="block text-sm text-gray-700 mb-1">Quantity</label>
             <input
               type="number" name="quantity" min="0.001" step="0.001" value="{{ old('quantity') }}" required inputmode="decimal"
               class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
           </div>
-          <div>
+
+          <div class="md:col-span-1">
             <label class="block text-sm text-gray-700 mb-1">Unit Price (₱)</label>
             <input
               type="number" name="price" step="0.01" min="0" value="{{ old('price') }}" placeholder="Leave blank for auto"
@@ -136,30 +152,29 @@
           </div>
         </div>
 
-        {{-- Total preview --}}
+        {{-- Total --}}
         <div class="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
           <span class="text-gray-700">Total</span>
           <span id="totalPreview" class="text-gray-900 font-semibold">₱ 0.00</span>
         </div>
 
-        {{-- Invoice (preview) --}}
-        <div>
-          <label class="block text-sm text-gray-700 mb-1">Invoice Number</label>
-          <input
-            type="text" value="{{ $nextInvoice }}" readonly
-            class="w-full rounded-xl border border-gray-200 bg-gray-50 text-gray-700 px-3 py-2.5" aria-readonly="true">
-        </div>
-
-        {{-- Status --}}
-        <div>
-          <label class="block text-sm text-gray-700 mb-1">Status</label>
-          <select
-            name="status" required
-            class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
-            @foreach ($statusOptions as $opt)
-              <option value="{{ $opt }}" @selected(old('status')===$opt)>{{ $opt }}</option>
-            @endforeach
-          </select>
+        {{-- Invoice / Status --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm text-gray-700 mb-1">Invoice Number</label>
+            <input type="text" value="{{ $nextInvoice }}" readonly
+                   class="w-full rounded-xl border border-gray-200 bg-gray-50 text-gray-700 px-3 py-2.5" aria-readonly="true">
+          </div>
+          <div>
+            <label class="block text-sm text-gray-700 mb-1">Status</label>
+            <select
+              name="status" required
+              class="w-full rounded-xl border border-gray-300 bg-white text-gray-900 px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-300">
+              @foreach ($statusOptions as $opt)
+                <option value="{{ $opt }}" @selected(old('status')===$opt)>{{ $opt }}</option>
+              @endforeach
+            </select>
+          </div>
         </div>
 
         {{-- Actions --}}
@@ -194,69 +209,63 @@ document.addEventListener('DOMContentLoaded', function () {
   const priceInput = document.querySelector('input[name="price"]');
   const qtyInput   = document.querySelector('input[name="quantity"]');
   const totalEl    = document.getElementById('totalPreview');
-  const pill       = document.getElementById('availabilityPill');
-  const availQtyEl = document.getElementById('availQty');
+
+  const packsAvail = document.getElementById('packsAvail');
+  const bagsAvail  = document.getElementById('bagsAvail');
+  const packPrice  = document.getElementById('packPrice');
+  const bagPrice   = document.getElementById('bagPrice');
+  const packHint   = document.getElementById('packHint');
+  const bagHint    = document.getElementById('bagHint');
+
+  const btnSave    = document.getElementById('btnSaveSale');
+  const banner     = document.getElementById('noStockBanner');
+  const bannerBatchSuffix = document.getElementById('bannerBatchSuffix');
   const batchInfo  = document.getElementById('batchInfo');
 
   const typeInput   = document.getElementById('type_label');
   const typeList    = document.getElementById('typeList');
   const nextTypeTxt = document.getElementById('nextTypeText');
 
-  const btnSave   = document.getElementById('btnSaveSale');
-  const banner    = document.getElementById('noStockBanner');
-  const bannerBatchSuffix = document.getElementById('bannerBatchSuffix');
-
-  const batchesUrlBase  = "{{ url('/production/api/by-product') }}/"; // returns minimal batch list (now includes prices)
+  const batchesUrlBase  = "{{ url('/production/api/by-product') }}/"; // returns batch list including: available_pack, available_bag, unit_price_pack/bag, current_inventory, production_date, product_name_snapshot, batch_number
   const productAvailUrl = "{{ route('sales.available') }}";           // returns { available, price }
   const typesApiUrl     = "{{ route('sales.api.types') }}";           // returns { ok, list:[], next:"Type N" }
 
-  let productAvailable = 0;  // product-level available kg
-  let batchAvailable   = null; // when a batch is selected; null = not using batch
+  let productAvailableKg = 0;
+  let batchAvailableKg   = null;
+  let currentBatches     = []; // cache list for current product
 
-  function setSaveEnabled(enabled){
-    btnSave.disabled = !enabled;
-  }
-
+  /** UI helpers **/
+  function setSaveEnabled(enabled){ btnSave.disabled = !enabled; }
   function showNoStockBanner(show, isBatch){
     banner.classList.toggle('hidden', !show);
     bannerBatchSuffix.classList.toggle('hidden', !isBatch);
   }
+  function currentUnitType(){ return (unitType?.value || '').toLowerCase().trim(); }
+  function selectedBatchOption(){ return batchSel?.options?.[batchSel.selectedIndex] || null; }
+  function selectedProductOption(){ return productSel?.options?.[productSel.selectedIndex] || null; }
 
+  function peso(n){ const v = Number(n||0); return isFinite(v)? v.toFixed(2):'0.00'; }
+  function int(n){ const v = parseInt(n,10); return isFinite(v)? v:0; }
+
+  /** recompute banner + qty clamp based on active availability (batch > product) */
   function recomputeNoStockUI(){
-    // Prefer batch availability when a batch is picked, else use product
-    const usingBatch = batchAvailable !== null;
-    const avail = usingBatch ? (parseFloat(batchAvailable)||0) : (parseFloat(productAvailable)||0);
-
-    // Update pill text (product-level)
-    if (!usingBatch) {
-      if (pill && availQtyEl){
-        if (isFinite(avail) && avail >= 0){
-          availQtyEl.textContent = avail.toLocaleString(undefined,{maximumFractionDigits:3});
-          pill.classList.remove('hidden');
-        } else {
-          pill.classList.add('hidden');
-        }
-      }
-    }
-
-    // Show banner + disable Save when availability <= 0
-    const noStock = !isFinite(avail) || avail <= 0;
+    const usingBatch = (batchAvailableKg !== null);
+    const availKg = usingBatch ? (parseFloat(batchAvailableKg)||0) : (parseFloat(productAvailableKg)||0);
+    const noStock = !isFinite(availKg) || availKg <= 0;
     showNoStockBanner(noStock, usingBatch);
     setSaveEnabled(!noStock);
-
-    // Clamp max on quantity
     if (noStock){
       qtyInput.setAttribute('max', 0);
       if (qtyInput.value) qtyInput.value = '';
     } else {
-      qtyInput.setAttribute('max', String(avail));
-      // If user-entered qty > avail, clamp
+      qtyInput.setAttribute('max', String(availKg));
       const q = parseFloat(qtyInput.value||'0');
-      if (q > avail) qtyInput.value = avail;
+      if (q > availKg) qtyInput.value = availKg;
     }
     updateTotal();
   }
 
+  /** total preview */
   function updateTotal() {
     const q = parseFloat(qtyInput.value || 0);
     const p = parseFloat(priceInput.value || NaN);
@@ -264,23 +273,7 @@ document.addEventListener('DOMContentLoaded', function () {
     totalEl.textContent = isNaN(t) ? '₱ auto' : ('₱ ' + t.toFixed(2));
   }
 
-  function resetBatchUI() {
-    batchSel.innerHTML = '<option value="">— Select batch —</option>';
-    batchSel.disabled = true;
-    batchInfo.classList.add('hidden');
-    batchAvailable = null;
-  }
-
-  // --- helpers for automatic unit price --------------------------------
-  function currentUnitType() {
-    return (unitType?.value || '').toLowerCase().trim();
-  }
-  function selectedBatchOption() {
-    return batchSel?.options?.[batchSel.selectedIndex] || null;
-  }
-  function selectedProductOption() {
-    return productSel?.options?.[productSel.selectedIndex] || null;
-  }
+  /** get per-unit suggested price from selected batch (or product fallback) */
   function getSuggestedPriceFor(unit) {
     const opt = selectedBatchOption();
     if (opt) {
@@ -298,30 +291,62 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     return null;
   }
-  function applyUnitPriceFromSelection(force = false) {
+
+  function applyUnitPriceFromSelection(force=false){
     const unit = currentUnitType();
-    if (!unit) { updateTotal(); return; } // 'Auto' → do nothing
+    if (!unit){ updateTotal(); return; }
     const suggested = getSuggestedPriceFor(unit);
-    if (suggested !== null) {
-      if (force || priceInput.value === '' || +priceInput.value === 0) {
-        priceInput.value = suggested.toFixed(2);
-      }
+    if (suggested !== null && (force || priceInput.value === '' || +priceInput.value === 0)) {
+      priceInput.value = Number(suggested).toFixed(2);
     }
     updateTotal();
   }
-  // ---------------------------------------------------------------------
 
+  /** ----- INSIGHT CARDS LOGIC ----- **/
+  function updateCardsForAggregate() {
+    // aggregate across all batches that have price for each unit
+    const withPackPrice = currentBatches.filter(b => b.unit_price_pack && Number(b.unit_price_pack) > 0);
+    const withBagPrice  = currentBatches.filter(b => b.unit_price_bag && Number(b.unit_price_bag) > 0);
+
+    const packs = withPackPrice.reduce((s,b)=> s + int(b.available_pack ?? 0), 0);
+    const bags  = withBagPrice.reduce((s,b)=> s + int(b.available_bag  ?? 0), 0);
+
+    // choose latest priced batch for suggested price
+    const latestPack = withPackPrice[0];
+    const latestBag  = withBagPrice[0];
+
+    packsAvail.textContent = packs;
+    bagsAvail.textContent  = bags;
+    packPrice.textContent  = peso(latestPack ? latestPack.unit_price_pack : 0);
+    bagPrice.textContent   = peso(latestBag  ? latestBag.unit_price_bag  : 0);
+
+    packHint.textContent = 'Based on latest batches with price.';
+    bagHint .textContent = 'Based on latest batches with price.';
+  }
+
+  function updateCardsForBatch(opt) {
+    const ap = int(opt?.dataset.apack ?? opt?.dataset.availablePack ?? 0);
+    const ab = int(opt?.dataset.abag  ?? opt?.dataset.availableBag  ?? 0);
+    const pp = parseFloat(opt?.dataset.pack ?? '0');
+    const bp = parseFloat(opt?.dataset.bag  ?? '0');
+
+    packsAvail.textContent = ap;
+    bagsAvail.textContent  = ab;
+    packPrice.textContent  = peso(pp);
+    bagPrice.textContent   = peso(bp);
+
+    packHint.textContent = 'Based on selected batch.';
+    bagHint .textContent = 'Based on selected batch.';
+  }
+
+  /** API calls **/
   async function fetchProductAvailability(productId) {
     try {
       const url = productAvailUrl + "?product_id=" + encodeURIComponent(productId);
       const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
       if (!res.ok) return;
       const data = await res.json();
-
-      // product-level availability (used when no batch selected)
-      productAvailable = parseFloat(data.available ?? 0) || 0;
-
-      // base price if empty
+      productAvailableKg = parseFloat(data.available ?? 0) || 0;
       if (priceInput.value === '') {
         const opt = selectedProductOption();
         priceInput.value = (opt?.getAttribute('data-price') || (typeof data.price !== 'undefined' ? data.price : '') );
@@ -329,9 +354,18 @@ document.addEventListener('DOMContentLoaded', function () {
       updateTotal();
       recomputeNoStockUI();
     } catch {
-      productAvailable = 0;
+      productAvailableKg = 0;
       recomputeNoStockUI();
     }
+  }
+
+  function resetBatchUI() {
+    batchSel.innerHTML = '<option value="">— Select batch —</option>';
+    batchSel.disabled = true;
+    batchInfo.classList.add('hidden');
+    batchAvailableKg = null;
+    currentBatches = [];
+    updateCardsForAggregate(); // clears to 0
   }
 
   async function loadBatches(productId) {
@@ -342,27 +376,36 @@ document.addEventListener('DOMContentLoaded', function () {
       });
       if (!res.ok) { recomputeNoStockUI(); return; }
 
-      const batches = await res.json();
-      batches.forEach(b => {
+      const list = await res.json();
+
+      // sort: newest first already, but ensure
+      currentBatches = Array.isArray(list) ? list : [];
+
+      currentBatches.forEach(b => {
         const opt = document.createElement('option');
 
-        // keep per-unit prices on the option
+        // datasets we use later
         opt.dataset.pack = (b.unit_price_pack ?? '') === '' ? '' : String(b.unit_price_pack);
         opt.dataset.bag  = (b.unit_price_bag  ?? '') === '' ? '' : String(b.unit_price_bag);
+        opt.dataset.inv  = String(b.current_inventory ?? 0);
+        opt.dataset.apack = String(b.available_pack ?? 0);
+        opt.dataset.abag  = String(b.available_bag  ?? 0);
+        opt.dataset.type  = (b.product_name_snapshot ?? '').toString();
 
-        const date = b.production_date ?? '';
-        const qty  = (b.quantity ?? 0);
-        const inv  = (b.current_inventory ?? 0);
+        // label like: Type: Garlic Skinless • Pack 33 • Bag 22 • B-2
+        const type = b.product_name_snapshot ?? 'Base';
+        const pN   = int(b.available_pack ?? 0);
+        const bN   = int(b.available_bag ?? 0);
+        const code = b.batch_number ?? 'Batch';
 
         opt.value = b.id;
-        opt.textContent = `${b.batch_number ?? 'Batch'} — Qty ${qty} — Inv ${inv}${date ? ' — ' + date : ''}`;
-        opt.dataset.inv = inv;
+        opt.textContent = `Type: ${type} • Pack ${pN} • Bag ${bN} • ${code}`;
         batchSel.appendChild(opt);
       });
-      batchSel.disabled = false;
 
-      applyUnitPriceFromSelection(false);
-      // When batches load, if none available, keep using product availability
+      batchSel.disabled = false;
+      updateCardsForAggregate();           // fill aggregate cards
+      applyUnitPriceFromSelection(false);  // set any default price if unit chosen
       recomputeNoStockUI();
     } catch {
       recomputeNoStockUI();
@@ -391,19 +434,15 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch {}
   }
 
+  /** Event wiring **/
   productSel?.addEventListener('change', function () {
     const hasValue = !!this.value;
-
     resetBatchUI();
-    pill.classList.add('hidden');
     qtyInput.value = '';
     qtyInput.removeAttribute('max');
 
-    // Base price from product; per-unit override happens on unit/batch change
     const opt = selectedProductOption();
-    if (priceInput.value === '') {
-      priceInput.value = opt?.getAttribute('data-price') || '';
-    }
+    if (priceInput.value === '') priceInput.value = opt?.getAttribute('data-price') || '';
     updateTotal();
 
     if (hasValue) {
@@ -411,9 +450,10 @@ document.addEventListener('DOMContentLoaded', function () {
       loadBatches(this.value);
       loadTypes(this.value);
     } else {
-      productAvailable = 0;
+      productAvailableKg = 0;
       typeList.innerHTML = '';
       nextTypeTxt.textContent = 'Type 1';
+      updateCardsForAggregate();
       recomputeNoStockUI();
     }
   });
@@ -423,22 +463,26 @@ document.addEventListener('DOMContentLoaded', function () {
     const invStr = selOpt?.dataset?.inv ?? '';
     const inv = invStr === '' ? null : parseFloat(invStr);
 
-    if (inv !== null) {
-      batchInfo.textContent = `Batch available inventory: ${inv}`;
+    // info line like your screenshot
+    if (selOpt) {
+      const type = selOpt.dataset.type || 'Base';
+      const pN   = int(selOpt.dataset.apack);
+      const bN   = int(selOpt.dataset.abag);
+      batchInfo.textContent = `Type: ${type} — Pack: ${pN} • Bag: ${bN} — Batch inventory (kg): ${inv ?? 0}`;
       batchInfo.classList.remove('hidden');
-      batchAvailable = inv;
+      updateCardsForBatch(selOpt);
     } else {
       batchInfo.classList.add('hidden');
-      batchAvailable = null;
+      updateCardsForAggregate();
     }
 
-    // clamp qty to batch inv and re-apply price for unit
     if (inv !== null) {
+      batchAvailableKg = inv;
       qtyInput.setAttribute('max', String(inv));
-      if (qtyInput.value && parseFloat(qtyInput.value) > inv) {
-        qtyInput.value = inv;
-      }
+      const v = parseFloat(qtyInput.value||'0');
+      if (v > inv) qtyInput.value = inv;
     } else {
+      batchAvailableKg = null;
       qtyInput.removeAttribute('max');
     }
 
@@ -454,13 +498,9 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   priceInput?.addEventListener('input', updateTotal);
+  unitType?.addEventListener('change', () => applyUnitPriceFromSelection(true));
 
-  // When user picks Pack/Bag, set the correct price from the selected batch
-  unitType?.addEventListener('change', function () {
-    applyUnitPriceFromSelection(true);
-  });
-
-  // Init state
+  // init
   setSaveEnabled(false);
   updateTotal();
 });

@@ -17,13 +17,12 @@ class Sale extends Model
 
     protected $table = 'sales';
 
-    /** Simple statuses (keep in sync with DB + UI) */
+    /** Statuses */
     public const STATUS_PENDING   = 'Pending';
     public const STATUS_COMPLETED = 'Completed';
     public const STATUS_CANCELLED = 'Cancelled';
     public const STATUS_PAID      = 'Paid';
 
-    /** Useful list for validation/UI */
     public const STATUSES = [
         self::STATUS_PENDING,
         self::STATUS_COMPLETED,
@@ -31,21 +30,17 @@ class Sale extends Model
         self::STATUS_PAID,
     ];
 
-    /**
-     * While debugging you can swap to:
-     * protected $guarded = [];
-     * but keep $fillable in prod for safety.
-     */
     protected $fillable = [
-        // Current schema columns
+        // schema columns (new + legacy)
         'product_id',
         'production_id',
         'invoice_number',
         'order_number',
         'order_date',
-        'product',          // legacy string label
-        'product_name',     // (exists in your table screenshot)
-        'type_label',       // <<— important for dashboard “Type”
+        'product',          // legacy string
+        'product_name',     // preferred display
+        'type_label',
+        'unit_type',        // <-- NEW (kg|pack|bag)
         'quantity',
         'quantity_kg',
         'unit_price',
@@ -56,45 +51,42 @@ class Sale extends Model
         'customer_name',
         'notes',
 
-        // Optional timeline fields used by controllers (if columns exist)
+        // optional timeline fields (if present)
         'production_date',
         'expiration_date',
 
-        // Legacy date
+        // legacy date
         'date',
     ];
 
     protected $casts = [
-        // New-ish
         'order_date'      => 'date',
         'quantity_kg'     => 'decimal:3',
         'unit_price'      => 'decimal:2',
         'total_price'     => 'decimal:2',
 
-        // Optional
         'production_date' => 'date',
         'expiration_date' => 'date',
 
-        // Legacy
         'date'            => 'date',
         'quantity'        => 'decimal:3',
         'price'           => 'decimal:2',
         'total'           => 'decimal:2',
+
+        'unit_type'       => 'string', // <-- NEW
     ];
 
-    // Make these derived fields visible in JSON (API responses)
     protected $appends = [
         'display_product',
         'sale_date',
         'is_paid',
-        'total_value',     // direct accessor for API use
-        'invoice',         // unified invoice/order number
-        'sale_type',       // <<— normalized type for dashboard
+        'total_value',
+        'invoice',
+        'sale_type',
     ];
 
     /* ----------------------------- Relationships ----------------------------- */
 
-    // Avoid name clash with legacy string column "product"
     public function productRef()
     {
         return $this->belongsTo(Product::class, 'product_id');
@@ -157,19 +149,16 @@ class Sale extends Model
 
     /* ---------------------------- Unified Accessors --------------------------- */
 
-    /** Quantity (kg) regardless of schema */
     public function qtyKg(): float
     {
         return (float) ($this->quantity_kg ?? $this->quantity ?? 0);
     }
 
-    /** Unit price regardless of schema */
     public function unitPriceValue(): float
     {
         return (float) ($this->unit_price ?? $this->price ?? 0);
     }
 
-    /** Total value (computed if not stored) – method */
     public function totalValue(): float
     {
         if (!is_null($this->total_price ?? null)) return (float) $this->total_price;
@@ -177,13 +166,11 @@ class Sale extends Model
         return round($this->qtyKg() * $this->unitPriceValue(), 2);
     }
 
-    /** Total value – accessor (so it's in $appends) */
     public function getTotalValueAttribute(): float
     {
         return $this->totalValue();
     }
 
-    /** Display product: prefer explicit product_name, then legacy string, then relation */
     public function getDisplayProductAttribute(): string
     {
         if (!empty($this->product_name)) return (string) $this->product_name;
@@ -191,43 +178,31 @@ class Sale extends Model
         return optional($this->productRef)->product_name ?? '';
     }
 
-    /** Unified sale date: prefer new order_date, then legacy date */
     public function getSaleDateAttribute(): ?Carbon
     {
         return $this->order_date ?? $this->date ?? null;
     }
 
-    /** Unified invoice/order number for display */
     public function getInvoiceAttribute(): string
     {
         return $this->order_number ?: ($this->invoice_number ?: '');
     }
 
-    /** Convenience boolean */
     public function getIsPaidAttribute(): bool
     {
         return ($this->status ?? '') === self::STATUS_PAID;
     }
 
-    /**
-     * Normalized sale type for dashboard:
-     * 1) honors a selected SQL alias `sale_type` (from controller queries)
-     * 2) falls back to `type_label`
-     * 3) as a last resort, checks a few optional columns if they exist
-     */
     public function getSaleTypeAttribute(): ?string
     {
-        // 1) If the controller selected "... as sale_type", use that raw attribute.
         if (array_key_exists('sale_type', $this->attributes)) {
             $aliased = trim((string) $this->attributes['sale_type']);
             if ($aliased !== '') return $aliased;
         }
 
-        // 2) Native column stored by forms / add order
         $val = trim((string) ($this->type_label ?? ''));
         if ($val !== '') return $val;
 
-        // 3) Safe fallbacks (only if columns exist)
         foreach (['product_type', 'type', 'variant_name', 'variant'] as $col) {
             if (Schema::hasColumn($this->getTable(), $col)) {
                 $v = trim((string) ($this->getAttribute($col) ?? ''));
@@ -238,7 +213,7 @@ class Sale extends Model
         return null;
     }
 
-    /* ------------------------------- Mutators -------------------------------- */
+    /* -------------------------------- Mutators -------------------------------- */
 
     public function setOrderDateAttribute($value): void
     {
@@ -248,78 +223,108 @@ class Sale extends Model
     public function setQuantityKgAttribute($value): void
     {
         $this->attributes['quantity_kg'] = is_null($value) ? null : (float) $value;
-
-        if (array_key_exists('unit_price', $this->attributes) && !is_null($this->attributes['unit_price'])) {
-            $computed = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
-            if (Schema::hasColumn('sales', 'total_price')) {
-                $this->attributes['total_price'] = $computed;
-            }
-        }
-
-        if (array_key_exists('price', $this->attributes) && !is_null($this->attributes['price'])) {
-            $computedLegacy = round(($this->attributes['quantity_kg'] ?? $this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
-            if (Schema::hasColumn('sales', 'total')) {
-                $this->attributes['total'] = $computedLegacy;
-            }
-        }
+        $this->recomputeTotalsIntoAttributes();
     }
 
     public function setUnitPriceAttribute($value): void
     {
         $this->attributes['unit_price'] = is_null($value) ? null : (float) $value;
-
-        if (array_key_exists('quantity_kg', $this->attributes) && !is_null($this->attributes['quantity_kg'])) {
-            $computed = round(($this->attributes['quantity_kg'] ?? 0) * ($this->attributes['unit_price'] ?? 0), 2);
-            if (Schema::hasColumn('sales', 'total_price')) {
-                $this->attributes['total_price'] = $computed;
-            }
-        }
+        $this->recomputeTotalsIntoAttributes();
     }
 
     public function setQuantityAttribute($value): void
     {
         $this->attributes['quantity'] = is_null($value) ? null : (float) $value;
 
-        if (array_key_exists('price', $this->attributes) && !is_null($this->attributes['price'])) {
-            $computed = round(($this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
-            if (Schema::hasColumn('sales', 'total')) {
-                $this->attributes['total'] = $computed;
-            }
-        }
-
         if (Schema::hasColumn('sales', 'quantity_kg') && !isset($this->attributes['quantity_kg'])) {
             $this->attributes['quantity_kg'] = $this->attributes['quantity'];
         }
+        $this->recomputeTotalsIntoAttributes();
     }
 
     public function setPriceAttribute($value): void
     {
         $this->attributes['price'] = is_null($value) ? null : (float) $value;
+        $this->recomputeTotalsIntoAttributes();
+    }
 
-        if (array_key_exists('quantity', $this->attributes) && !is_null($this->attributes['quantity'])) {
-            $computed = round(($this->attributes['quantity'] ?? 0) * ($this->attributes['price'] ?? 0), 2);
-            if (Schema::hasColumn('sales', 'total')) {
-                $this->attributes['total'] = $computed;
-            }
+    protected function recomputeTotalsIntoAttributes(): void
+    {
+        if (Schema::hasColumn('sales', 'total_price')
+            && array_key_exists('quantity_kg', $this->attributes)
+            && array_key_exists('unit_price', $this->attributes)
+            && !is_null($this->attributes['quantity_kg'])
+            && !is_null($this->attributes['unit_price'])) {
+            $this->attributes['total_price'] = round(
+                (float)$this->attributes['quantity_kg'] * (float)$this->attributes['unit_price'], 2
+            );
+        }
+
+        if (Schema::hasColumn('sales', 'total')
+            && array_key_exists('quantity', $this->attributes)
+            && array_key_exists('price', $this->attributes)
+            && !is_null($this->attributes['quantity'])
+            && !is_null($this->attributes['price'])) {
+            $this->attributes['total'] = round(
+                (float)$this->attributes['quantity'] * (float)$this->attributes['price'], 2
+            );
         }
     }
 
-    /* ----------------------------- Stock Utilities ------------------------------ */
+    /* ----------------------------- Stock Utilities --------------------------- */
 
-    /**
-     * Returns available stock (kg) for a product, optionally narrowed to a batch/production.
-     * Available = Produced - Sold (soft-deletes ignored).
-     */
+    /** Normalize selling mode from unit_type column (preferred): kg | pack | bag (default kg) */
+    protected function resolveMode(): string
+    {
+        // Prefer explicit DB column
+        $col = Schema::hasColumn($this->getTable(), 'unit_type')
+            ? 'unit_type'
+            : (Schema::hasColumn($this->getTable(), 'unit') ? 'unit' : null);
+
+        $raw = $col ? ($this->{$col} ?? null) : null;
+        $t   = strtolower(trim((string) $raw));
+
+        return in_array($t, ['kg','pack','bag'], true) ? $t : 'kg';
+    }
+
+    /** Numeric amount the user is requesting (kg for kg-mode; units for pack/bag) */
+    protected function requestedAmount(): float
+    {
+        $mode = $this->resolveMode();
+        if ($mode === 'kg') {
+            return (float) ($this->quantity_kg ?? $this->quantity ?? 0);
+        }
+        // packs/bags are whole units
+        return (float) (int) round((float) ($this->quantity ?? 0));
+    }
+
+    /** How many are available for the chosen mode and (optional) target batch. */
+    public static function availableForMode(int $productId, ?int $productionId, string $mode): float
+    {
+        $q = DB::table('productions')->whereNull('deleted_at');
+
+        if ($mode === 'pack') {
+            $q = $productionId ? $q->where('id', $productionId) : $q->where('product_id', $productId);
+            return (float) $q->sum(DB::raw('COALESCE(available_pack,0)'));
+        }
+        if ($mode === 'bag') {
+            $q = $productionId ? $q->where('id', $productionId) : $q->where('product_id', $productId);
+            return (float) $q->sum(DB::raw('COALESCE(available_bag,0)'));
+        }
+
+        // kg default: produced - sold
+        return self::availableKg($productId, $productionId);
+    }
+
+    /** Available by kg using produced - sold (supports per-batch or per-product) */
     public static function availableKg(int $productId, ?int $productionId = null): float
     {
-        // Produced (kg): from productions.quantity
         $produced = DB::table('productions')
             ->whereNull('deleted_at')
             ->when($productionId, fn($q) => $q->where('id', $productionId))
             ->when(!$productionId, fn($q) => $q->where('product_id', $productId))
             ->sum(DB::raw('COALESCE(quantity,0)'));
 
-        // Sold (kg): prefer normalized quantity_kg, fall back to quantity
         $sold = DB::table('sales')
             ->whereNull('deleted_at')
             ->where('product_id', $productId)
@@ -333,8 +338,8 @@ class Sale extends Model
 
     protected static function booted()
     {
+        // ---------- CREATE ----------
         static::creating(function (self $m) {
-            // Defaults / normalization
             if (!filled($m->status) || !in_array($m->status, self::STATUSES, true)) {
                 $m->status = self::STATUS_COMPLETED;
             }
@@ -353,81 +358,259 @@ class Sale extends Model
                 $m->invoice_number = $m->order_number ?: static::generateInvoiceNumber();
             }
 
-            // ⛔ Server-side guard: block save if no stock or oversell
-            $requestedQty = (float) ($m->quantity_kg ?? $m->quantity ?? 0);
-            $pid          = (int) ($m->product_id ?? 0);
-            $prodId       = $m->production_id ? (int) $m->production_id : null;
+            // Guard: stock must exist, cannot oversell
+            $requestedQty = $m->requestedAmount();
+            $pid    = (int) ($m->product_id ?? 0);
+            $prodId = $m->production_id ? (int) $m->production_id : null;
+            $mode   = $m->resolveMode();
 
             if ($pid > 0 && $requestedQty > 0) {
-                $available = self::availableKg($pid, $prodId);
+                $available = self::availableForMode($pid, $prodId, $mode);
 
                 if ($available <= 0) {
                     throw ValidationException::withMessages([
-                        'quantity' => 'Cannot add this sale because stock is currently 0 for the selected product' .
-                                      ($prodId ? ' / batch.' : '.'),
+                        'quantity' => 'No available stock for the selected product' . ($prodId ? ' / batch.' : '.'),
                     ]);
                 }
-
                 if ($requestedQty > $available) {
                     throw ValidationException::withMessages([
-                        'quantity' => 'Requested quantity exceeds available stock. Available: ' .
-                                      number_format($available, 3) . ' kg.',
+                        'quantity' => 'Requested amount exceeds available ' . $mode . ' stock. Available: ' .
+                                      number_format($available, 3),
                     ]);
                 }
             }
 
-            // Compute totals if missing
-            $qty  = $m->quantity_kg ?? $m->quantity ?? 0;
-            $unit = $m->unit_price  ?? $m->price    ?? 0;
-            $computed = round((float)$qty * (float)$unit, 2);
-
-            $hasNewTotal    = Schema::hasColumn('sales', 'total_price');
-            $hasLegacyTotal = Schema::hasColumn('sales', 'total');
-
-            if ($hasNewTotal && is_null($m->total_price)) $m->total_price = $computed;
-            if ($hasLegacyTotal && is_null($m->total))     $m->total      = $computed;
+            // Ensure totals present
+            $m->recomputeTotalsIntoAttributes();
         });
 
         static::created(function (self $m) {
-            static::withInventory(fn (InventoryService $svc) => $svc->applySale($m));
+            if (!static::applyViaService($m)) {
+                $m->allocateAndDeduct();
+            }
         });
 
+        // ---------- UPDATE ----------
         static::updating(function (self $m) {
+            // If qty/batch/product/mode changes, revert old effect first
             $dirty = array_intersect(
                 array_keys($m->getDirty()),
-                ['product_id','production_id','quantity_kg','quantity']
+                ['product_id','production_id','quantity_kg','quantity','unit_price','price','status','type_label','sale_type','unit_type'] // <-- add unit_type
             );
+
             if (!empty($dirty)) {
                 $orig = (new self())->forceFill($m->getOriginal());
-                static::withInventory(fn (InventoryService $svc) => $svc->undoSale($orig));
+                if (!static::undoViaService($orig)) {
+                    $orig->releaseAllocations();
+                }
             }
+
+            $m->recomputeTotalsIntoAttributes();
         });
 
         static::updated(function (self $m) {
-            if ($m->wasChanged(['product_id','production_id','quantity_kg','quantity'])) {
-                static::withInventory(fn (InventoryService $svc) => $svc->applySale($m));
+            if ($m->wasChanged(['product_id','production_id','quantity_kg','quantity','unit_price','price','status','type_label','sale_type','unit_type'])) { // <-- add unit_type
+                if (!static::applyViaService($m)) {
+                    $m->allocateAndDeduct();
+                }
             }
         });
 
+        // ---------- DELETE / RESTORE ----------
         static::deleted(function (self $m) {
-            static::withInventory(fn (InventoryService $svc) => $svc->undoSale($m));
+            if (!static::undoViaService($m)) {
+                $m->releaseAllocations();
+            }
         });
 
         static::restored(function (self $m) {
-            static::withInventory(fn (InventoryService $svc) => $svc->applySale($m));
+            if (!static::applyViaService($m)) {
+                $m->allocateAndDeduct();
+            }
         });
 
+        // ---------- RECOMPUTE PRODUCT BALANCE ----------
         static::saved(function (self $m) {
             if ($m->product_id) {
-                static::withInventory(fn (InventoryService $svc) => $svc->recomputeProductBalance((int) $m->product_id));
+                if (App::bound(InventoryService::class)) {
+                    App::make(InventoryService::class)->recomputeProductBalance((int) $m->product_id);
+                } else {
+                    $produced = (float) DB::table('productions')
+                        ->whereNull('deleted_at')
+                        ->where('product_id', $m->product_id)
+                        ->sum(DB::raw('COALESCE(quantity,0)'));
+
+                    $sold = (float) DB::table('sales')
+                        ->whereNull('deleted_at')
+                        ->where('product_id', $m->product_id)
+                        ->sum(DB::raw('COALESCE(quantity_kg, quantity, 0)'));
+
+                    $balance = max(0.0, $produced - $sold);
+                    $latestProdDate = DB::table('productions')
+                        ->whereNull('deleted_at')
+                        ->where('product_id', $m->product_id)
+                        ->max('production_date');
+
+                    \App\Models\Product::whereKey($m->product_id)->update([
+                        'quantity'        => $balance,
+                        'stock_status'    => $balance > 0 ? 'in_stock' : 'out_of_stock',
+                        'production_date' => $latestProdDate,
+                    ]);
+                }
             }
         });
     }
 
-    /**
-     * Generates a human-friendly unique invoice number: INV-YYYYMMDD-###.
-     * Uses invoice_sequences table if present; otherwise scans sales.
-     */
+    /** Try to use InventoryService::applySale, returns true if used */
+    protected static function applyViaService(self $m): bool
+    {
+        if (App::bound(InventoryService::class)) {
+            /** @var InventoryService $svc */
+            $svc = App::make(InventoryService::class);
+            $svc->applySale($m);
+            return true;
+        }
+        return false;
+    }
+
+    /** Try to use InventoryService::undoSale, returns true if used */
+    protected static function undoViaService(self $m): bool
+    {
+        if (App::bound(InventoryService::class)) {
+            /** @var InventoryService $svc */
+            $svc = App::make(InventoryService::class);
+            $svc->undoSale($m);
+            return true;
+        }
+        return false;
+    }
+
+    /* ----------------------- Allocation + Audit (local) ----------------------- */
+
+    public function allocateAndDeduct(): void
+    {
+        $mode = $this->resolveMode();
+        $req  = $this->requestedAmount();
+        if ($req <= 0 || !$this->product_id) return;
+
+        DB::transaction(function () use ($mode, $req) {
+            $remaining = $req;
+
+            $deductFromProd = function (\App\Models\Production $p, float $take) use ($mode) {
+                if ($mode === 'pack') {
+                    $avail = (float) ($p->available_pack ?? 0);
+                    $take  = min($take, $avail);
+                    if ($take > 0) {
+                        $this->recordAllocation($p->id, $mode, $take);
+                        $p->available_pack = max(0, $avail - $take);
+                        $p->save();
+                        $this->audit("Deducted {$take} pack(s) from batch {$p->batch_number} (Production #{$p->id}).");
+                    }
+                    return $take;
+                } elseif ($mode === 'bag') {
+                    $avail = (float) ($p->available_bag ?? 0);
+                    $take  = min($take, $avail);
+                    if ($take > 0) {
+                        $this->recordAllocation($p->id, $mode, $take);
+                        $p->available_bag = max(0, $avail - $take);
+                        $p->save();
+                        $this->audit("Deducted {$take} bag(s) from batch {$p->batch_number} (Production #{$p->id}).");
+                    }
+                    return $take;
+                }
+
+                // default kg allocation uses current_inventory
+                $availKg = (float) ($p->current_inventory ?? 0);
+                $takeKg  = min($take, $availKg);
+                if ($takeKg > 0) {
+                    $this->recordAllocation($p->id, 'kg', $takeKg);
+                    $p->current_inventory = max(0, $availKg - $takeKg);
+                    $p->save();
+                    $this->audit("FIFO deduct {$takeKg} kg from batch {$p->batch_number} (Production #{$p->id}).");
+                }
+                return $takeKg;
+            };
+
+            // Specific batch first (if provided)
+            if ($this->production_id) {
+                $p = \App\Models\Production::lockForUpdate()->find($this->production_id);
+                if ($p && !$p->deleted_at) {
+                    $taken = $deductFromProd($p, $remaining);
+                    $remaining -= $taken;
+                }
+            }
+
+            // Then FIFO across batches (freshest first)
+            if ($remaining > 0) {
+                $batches = \App\Models\Production::query()
+                    ->whereNull('deleted_at')
+                    ->where('product_id', $this->product_id)
+                    ->orderByDesc('production_date')->orderByDesc('id')
+                    ->lockForUpdate()
+                    ->get(['id','batch_number','current_inventory','available_pack','available_bag']);
+
+                foreach ($batches as $p) {
+                    if ($remaining <= 0) break;
+                    $taken = $deductFromProd($p, $remaining);
+                    $remaining -= $taken;
+                }
+            }
+
+            if ($remaining > 0) {
+                throw ValidationException::withMessages([
+                    'quantity' => 'Insufficient stock while allocating (concurrency). Please retry.',
+                ]);
+            }
+        });
+    }
+
+    public function releaseAllocations(): void
+    {
+        DB::transaction(function () {
+            $rows = $this->allocations()->lockForUpdate()->get();
+            foreach ($rows as $alloc) {
+                /** @var \App\Models\BatchAllocation $alloc */
+                $p = \App\Models\Production::lockForUpdate()->find($alloc->production_id);
+                if (!$p || $p->deleted_at) continue;
+
+                if ($alloc->mode === 'pack') {
+                    $p->available_pack = (float) ($p->available_pack ?? 0) + (float) $alloc->quantity_value;
+                    $p->save();
+                    $this->audit("Returned {$alloc->quantity_value} pack(s) to batch {$p->batch_number} (Production #{$p->id}).");
+                } elseif ($alloc->mode === 'bag') {
+                    $p->available_bag = (float) ($p->available_bag ?? 0) + (float) $alloc->quantity_value;
+                    $p->save();
+                    $this->audit("Returned {$alloc->quantity_value} bag(s) to batch {$p->batch_number} (Production #{$p->id}).");
+                } else { // kg
+                    $p->current_inventory = (float) ($p->current_inventory ?? 0) + (float) $alloc->quantity_value;
+                    $p->save();
+                    $this->audit("Reverted {$alloc->quantity_value} kg back to batch {$p->batch_number} (Production #{$p->id}).");
+                }
+            }
+
+            $this->allocations()->delete();
+        });
+    }
+
+    protected function recordAllocation(int $productionId, string $mode, float $qty): void
+    {
+        $this->allocations()->create([
+            'production_id'  => $productionId,
+            'mode'           => $mode,
+            'quantity_value' => $qty,
+        ]);
+    }
+
+    public function audit(string $message): void
+    {
+        $this->audits()->create([
+            'message' => $message,
+            'at'      => now(),
+        ]);
+    }
+
+    /* ----------------------------- Invoicing utils ---------------------------- */
+
     public static function generateInvoiceNumber(): string
     {
         $ymd = now()->format('Ymd');
@@ -484,16 +667,5 @@ class Sale extends Model
         }
 
         return $prefix . str_pad((string) $next, 3, '0', STR_PAD_LEFT);
-    }
-
-    /* ----------------------------- Internal utils ---------------------------- */
-
-    protected static function withInventory(\Closure $fn): void
-    {
-        if (App::bound(InventoryService::class)) {
-            /** @var InventoryService $svc */
-            $svc = App::make(InventoryService::class);
-            $fn($svc);
-        }
     }
 }

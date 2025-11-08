@@ -9,13 +9,19 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Carbon;
 
+/**
+ * SalesOrder
+ *
+ * Holds the header info for a sale (customer, date, status).
+ * Line items live in SalesOrderItem and handle inventory side-effects.
+ */
 class SalesOrder extends Model
 {
     use HasFactory, SoftDeletes;
 
     protected $table = 'sales_orders';
 
-    /** Simple statuses (keep in sync with your DB/UX) */
+    /** Simple statuses (keep in sync with DB + UI) */
     public const STATUS_PENDING   = 'Pending';
     public const STATUS_COMPLETED = 'Completed';
     public const STATUS_CANCELLED = 'Cancelled';
@@ -40,17 +46,12 @@ class SalesOrder extends Model
     protected $casts = [
         'order_date' => 'datetime:Y-m-d',
         'status'     => 'string',
+        'deleted_at' => 'datetime',
     ];
 
     /**
      * Dashboard-friendly computed fields
-     * - total_amount:  Σ item totals (stored or computed)
-     * - items_count  : number of line items
-     * - is_paid      : boolean flag from status
-     * - total_qty    : Σ item quantities (kg-aware)
-     * - total_revenue: alias of total_amount (handy for charts)
-     * - types_summary: array breakdown by type_label with qty & revenue
-     * - types_badge  : compact string summary for UI badges
+     * (These are virtual; they’re appended to array/json automatically.)
      */
     protected $appends = [
         'total_amount',
@@ -62,15 +63,19 @@ class SalesOrder extends Model
         'types_badge',
     ];
 
-    /* ----------------------------- Relationships ----------------------------- */
+    /* -------------------------------------------------------------------------
+     | Relationships
+     * ------------------------------------------------------------------------ */
 
     public function items()
     {
-        // Assumes sales_order_id foreign key on sales_order_items table
+        // FK must be sales_order_id on sales_order_items
         return $this->hasMany(SalesOrderItem::class, 'sales_order_id');
     }
 
-    /* ------------------------------- Scopes ---------------------------------- */
+    /* -------------------------------------------------------------------------
+     | Scopes
+     * ------------------------------------------------------------------------ */
 
     public function scopeStatus($query, string $status)
     {
@@ -105,7 +110,7 @@ class SalesOrder extends Model
         return $query->whereIn('status', [self::STATUS_PENDING, self::STATUS_COMPLETED]);
     }
 
-    /** Orders that have at least one item with problems (example scope on items model). */
+    /** Orders that have at least one item with problems (requires item scope). */
     public function scopeProblematic($query)
     {
         return $query->whereHas('items', function ($q) {
@@ -114,26 +119,20 @@ class SalesOrder extends Model
     }
 
     /**
-     * Eager-load with a lightweight type breakdown (for lists).
-     * Example:
-     * SalesOrder::withTypeBreakdown()->latest()->take(10)->get();
+     * Eager-load with a lightweight type breakdown (great for lists).
      */
     public function scopeWithTypeBreakdown($query)
     {
         $itemsTable = (new SalesOrderItem())->getTable();
         return $query->withCount('items')->with(['items' => function ($q) use ($itemsTable) {
-            // Only bring columns we use frequently
-            $q->select("$itemsTable.*")
-              ->orderBy('id', 'asc');
+            $q->select("$itemsTable.*")->orderBy('id', 'asc');
         }]);
     }
 
-    /* --------------------------- Attribute Accessors ------------------------- */
+    /* -------------------------------------------------------------------------
+     | Accessors / Virtuals
+     * ------------------------------------------------------------------------ */
 
-    /**
-     * Σ (item.total_price) or (qty * unit_price) if total_price missing.
-     * Uses loaded relation when available; falls back to an aggregate query.
-     */
     public function getTotalAmountAttribute(): float
     {
         if ($this->relationLoaded('items')) {
@@ -152,13 +151,11 @@ class SalesOrder extends Model
             ->value('total') ?? 0.0);
     }
 
-    /** Mirror total_amount for readability in charts */
     public function getTotalRevenueAttribute(): float
     {
         return $this->total_amount;
     }
 
-    /** Count items (uses relation if loaded) */
     public function getItemsCountAttribute(): int
     {
         if ($this->relationLoaded('items')) {
@@ -170,7 +167,6 @@ class SalesOrder extends Model
             ->count();
     }
 
-    /** Σ quantities across items (kg-aware) */
     public function getTotalQtyAttribute(): float
     {
         if ($this->relationLoaded('items')) {
@@ -191,31 +187,14 @@ class SalesOrder extends Model
         return $this->status === self::STATUS_PAID;
     }
 
-    /**
-     * Type breakdown per order:
-     * Returns an array keyed by type_label with:
-     *   [
-     *     'qty'     => float,
-     *     'revenue' => float
-     *   ]
-     *
-     * Uses loaded relation when available; otherwise performs a grouped query.
-     *
-     * Expected item columns:
-     * - type_label
-     * - quantity_kg (or quantity)
-     * - unit_price / total_price
-     */
+    /** Array keyed by type_label: ['qty' => float, 'revenue' => float] */
     public function getTypesSummaryAttribute(): array
     {
         $itemsTable = (new SalesOrderItem())->getTable();
 
-        // Helper to merge a row into an accumulator
         $merge = function (array &$acc, ?string $label, float $qty, float $revenue): void {
             $key = $label !== null && $label !== '' ? $label : 'Unspecified';
-            if (!isset($acc[$key])) {
-                $acc[$key] = ['qty' => 0.0, 'revenue' => 0.0];
-            }
+            if (!isset($acc[$key])) $acc[$key] = ['qty' => 0.0, 'revenue' => 0.0];
             $acc[$key]['qty']     += $qty;
             $acc[$key]['revenue'] += $revenue;
         };
@@ -233,7 +212,6 @@ class SalesOrder extends Model
             return $out;
         }
 
-        // Not loaded: run a single grouped aggregate query
         $rows = DB::table($itemsTable)
             ->where('sales_order_id', $this->getKey())
             ->selectRaw("
@@ -251,16 +229,13 @@ class SalesOrder extends Model
         return $out;
     }
 
-    /**
-     * Compact, human-friendly badge string for UI:
-     * e.g. "Garlic Skinless 8.0kg • Regular Skinless 5.0kg"
-     */
+    /** Compact, human-friendly badge string for UI lists */
     public function getTypesBadgeAttribute(): string
     {
         $summary = $this->types_summary;
         if (empty($summary)) return '';
 
-        // Order by revenue desc, then qty desc
+        // Sort by revenue desc then qty desc
         uasort($summary, function ($a, $b) {
             if ($a['revenue'] === $b['revenue']) {
                 return $b['qty'] <=> $a['qty'];
@@ -276,28 +251,28 @@ class SalesOrder extends Model
         return implode(' • ', $parts);
     }
 
-    /* ------------------------------- Events ---------------------------------- */
+    /* -------------------------------------------------------------------------
+     | Model Events
+     * ------------------------------------------------------------------------ */
 
     protected static function booted()
     {
-        // Auto-generate order_number, default status/date
+        // Assign order number + defaults
         static::creating(function (SalesOrder $order) {
             if (!filled($order->order_number)) {
                 $order->order_number = static::generateOrderNumber();
             }
 
-            // Default status
             if (!filled($order->status) || !in_array($order->status, self::STATUSES, true)) {
                 $order->status = self::STATUS_COMPLETED;
             }
 
-            // Default date
             if (!filled($order->order_date)) {
                 $order->order_date = now();
             }
         });
 
-        // Soft-delete cascade for items
+        // Cascade soft-delete to items
         static::deleting(function (SalesOrder $order) {
             if ($order->isForceDeleting()) {
                 $order->items()->withTrashed()->forceDelete();
@@ -306,23 +281,107 @@ class SalesOrder extends Model
             }
         });
 
-        // Restore cascade for items
+        // Cascade restore to items
         static::restoring(function (SalesOrder $order) {
             $order->items()->withTrashed()->restore();
         });
+
+        // Optional: keep a persisted rollup up-to-date if columns exist
+        static::saved(function (SalesOrder $order) {
+            $order->maybePersistRollups();
+        });
+    }
+
+    /* -------------------------------------------------------------------------
+     | Commands / Helpers
+     * ------------------------------------------------------------------------ */
+
+    /** Quick helper to add one item (attributes are passed to SalesOrderItem::create). */
+    public function addItem(array $attrs): SalesOrderItem
+    {
+        /** @var \App\Models\SalesOrderItem $item */
+        $item = $this->items()->create($attrs);
+        $this->refresh(); // so accessors reflect the new item
+        $this->maybePersistRollups();
+        return $item;
     }
 
     /**
+     * Replace all items with the provided list (each entry is SalesOrderItem::fillable array).
+     * This will soft-delete any previous items, add new ones, and refresh totals.
+     */
+    public function replaceItems(array $items): void
+    {
+        DB::transaction(function () use ($items) {
+            $this->items()->delete();
+            foreach ($items as $attrs) {
+                $this->items()->create($attrs);
+            }
+            $this->refresh();
+            $this->maybePersistRollups();
+        });
+    }
+
+    /** Transition helpers */
+    public function markPaid(): bool
+    {
+        $this->status = self::STATUS_PAID;
+        return $this->save();
+    }
+
+    public function markCompleted(): bool
+    {
+        $this->status = self::STATUS_COMPLETED;
+        return $this->save();
+    }
+
+    public function markCancelled(): bool
+    {
+        $this->status = self::STATUS_CANCELLED;
+        return $this->save();
+    }
+
+    /**
+     * If you later add persisted rollup columns on sales_orders (e.g. total_amount, items_count),
+     * this will auto-detect and write them. Safe to call even if they don't exist.
+     */
+    public function maybePersistRollups(): void
+    {
+        $updates = [];
+
+        if (Schema::hasColumn($this->getTable(), 'items_count')) {
+            $updates['items_count'] = $this->items_count;
+        }
+        if (Schema::hasColumn($this->getTable(), 'total_amount')) {
+            $updates['total_amount'] = $this->total_amount;
+        }
+        if (Schema::hasColumn($this->getTable(), 'total_qty')) {
+            $updates['total_qty'] = $this->total_qty;
+        }
+        if (Schema::hasColumn($this->getTable(), 'total_revenue')) {
+            $updates['total_revenue'] = $this->total_revenue;
+        }
+
+        if (!empty($updates)) {
+            // Avoid recursion by direct query
+            DB::table($this->getTable())->where('id', $this->getKey())->update($updates);
+        }
+    }
+
+    /* -------------------------------------------------------------------------
+     | Numbering
+     * ------------------------------------------------------------------------ */
+
+    /**
      * Generates a human-friendly unique order number:
-     * SO-YYYYMMDD-### (sequence per day, with DB-safe increment).
-     * Falls back to MAX()-based scan if the sequence table isn't available.
+     * SO-YYYYMMDD-### (sequence per day)
+     * Uses order_sequences table if present; falls back to MAX()-scan.
      */
     public static function generateOrderNumber(): string
     {
         $ymd = now()->format('Ymd');
         $prefix = 'SO-' . $ymd . '-';
 
-        // If sequence table is present, use it atomically
         if (Schema::hasTable('order_sequences')) {
             try {
                 return DB::transaction(function () use ($ymd, $prefix) {
@@ -352,11 +411,11 @@ class SalesOrder extends Model
                     return $prefix . str_pad((string) $seq, 3, '0', STR_PAD_LEFT);
                 }, 3);
             } catch (\Throwable $e) {
-                // fall through to MAX()-based fallback
+                // fall through
             }
         }
 
-        // Fallback: scan existing orders for today and increment the tail
+        // Fallback: scan
         $maxToday = static::query()
             ->whereDate('order_date', Carbon::now()->toDateString())
             ->where('order_number', 'like', $prefix . '%')

@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Material;
 use App\Models\Production;
-use App\Models\Sale;
+use App\Models\Sale;                 // legacy (ok if not used)
 use App\Services\InventoryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -23,57 +23,87 @@ class InventoryController extends Controller
         $cat       = $request->get('cat');
         $lowThresh = (float) $request->get('low_material_threshold', 5.0);
 
-        // KPIs
+        $hasSalesOrderTbl     = Schema::hasTable('sales_orders');
+        $hasSalesOrderItemTbl = Schema::hasTable('sales_order_items');
+        $hasSaleTbl           = Schema::hasTable('sales');
+
+        /* ========================= KPIs ========================= */
+
         $totalProducts        = (int) Product::count();
         $totalMaterialsWeight = (float) (Material::sum('quantity_kg') ?? 0.0);
-        $totalSales           = (int) Sale::count();
-        $totalRevenue         = (float) (Sale::selectRaw('SUM(quantity * price) AS rev')->value('rev') ?? 0.0);
 
-        // Batch counts (avoid ->clone(), use native clone)
-        $batchesQuery = Production::query();
-        $batchesInProduction = (int) (clone $batchesQuery)->count();
-        $batchesReleased     = (int) (clone $batchesQuery)->where('current_inventory', '>', 0)->count();
-        $batchesExpiringSoon = (int) (clone $batchesQuery)
+        // Sales count (orders or rows)
+        if ($hasSalesOrderTbl) {
+            $totalSales = (int) DB::table('sales_orders')->whereNull('deleted_at')->count();
+        } elseif ($hasSaleTbl) {
+            $totalSales = (int) DB::table('sales')->whereNull('deleted_at')->count();
+        } else {
+            $totalSales = 0;
+        }
+
+        // Revenue (prefer items.total_price; fallback to qty*price)
+        if ($hasSalesOrderItemTbl) {
+            $totalRevenue = (float) (DB::table('sales_order_items')
+                ->whereNull('deleted_at')
+                ->selectRaw('SUM(COALESCE(total_price, (COALESCE(quantity,0) * COALESCE(unit_price,0)))) as rev')
+                ->value('rev') ?? 0.0);
+        } elseif ($hasSaleTbl) {
+            // legacy: prefer total_price, then total, then qty*price
+            $totalRevenue = (float) (DB::table('sales')
+                ->whereNull('deleted_at')
+                ->selectRaw('SUM(COALESCE(total_price, COALESCE(total, (COALESCE(quantity_kg, quantity, 0) * COALESCE(unit_price, price, 0))))) as rev')
+                ->value('rev') ?? 0.0);
+        } else {
+            $totalRevenue = 0.0;
+        }
+
+        // Batch counts
+        $batchesQuery         = Production::query()->whereNull('deleted_at');
+        $batchesInProduction  = (int) (clone $batchesQuery)->count();
+        $batchesReleased      = (int) (clone $batchesQuery)->where('current_inventory', '>', 0)->count();
+        $batchesExpiringSoon  = (int) (clone $batchesQuery)
             ->whereDate('expiration_date', '<=', now()->addDays(7)->toDateString())
             ->count();
 
-        // Products + available stock
+        /* ==================== Product listing ==================== */
+
         $productsBase = Product::query()
             ->when($q,   fn($qq) => $qq->where('product_name', 'like', "%{$q}%"))
             ->when($cat, fn($qq) => $qq->where('category', $cat))
             ->orderBy('product_name');
 
-        $products = $productsBase->paginate(18)->withQueryString();
+        $products   = $productsBase->paginate(18)->withQueryString();
         $productIds = $products->pluck('id');
 
-        $producedPerProduct = Production::select('product_id', DB::raw('SUM(quantity) as qty'))
-            ->whereIn('product_id', $productIds)->groupBy('product_id')->pluck('qty','product_id');
-        $soldPerProduct = Sale::select('product_id', DB::raw('SUM(quantity) as qty'))
-            ->whereIn('product_id', $productIds)->groupBy('product_id')->pluck('qty','product_id');
+        // Available stock (kg) = live batch balance sum per product
+        $batchBalances = Production::query()
+            ->whereNull('deleted_at')
+            ->whereIn('product_id', $productIds)
+            ->groupBy('product_id')
+            ->select('product_id', DB::raw('SUM(COALESCE(current_inventory,0)) as bal'))
+            ->pluck('bal', 'product_id');
 
-        $products->getCollection()->transform(function (Product $p) use ($producedPerProduct, $soldPerProduct) {
-            $produced = (float) ($producedPerProduct[$p->id] ?? $p->quantity ?? 0);
-            $sold     = (float) ($soldPerProduct[$p->id] ?? 0);
-            $p->available_stock_kg = max(0.0, $produced - $sold);
+        $products->getCollection()->transform(function (Product $p) use ($batchBalances) {
+            $p->available_stock_kg = (float) ($batchBalances[$p->id] ?? 0.0);
             return $p;
         });
 
-        // Materials search that adapts to your columns
+        /* ==================== Materials list ===================== */
+
         $hasNameCol = Schema::hasColumn('materials', 'name');
         $materials = Material::query()
             ->when($q, function ($qq) use ($q, $hasNameCol) {
                 $qq->where(function ($w) use ($q, $hasNameCol) {
                     $w->where('material_name', 'like', "%{$q}%");
-                    if ($hasNameCol) {
-                        $w->orWhere('name', 'like', "%{$q}%");
-                    }
+                    if ($hasNameCol) $w->orWhere('name', 'like', "%{$q}%");
                 });
             })
             ->orderBy('quantity_kg')
             ->paginate(18)
             ->withQueryString();
 
-        // Expiry risk
+        /* ===================== Expiry / recent ==================== */
+
         $expiringSoon = Production::whereNull('deleted_at')
             ->whereDate('expiration_date', '<=', now()->addDays(7)->toDateString())
             ->orderBy('expiration_date')
@@ -81,8 +111,8 @@ class InventoryController extends Controller
             ->limit(20)
             ->get();
 
-        // Recent batches (normalized for the view)
         $recentBatches = Production::with('product:id,product_name')
+            ->whereNull('deleted_at')
             ->orderByDesc('production_date')
             ->orderByDesc('id')
             ->limit(20)
@@ -94,10 +124,14 @@ class InventoryController extends Controller
                 $b->qty_total      = (float) ($b->quantity ?? 0);
                 $b->qty_available  = (float) ($b->current_inventory ?? 0);
                 $b->status         = $b->qty_available > 0 ? 'RELEASED' : 'CREATED';
+                // optional: surface pack/bag
+                $b->available_pack = (int) ($b->available_pack ?? 0);
+                $b->available_bag  = (int) ($b->available_bag ?? 0);
                 return $b;
             });
 
-        // Material usage (this week)
+        /* ===================== Material usage ===================== */
+
         $start = Carbon::now()->startOfWeek()->toDateString();
         $end   = Carbon::now()->endOfWeek()->toDateString();
         $materialsUsage = $this->inventory->materialUsage($start, $end);
@@ -106,7 +140,8 @@ class InventoryController extends Controller
             'cost' => (float) ($materialsUsage->sum('cost_used') ?? 0),
         ];
 
-        // Stockout “badge” forecast
+        /* ===================== Forecast badges ==================== */
+
         $stockForecasting = [];
         foreach ($products as $p) {
             $forecast = (float) ($p->forecasted_demand ?? 0);
@@ -127,9 +162,12 @@ class InventoryController extends Controller
 
         $productionAlarms = [];
         foreach ($expiringSoon as $b) {
+            $dte = method_exists($b, 'getDaysToExpiryAttribute') ? $b->days_to_expiry : null;
+            $sev = ($dte !== null && $dte <= 3) ? 'critical' : 'warning';
+            $left = $dte !== null ? $dte : 'N/A';
             $productionAlarms[] = [
-                'severity' => $b->days_to_expiry !== null && $b->days_to_expiry <= 3 ? 'critical' : 'warning',
-                'message'  => "{$b->product?->product_name} ({$b->batch_number}) expiring in {$b->days_to_expiry} day(s).",
+                'severity' => $sev,
+                'message'  => "{$b->product?->product_name} ({$b->batch_number}) expiring in {$left} day(s).",
             ];
         }
 

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Log;
 use App\Services\InventoryService;
 
 class AppServiceProvider extends ServiceProvider
@@ -12,9 +13,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Bind InventoryService as a singleton so it reuses the same instance
-        $this->app->singleton(InventoryService::class, function ($app) {
-            return new InventoryService();
+        // Bind once, reused everywhere (models, controllers, jobs).
+        $this->app->singleton(InventoryService::class, fn () => new InventoryService());
+
+        // Optional alias: app('inventory') will resolve the same instance.
+        $this->app->alias(InventoryService::class, 'inventory');
+
+        // Tiny health check: confirms the service is actually being resolved.
+        // (One log line when the container first builds InventoryService)
+        $this->app->resolving(InventoryService::class, function ($svc) {
+            static $logged = false;
+            if (!$logged && !app()->runningInConsole()) {
+                Log::debug('[inventory] InventoryService resolved and ready.');
+                $logged = true;
+            }
         });
     }
 
@@ -23,6 +35,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Place boot-time tweaks here if needed (e.g., URL::forceScheme).
     }
 }

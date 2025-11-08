@@ -175,19 +175,24 @@ class ProductionController extends Controller
     /* =============================== CREATE (DASHBOARD CARD) =============================== */
     public function store(Request $request)
     {
+        // Updated: no current_inventory/unit_cost required; accept remarks and available_*.
         $validated = $request->validate([
             'product_id'        => ['nullable','integer','exists:products,id'],
             'product_name'      => ['nullable','string','max:255'],
             'batch_number'      => ['nullable','string','max:255'],
             'forecasted_demand' => ['nullable','numeric','min:0'],
-            'current_inventory' => ['required','integer','min:1'],
-            'unit_cost'         => ['nullable','numeric','min:0'],
             'unit_price_pack'   => ['nullable','numeric','min:0'],
             'unit_price_bag'    => ['nullable','numeric','min:0'],
+            'available_pack'    => ['nullable','integer','min:0'],
+            'available_bag'     => ['nullable','integer','min:0'],
             'production_date'   => ['required','date'],
             'expiration_date'   => ['nullable','date','after_or_equal:production_date'],
             'category'          => ['nullable','string','max:120'],
+            'remarks'           => ['nullable','string','max:500'],
             'image'             => ['nullable','image','mimes:jpg,jpeg,png,webp','max:5120'],
+            // legacy fields (accepted but ignored safely)
+            'current_inventory' => ['nullable','numeric','min:0'],
+            'unit_cost'         => ['nullable','numeric','min:0'],
         ]);
 
         try {
@@ -200,7 +205,6 @@ class ProductionController extends Controller
 
                 $attrs = $this->filterProductColumns([
                     'forecasted_demand' => (float)($validated['forecasted_demand'] ?? 0),
-                    'unit_cost'         => (float)($validated['unit_cost'] ?? 0),
                     'production_date'   => $validated['production_date'],
                     'stock_status'      => 'in_stock',
                     'category'          => $validated['category'] ?? null,
@@ -217,7 +221,6 @@ class ProductionController extends Controller
 
                 $updates = $this->filterProductColumns([
                     'forecasted_demand' => array_key_exists('forecasted_demand', $validated) ? (float)$validated['forecasted_demand'] : $product->forecasted_demand,
-                    'unit_cost'         => array_key_exists('unit_cost', $validated)         ? (float)$validated['unit_cost']         : $product->unit_cost,
                     'category'          => $validated['category'] ?? $product->category,
                     'production_date'   => $validated['production_date'],
                     'stock_status'      => 'in_stock',
@@ -242,21 +245,24 @@ class ProductionController extends Controller
                 ? $this->uniqueBatchNumber($product, $validated['batch_number'])
                 : $this->uniqueBatchNumber($product);
 
+            // infer qty (kg or units proxy) from inputs
+            $qty = $this->inferQuantity($validated);
+
             if (config('app.consume_materials', false)) {
                 if (!$this->productHasRecipe($product)) {
                     return $this->respondNeedsRecipe($request, $product);
                 }
 
                 try {
-                    DB::transaction(function () use ($product, $validated, $prodDate, $expiry, &$batchNumber) {
-                        $this->consumeMaterials($product, (float)$validated['current_inventory']);
-                        $this->createBatchAndRecompute($product, $validated, $prodDate, $expiry, $batchNumber);
+                    DB::transaction(function () use ($product, $validated, $prodDate, $expiry, &$batchNumber, $qty) {
+                        $this->consumeMaterials($product, (float)$qty);
+                        $this->createBatchAndRecompute($product, $validated + ['__inferred_qty' => $qty], $prodDate, $expiry, $batchNumber);
                     });
                 } catch (\RuntimeException $re) {
                     return $this->respondError($request, ['materials' => $re->getMessage() ]);
                 }
             } else {
-                $this->createBatchAndRecompute($product, $validated, $prodDate, $expiry, $batchNumber);
+                $this->createBatchAndRecompute($product, $validated + ['__inferred_qty' => $qty], $prodDate, $expiry, $batchNumber);
             }
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -298,7 +304,8 @@ class ProductionController extends Controller
     /* =============================== CREATE (ORDERS PAGE) =============================== */
     public function storeOrder(Request $request)
     {
-        $validated = $request->validate([
+        // Accept legacy 'quantity' and new counts; remarks supported
+        $rules = [
             'parent_product_id'     => ['nullable','integer','exists:products,id'],
             'product_id'            => ['required','integer','exists:products,id'],
             'product_name_snapshot' => ['nullable','string','max:255'],
@@ -306,11 +313,18 @@ class ProductionController extends Controller
             'batch_number'          => ['nullable','string','max:255'],
             'production_date'       => ['required','date'],
             'expiration_date'       => ['nullable','date','after_or_equal:production_date'],
-            'quantity'              => ['required','integer','min:1'],
-            'unit_cost'             => ['nullable','numeric','min:0'],
+            'quantity'              => ['nullable','numeric','min:0'],     // legacy
+            'produced_qty_kg'       => ['nullable','numeric','min:0'],     // legacy alt
             'unit_price_pack'       => ['nullable','numeric','min:0'],
             'unit_price_bag'        => ['nullable','numeric','min:0'],
-        ]);
+            'available_pack'        => ['nullable','integer','min:0'],
+            'available_bag'         => ['nullable','integer','min:0'],
+            'remarks'               => ['nullable','string','max:500'],
+            // legacy accept but ignore safely
+            'unit_cost'             => ['nullable','numeric','min:0'],
+        ];
+
+        $validated = $request->validate($rules);
 
         $product  = Product::findOrFail((int)$validated['product_id']);
         $parentProductId = (int)($validated['parent_product_id'] ?? $product->parent_id ?? $product->id);
@@ -329,35 +343,52 @@ class ProductionController extends Controller
         if ($typeLabel !== '') $snapshotName = $typeLabel;
         if ($snapshotName === '') $snapshotName = $product->category ?: $product->product_name;
 
+        // infer qty from legacy fields or counts
+        $qty = $this->inferQuantity($validated);
+
         try {
-            DB::transaction(function () use ($product, $parentProductId, $snapshotName, $validated, $prodDate, $expiry, &$batchNumber) {
+            DB::transaction(function () use (
+                $product, $parentProductId, $snapshotName, $validated, $prodDate, $expiry, &$batchNumber, $qty
+            ) {
                 if (config('app.consume_materials', false)) {
                     if (!$this->productHasRecipe($product)) {
                         throw new \LogicException('__NEEDS_RECIPE__');
                     }
-                    $this->consumeMaterials($product, (float)$validated['quantity']);
+                    $this->consumeMaterials($product, (float)$qty);
+                }
+
+                $payload = [
+                    'parent_product_id'     => $parentProductId,
+                    'product_id'            => $product->id,
+                    'product_name_snapshot' => $snapshotName,
+                    'batch_number'          => $batchNumber,
+                    'forecasted_demand'     => (float)($product->forecasted_demand ?? 0),
+                    'current_inventory'     => (int)$qty,
+                    'quantity'              => (int)$qty,
+                    'unit_price_pack'       => (float)($validated['unit_price_pack'] ?? 0),
+                    'unit_price_bag'        => (float)($validated['unit_price_bag']  ?? 0),
+                    'production_date'       => $prodDate->toDateString(),
+                    'expiration_date'       => $expiry->toDateString(),
+                ];
+
+                if (Schema::hasColumn('productions', 'available_pack')) {
+                    $payload['available_pack'] = (int)($validated['available_pack'] ?? 0);
+                }
+                if (Schema::hasColumn('productions', 'available_bag')) {
+                    $payload['available_bag']  = (int)($validated['available_bag']  ?? 0);
+                }
+                if (Schema::hasColumn('productions', 'remarks')) {
+                    $payload['remarks'] = (string)($validated['remarks'] ?? '');
                 }
 
                 for ($attempt = 1; $attempt <= 2; $attempt++) {
                     try {
-                        Production::create([
-                            'parent_product_id'     => $parentProductId,
-                            'product_id'            => $product->id,
-                            'product_name_snapshot' => $snapshotName,
-                            'batch_number'          => $batchNumber,
-                            'forecasted_demand'     => (float)($product->forecasted_demand ?? 0),
-                            'current_inventory'     => (int)$validated['quantity'],
-                            'quantity'              => (int)$validated['quantity'],
-                            'unit_cost'             => (float)($validated['unit_cost'] ?? ($product->unit_cost ?? 0)),
-                            'unit_price_pack'       => (float)($validated['unit_price_pack'] ?? 0),
-                            'unit_price_bag'        => (float)($validated['unit_price_bag']  ?? 0),
-                            'production_date'       => $prodDate->toDateString(),
-                            'expiration_date'       => $expiry->toDateString(),
-                        ]);
+                        Production::create($payload);
                         break;
                     } catch (QueryException $e) {
-                        if ($e->getCode() === '23000' && $attempt < 2) { // duplicate key
+                        if ($e->getCode() === '23000' && $attempt < 2) {
                             $batchNumber = $this->uniqueBatchNumber($product);
+                            $payload['batch_number'] = $batchNumber;
                             continue;
                         }
                         throw $e;
@@ -430,21 +461,45 @@ class ProductionController extends Controller
 
     public function update(Request $request, $id)
     {
+        // Updated: make fields optional, drop unit_cost requirement, support remarks and available_*.
         $validated = $request->validate([
-            'forecasted_demand'   => ['required','numeric','min:0'],
-            'current_inventory'   => ['required','integer','min:0'],
-            'unit_cost'           => ['required','numeric','min:0'],
+            'forecasted_demand'   => ['nullable','numeric','min:0'],
+            'current_inventory'   => ['nullable','integer','min:0'],
             'unit_price_pack'     => ['nullable','numeric','min:0'],
             'unit_price_bag'      => ['nullable','numeric','min:0'],
+            'available_pack'      => ['nullable','integer','min:0'],
+            'available_bag'       => ['nullable','integer','min:0'],
             'production_date'     => ['required','date'],
             'expiration_date'     => ['nullable','date','after_or_equal:production_date'],
+            'remarks'             => ['nullable','string','max:500'],
+            // legacy accept but ignore
+            'unit_cost'           => ['nullable','numeric','min:0'],
         ]);
 
         $production = Production::findOrFail($id);
-        $production->update(array_merge($validated, [
-            'quantity' => (int)$validated['current_inventory'],
-        ]));
 
+        // Base payload
+        $payload = [
+            'forecasted_demand' => $validated['forecasted_demand'] ?? $production->forecasted_demand,
+            'current_inventory' => array_key_exists('current_inventory', $validated) ? (int)$validated['current_inventory'] : $production->current_inventory,
+            'quantity'          => array_key_exists('current_inventory', $validated) ? (int)$validated['current_inventory'] : $production->quantity,
+            'unit_price_pack'   => $validated['unit_price_pack'] ?? $production->unit_price_pack,
+            'unit_price_bag'    => $validated['unit_price_bag']  ?? $production->unit_price_bag,
+            'production_date'   => $validated['production_date'],
+            'expiration_date'   => $validated['expiration_date'] ?? $production->expiration_date,
+        ];
+
+        if (Schema::hasColumn('productions', 'available_pack') && array_key_exists('available_pack', $validated)) {
+            $payload['available_pack'] = (int)($validated['available_pack'] ?? 0);
+        }
+        if (Schema::hasColumn('productions', 'available_bag') && array_key_exists('available_bag', $validated)) {
+            $payload['available_bag']  = (int)($validated['available_bag'] ?? 0);
+        }
+        if (Schema::hasColumn('productions', 'remarks') && array_key_exists('remarks', $validated)) {
+            $payload['remarks'] = (string)($validated['remarks'] ?? '');
+        }
+
+        $production->update($payload);
         $this->recomputeProductBalance((int)$production->product_id);
 
         return redirect()->route('production.index')->with('success', 'Production record updated.');
@@ -537,7 +592,6 @@ class ProductionController extends Controller
 
     /* =============================== ARCHIVE PAGES & ACTIONS =============================== */
 
-    // GET /production/archived
     public function archivedIndex(Request $request)
     {
         $q    = trim((string)$request->get('q', ''));
@@ -558,7 +612,6 @@ class ProductionController extends Controller
             ->when($sort === 'deleted_at', fn($x)=>$x->orderByDesc('deleted_at'))
             ->paginate(15)
             ->through(function($p){
-                // Compute purge_at = deleted_at + 7 days (display only)
                 $p->purge_at = $p->deleted_at ? Carbon::parse($p->deleted_at)->addDays(7) : null;
                 return $p;
             });
@@ -566,7 +619,6 @@ class ProductionController extends Controller
         return view('production.archived', compact('items', 'q', 'sort'));
     }
 
-    // POST /production/{id}/archive  (soft delete + optional archived_* fields)
     public function archive($id, Request $request)
     {
         $p = Production::findOrFail((int)$id);
@@ -575,7 +627,6 @@ class ProductionController extends Controller
             return $this->archiveJsonOrBack($request, false, 'Cannot archive. This batch has linked sales.');
         }
 
-        // Set archive metadata if columns exist
         $meta = [];
         if (Schema::hasColumn('productions', 'archived_at')) {
             $meta['archived_at'] = now();
@@ -594,7 +645,6 @@ class ProductionController extends Controller
         return $this->archiveJsonOrBack($request, true, 'Moved to Archive for 7 days.');
     }
 
-    // POST /production/{id}/restore
     public function restore($id, Request $request)
     {
         $p = Production::withTrashed()->findOrFail((int)$id);
@@ -604,7 +654,6 @@ class ProductionController extends Controller
 
         $p->restore();
 
-        // Clear archive metadata if present
         $dirty = false;
         if (Schema::hasColumn('productions', 'archived_at')) { $p->archived_at = null; $dirty = true; }
         if (Schema::hasColumn('productions', 'archived_reason')) { $p->archived_reason = null; $dirty = true; }
@@ -615,7 +664,6 @@ class ProductionController extends Controller
         return $this->archiveJsonOrBack($request, true, 'Production restored.');
     }
 
-    // DELETE /production/{id}/force
     public function destroyForever($id, Request $request)
     {
         $p = Production::withTrashed()->findOrFail((int)$id);
@@ -650,7 +698,7 @@ class ProductionController extends Controller
         return response()->json([
             'forecasted_demand' => (float) $product->forecasted_demand,
             'current_inventory' => (float) ($product->quantity ?? 0),
-            'unit_cost'         => (float) $product->unit_cost,
+            'unit_cost'         => (float) ($product->unit_cost ?? 0), // kept for compatibility
             'shelf_life_days'   => (int)  ($product->shelf_life_days ?? 7),
             'default_price'     => (float) ($product->default_price ?? 0),
         ]);
@@ -659,26 +707,38 @@ class ProductionController extends Controller
     // Used by: /production/api/by-product/{product}
     public function apiByProduct(Product $product): JsonResponse
     {
+        $cols = [
+            'id',
+            'batch_number',
+            'quantity',
+            'current_inventory',
+            'production_date',
+            'expiration_date',
+            'unit_price_pack',
+            'unit_price_bag',
+            'product_name_snapshot',
+        ];
+
+        if (Schema::hasColumn('productions', 'available_pack')) $cols[] = 'available_pack';
+        if (Schema::hasColumn('productions', 'available_bag'))  $cols[] = 'available_bag';
+        if (Schema::hasColumn('productions', 'remarks'))        $cols[] = 'remarks';
+
         $batches = Production::where('product_id', $product->id)
             ->orderByDesc('production_date')
             ->orderByDesc('id')
-            ->get([
-                'id',
-                'batch_number',
-                'quantity',
-                'current_inventory',
-                'production_date',
-                'expiration_date',
-                'unit_price_pack',
-                'unit_price_bag',
-                'product_name_snapshot',
-            ]);
+            ->get($cols);
 
         $batches = $batches->map(function ($b) {
             $b->unit_price_pack   = isset($b->unit_price_pack) ? (float)$b->unit_price_pack : null;
             $b->unit_price_bag    = isset($b->unit_price_bag)  ? (float)$b->unit_price_bag  : null;
             $b->quantity          = isset($b->quantity)        ? (float)$b->quantity        : 0.0;
             $b->current_inventory = isset($b->current_inventory) ? (float)$b->current_inventory : 0.0;
+            if (property_exists($b, 'available_pack') && isset($b->available_pack)) {
+                $b->available_pack = (int)$b->available_pack;
+            }
+            if (property_exists($b, 'available_bag') && isset($b->available_bag)) {
+                $b->available_bag = (int)$b->available_bag;
+            }
             return $b;
         });
 
@@ -877,28 +937,41 @@ class ProductionController extends Controller
 
     private function createBatchAndRecompute(Product $product, array $validated, Carbon $prodDate, Carbon $expiry, string $batchNumber): void
     {
+        // prefer legacy current_inventory/quantity; else fall back to inferred qty
         $qty = isset($validated['current_inventory'])
             ? (int)$validated['current_inventory']
-            : (int)($validated['quantity'] ?? 0);
+            : (isset($validated['quantity']) ? (int)$validated['quantity'] : (int)($validated['__inferred_qty'] ?? 0));
+
+        $payload = [
+            'product_id'        => $product->id,
+            'batch_number'      => $batchNumber,
+            'forecasted_demand' => (float)($validated['forecasted_demand'] ?? ($product->forecasted_demand ?? 0)),
+            'current_inventory' => $qty,
+            'quantity'          => $qty,
+            'unit_price_pack'   => (float)($validated['unit_price_pack'] ?? 0),
+            'unit_price_bag'    => (float)($validated['unit_price_bag']  ?? 0),
+            'production_date'   => $prodDate->toDateString(),
+            'expiration_date'   => $expiry->toDateString(),
+        ];
+
+        if (Schema::hasColumn('productions', 'available_pack')) {
+            $payload['available_pack'] = (int)($validated['available_pack'] ?? 0);
+        }
+        if (Schema::hasColumn('productions', 'available_bag')) {
+            $payload['available_bag']  = (int)($validated['available_bag'] ?? 0);
+        }
+        if (Schema::hasColumn('productions', 'remarks')) {
+            $payload['remarks'] = (string)($validated['remarks'] ?? '');
+        }
 
         for ($attempt = 1; $attempt <= 2; $attempt++) {
             try {
-                Production::create([
-                    'product_id'        => $product->id,
-                    'batch_number'      => $batchNumber,
-                    'forecasted_demand' => (float)($validated['forecasted_demand'] ?? ($product->forecasted_demand ?? 0)),
-                    'current_inventory' => $qty,
-                    'quantity'          => $qty,
-                    'unit_cost'         => (float)($validated['unit_cost'] ?? ($product->unit_cost ?? 0)),
-                    'unit_price_pack'   => (float)($validated['unit_price_pack'] ?? 0),
-                    'unit_price_bag'    => (float)($validated['unit_price_bag']  ?? 0),
-                    'production_date'   => $prodDate->toDateString(),
-                    'expiration_date'   => $expiry->toDateString(),
-                ]);
+                Production::create($payload);
                 break;
             } catch (QueryException $e) {
                 if ($e->getCode() === '23000' && $attempt < 2) {
                     $batchNumber = $this->uniqueBatchNumber($product);
+                    $payload['batch_number'] = $batchNumber;
                     continue;
                 }
                 throw $e;
@@ -994,5 +1067,25 @@ class ProductionController extends Controller
             'production_date'  => $productionDate,
             'expiration_date'  => $expirationDate,
         ]);
+    }
+
+    /* =============== NEW: central qty inference =============== */
+    private function inferQuantity(array $data): int
+    {
+        // Prefer explicit legacy fields if present
+        if (isset($data['current_inventory'])) {
+            return (int) max(0, (int) $data['current_inventory']);
+        }
+        if (isset($data['quantity'])) {
+            return (int) max(0, (int) $data['quantity']);
+        }
+        if (isset($data['produced_qty_kg'])) {
+            return (int) max(0, (float) $data['produced_qty_kg']);
+        }
+
+        // Fallback: use counts as a proxy until pack/bag weights are formalized
+        $packs = (int)($data['available_pack'] ?? 0);
+        $bags  = (int)($data['available_bag']  ?? 0);
+        return max(0, $packs + $bags);
     }
 }

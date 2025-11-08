@@ -1,224 +1,333 @@
-@extends('layout.mainlayout')
-
-@section('content')
-<div class="glass section-liquid-shine text-white p-6 rounded-2xl shadow-md border border-dark-line">
-
-    {{-- 🧠 Product Info Header --}}
-    <div class="flex items-center justify-between mb-6">
-        <div>
-            <h2 class="text-2xl font-bold tracking-wide">{{ $product->product_name }}</h2>
-            <p class="text-sm text-[var(--muted,#A3B4A7)]">Category: {{ $product->category ?? 'Uncategorized' }}</p>
-        </div>
-        <img src="{{ $product->image_url ?? '/images/default-burger.png' }}"
-             class="w-24 h-24 object-cover rounded-xl shadow border border-dark-line ring-1 ring-white/10"
-             alt="{{ $product->product_name }}">
-    </div>
-
-    {{-- ➕ Add Order Button --}}
-    <div class="flex justify-end mb-4">
-        <button onclick="openOrderModal()"
-                class="px-4 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold shadow hover:opacity-90 transition">
-            + Add Order
-        </button>
-    </div>
-
-    {{-- 📋 Orders Table --}}
-    <div class="overflow-x-auto rounded-2xl ring-1 ring-white/10">
-        <table class="min-w-full text-sm text-left rounded-2xl overflow-hidden">
-            <thead class="bg-white/5 text-white uppercase text-xs">
-                <tr>
-                    <th class="py-3 px-4">Batch #</th>
-                    <th class="py-3 px-4">Forecasted</th>
-                    <th class="py-3 px-4">Produced</th>
-                    <th class="py-3 px-4">Unit Cost</th>
-                    <th class="py-3 px-4">Production Date</th>
-                    <th class="py-3 px-4">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-white/10">
-                @forelse ($orders as $order)
-                    <tr class="hover:bg-white/5 transition">
-                        <td class="py-3 px-4">{{ $order->batch_number }}</td>
-                        <td class="py-3 px-4">{{ $order->forecasted_demand }} kg</td>
-                        <td class="py-3 px-4">{{ $order->quantity ?? $order->current_inventory }} kg</td>
-                        <td class="py-3 px-4">₱{{ number_format($order->unit_cost, 2) }}</td>
-                        <td class="py-3 px-4">{{ \Carbon\Carbon::parse($order->production_date)->format('M d, Y') }}</td>
-                        <td class="py-3 px-4">
-                            <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <a href="{{ route('production.edit', $order->id) }}"
-                                   class="px-3 py-1.5 rounded-full border border-white/20 hover:border-[var(--brand-green,#047705)] hover:bg-[var(--brand-green,#047705)]/20 transition">Edit</a>
-                                <form action="{{ route('production.destroy', $order->id) }}" method="POST"
-                                      onsubmit="return confirm('Are you sure? This will be soft-deleted for 7 days.')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit"
-                                            class="px-3 py-1.5 rounded-full border border-red-500/40 text-red-300 hover:bg-red-500/10 transition">Delete</button>
-                                </form>
-                                <a href="{{ route('production.export.pdf', $order->id) }}"
-                                   class="px-3 py-1.5 rounded-full border border-emerald-400/40 text-emerald-200 hover:bg-emerald-400/10 transition">PDF</a>
-                            </div>
-                        </td>
-                    </tr>
-                @empty
-                    <tr>
-                        <td colspan="6" class="py-4 text-center text-[var(--muted,#A3B4A7)]">No production orders found for this product.</td>
-                    </tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
-
-    {{-- 🔙 Back to Main Production --}}
-    <div class="mt-6">
-        <a href="{{ route('production.index') }}" class="text-[var(--sidebar-active,#EDD100)] hover:opacity-90">&larr; Back to Production</a>
-    </div>
-</div>
-
-{{-- Add Order Modal --}}
+{{-- Add Order Modal (parent-aware) --}}
 <div id="addOrderModal" class="fixed inset-0 z-[9999] hidden">
-  <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="closeOrderModal()"></div>
-  <div class="relative mx-auto my-10 max-w-md w-[92%] glass border border-dark-line rounded-2xl shadow-xl text-white p-6">
+  <div class="absolute inset-0 bg-black/40" onclick="closeOrderModal()" aria-hidden="true"></div>
 
-    {{-- Close button --}}
-    <button onclick="closeOrderModal()" class="absolute top-2 right-4 text-2xl font-bold hover:text-red-400">&times;</button>
+  <div class="relative mx-auto my-10 max-w-md w-[92%] page-card animate-fadeIn">
+    <button type="button" onclick="closeOrderModal()" aria-label="Close"
+            class="absolute top-2 right-4 text-2xl font-bold text-[color:var(--muted)] hover:text-[color:var(--red)]">&times;</button>
 
-    <h2 class="text-xl font-semibold mb-4">Add Order</h2>
+    <h3 id="modalTitle" class="text-xl font-semibold mb-4">
+      Add Order ({{ $product->product_name }})
+    </h3>
 
-    {{-- NOTE: posts to production.storeOrder to create Production + Sale + Inventory update --}}
-    <form action="{{ route('production.storeOrder', $product->id) }}" method="POST" class="space-y-4">
-        @csrf
+    {{-- POST to production.orders.store --}}
+    <form id="addOrderForm" action="{{ route('production.orders.store') }}" method="POST" class="space-y-3">
+      @csrf
 
-        {{-- Hidden identifiers --}}
-        <input type="hidden" name="product_id" value="{{ $product->id }}">
+      {{-- parent product = current page --}}
+      <input type="hidden" name="parent_product_id" id="po_parent_product_id" value="{{ (int) $product->id }}">
 
-        {{-- Batch & Demand --}}
+      {{-- selected variant (child) --}}
+      <input type="hidden" id="po_product_id" name="product_id" value="{{ (int) $product->id }}">
+
+      {{-- legacy snapshot (kept in sync with type_label) --}}
+      <input type="hidden" id="po_product_name" name="product_name_snapshot" value="{{ $product->product_name }}">
+
+      {{-- mirrors the computed expiration --}}
+      <input type="hidden" id="po_expiration_date" name="expiration_date" value="{{ old('expiration_date', $defaultExpiry ?? '') }}">
+
+      {{-- Variant selector --}}
+      <div>
+        <label class="label">Variant / Product</label>
+        <select id="po_product_select" class="select">
+          <option value="{{ $product->id }}">{{ $product->product_name }} (Base)</option>
+          @foreach(($variantProducts ?? collect()) as $vp)
+            <option value="{{ $vp->id }}">{{ $vp->product_name }}</option>
+          @endforeach
+        </select>
+
+        <div class="mt-2 flex items-center gap-2 flex-wrap">
+          <button type="button" id="po_new_toggle" class="btn btn-outline px-2 py-1 text-sm">+ New variant</button>
+          @php $chips=['Regular skinless','Special skinless','Garlic skinless','Chicken skinless','Beef skinless','Hamonado']; @endphp
+          @foreach($chips as $chip)
+            <button type="button" class="chip js-type-chip" data-value="{{ $chip }}">{{ $chip }}</button>
+          @endforeach
+        </div>
+
+        {{-- Type label saved per order (drives the Type column) --}}
+        <div class="mt-3">
+          <label class="label">Type / Variant label to record</label>
+          <input id="po_type_label" name="type_label" type="text" class="input"
+                 placeholder="e.g., Garlic skinless" value="{{ old('type_label') }}">
+          <p class="help mt-1">This is saved with this order only and will appear in the Type column.</p>
+        </div>
+
+        {{-- inline quick-add variant --}}
+        <div id="po_new_wrap" class="mt-3 hidden rounded-xl border border-[color:var(--line)] bg-white p-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="sm:col-span-2">
+              <label class="label">New Variant Name</label>
+              <input id="po_new_name" type="text" class="input" placeholder="e.g., Garlic skinless, Regular skinless" />
+              <p class="help mt-1">New variant will be created under {{ $product->product_name }}.</p>
+            </div>
+            <div>
+              <label class="label">Unit Cost (₱)</label>
+              <input id="po_new_cost" type="number" step="0.01" min="0" class="input" />
+            </div>
+            <div>
+              <label class="label">Shelf Life (days)</label>
+              <input id="po_new_shelf" type="number" min="1" class="input" value="{{ (int)($product->shelf_life_days ?? 7) }}" />
+            </div>
+          </div>
+          <div class="mt-3 flex items-center gap-2">
+            <button type="button" id="po_new_save" class="btn btn-primary text-sm">Save variant</button>
+            <button type="button" id="po_new_cancel" class="btn btn-outline text-sm">Cancel</button>
+            <span id="po_new_err" class="text-xs text-[color:var(--red)] ml-2 hidden"></span>
+          </div>
+        </div>
+      </div>
+
+      {{-- Batch Number (preview only) --}}
+      <div>
+        <label class="label">Batch Number</label>
+        <input id="po_batch_preview" class="input cursor-not-allowed bg-gray-50"
+               value="{{ $nextBatchNumber ?? 'Auto' }}" readonly>
+      </div>
+
+      {{-- Forecasted / Produced --}}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-            <label for="order_batch_number" class="block text-sm font-medium mb-1">Batch Number</label>
-            <input type="text" id="order_batch_number" name="batch_number"
-                   class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-active,#EDD100)]"
-                   readonly required>
+          <label class="label">Forecasted Demand (kg)</label>
+          <input id="po_fc" name="forecasted_demand" type="number" step="0.01" min="0" class="input"
+                 value="{{ old('forecasted_demand', (float)($product->forecasted_demand ?? 0)) }}">
         </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-                <label class="block text-sm font-medium mb-1">Forecasted Demand (kg)</label>
-                <input type="number" step="any" name="forecasted_demand"
-                       class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                       value="{{ (float)($product->forecasted_demand ?? 0) }}">
-            </div>
-            <div>
-                <label class="block text-sm font-medium mb-1">Produced Quantity (kg)</label>
-                <input type="number" step="any" name="produced_qty_kg"
-                       class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                       required>
-            </div>
-        </div>
-
-        {{-- Cost & Price --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-                <label class="block text-sm font-medium mb-1">Unit Cost (₱)</label>
-                <input type="number" step="any" name="unit_cost" id="order_unit_cost"
-                       value="{{ (float)($product->unit_cost ?? 0) }}"
-                       class="input-dark w-full bg-white/10 border border-white/10 rounded-xl px-3 py-2 cursor-not-allowed"
-                       readonly required>
-            </div>
-            <div>
-                <label class="block text-sm font-medium mb-1">Unit Price (₱)</label>
-                <input type="number" step="any" name="unit_price"
-                       value="{{ (float)($product->default_price ?? 0) }}"
-                       class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                       required>
-            </div>
-        </div>
-
-        {{-- Dates --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-                <label class="block text-sm font-medium mb-1">Production Date</label>
-                <input type="date" id="production_date" name="production_date"
-                       class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                       required>
-            </div>
-            <div>
-                <label class="block text-sm font-medium mb-1">Expiration Date</label>
-                <input type="date" id="expiration_date" name="expiration_date"
-                       class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400">
-                <p class="text-xs text-[var(--muted,#A3B4A7)] mt-1">
-                    Auto-calculates from shelf life ({{ (int)($product->shelf_life_days ?? 7) }} days). You can override.
-                </p>
-            </div>
-        </div>
-
-        {{-- Sales details --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-                <label class="block text-sm font-medium mb-1">Order Date</label>
-                <input type="date" id="order_date" name="order_date"
-                       class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                       required>
-            </div>
-            <div>
-                <label class="block text-sm font-medium mb-1">Order Quantity (kg)</label>
-                <input type="number" step="any" name="order_quantity_kg"
-                       class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                       required>
-            </div>
-        </div>
-
-        {{-- Optional meta --}}
         <div>
-            <label class="block text-sm font-medium mb-1">Customer (optional)</label>
-            <input type="text" name="customer_name"
-                   class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                   placeholder="Walk-in, Distributor A, etc.">
+          <label class="label">Produced Quantity (kg)</label>
+          <input id="po_prod_qty" name="quantity" type="number" step="1" min="1" required class="input"
+                 value="{{ old('quantity') }}">
         </div>
+      </div>
 
+      {{-- =======================
+           Unit Cost / Prices
+           + Availability
+         ======================= --}}
+      <style>
+        .accent-pack{border:1px solid rgba(237,209,0,.45);border-radius:12px;padding:12px;box-shadow:0 0 0 1px rgba(237,209,0,.18) inset}
+        .accent-bag{border:1px solid rgba(220,38,38,.45);border-radius:12px;padding:12px;box-shadow:0 0 0 1px rgba(220,38,38,.18) inset}
+        .badge{display:inline-flex;align-items:center;font-weight:700;font-size:.75rem;border-radius:8px;padding:.15rem .5rem}
+        .badge-pack{background:#EDD100;color:#1F1E1E}
+        .badge-bag{background:#dc2626;color:#fff}
+        .qty-input{text-align:center;font-weight:600}
+      </style>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {{-- Unit Cost --}}
         <div>
-            <label class="block text-sm font-medium mb-1">Notes</label>
-            <textarea name="notes" rows="2"
-                      class="input-dark w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-                      placeholder="Special handling, delivery date, etc."></textarea>
+          <label class="label">Unit Cost (₱)</label>
+          <input id="po_cost" name="unit_cost" type="number" step="0.01" min="0" required class="input"
+                 value="{{ old('unit_cost', (float)($product->unit_cost ?? 0)) }}">
         </div>
 
-        <button type="submit"
-                class="w-full mt-2 px-4 py-2 rounded-xl bg-[var(--sidebar-active,#EDD100)] text-[#1F1E1E] font-semibold shadow hover:opacity-90 transition">
-            Add Order (creates Sale & updates Inventory)
-        </button>
+        {{-- Per Pack (yellow) --}}
+        <div class="accent-pack">
+          <div class="flex items-center justify-between mb-2">
+            <label class="label m-0">Per Pack</label>
+            <span class="badge badge-pack">PACK</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="label">Price per Pack (₱)</label>
+              <input id="po_price_pack" name="unit_price_pack" type="number" step="0.01" min="0"
+                     class="input" value="{{ old('unit_price_pack') }}" placeholder="0.00">
+            </div>
+            <div>
+              <label class="label">Available Packs</label>
+              <input id="po_available_pack" name="available_pack" type="number" step="1" min="0"
+                     class="input qty-input" value="{{ old('available_pack', 0) }}" placeholder="Qty">
+            </div>
+          </div>
+        </div>
+
+        {{-- Per Bag (red) --}}
+        <div class="accent-bag">
+          <div class="flex items-center justify-between mb-2">
+            <label class="label m-0">Per Bag</label>
+            <span class="badge badge-bag">BAG</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="label">Price per Bag (₱)</label>
+              <input id="po_price_bag" name="unit_price_bag" type="number" step="0.01" min="0"
+                     class="input" value="{{ old('unit_price_bag') }}" placeholder="0.00">
+            </div>
+            <div>
+              <label class="label">Available Bags</label>
+              <input id="po_available_bag" name="available_bag" type="number" step="1" min="0"
+                     class="input qty-input" value="{{ old('available_bag', 0) }}" placeholder="Qty">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {{-- Dates --}}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="label">Production Date</label>
+          <input id="po_prod_date" name="production_date" type="date" required class="input"
+                 value="{{ old('production_date', $defaultProdDate ?? now()->toDateString()) }}">
+        </div>
+        <div>
+          <label class="label">Expiration Date (auto)</label>
+          <input id="po_exp_preview" type="date" readonly class="input cursor-not-allowed bg-gray-50"
+                 value="{{ old('expiration_date', $defaultExpiry ?? '') }}">
+          <p class="help mt-1">Computed from production date + {{ (int)($product->shelf_life_days ?? 7) }} days.</p>
+        </div>
+      </div>
+
+      {{-- Optional fields --}}
+      <div>
+        <label class="label">Order Date</label>
+        <input id="po_order_date" name="order_date" type="date" class="input"
+               value="{{ old('order_date', now()->toDateString()) }}">
+        <p class="help mt-1">Leave blank to use today.</p>
+      </div>
+      <div>
+        <label class="label">Order Quantity (kg)</label>
+        <input id="po_order_qty" name="order_quantity_kg" type="number" step="0.01" class="input"
+               value="{{ old('order_quantity_kg') }}">
+      </div>
+      <div>
+        <label class="label">Customer (optional)</label>
+        <input name="customer_name" class="input" value="{{ old('customer_name') }}" placeholder="Walk-in, Distributor A, etc.">
+      </div>
+      <div>
+        <label class="label">Notes</label>
+        <textarea name="notes" rows="2" class="textarea" placeholder="Special handling, delivery date, etc.">{{ old('notes') }}</textarea>
+      </div>
+
+      <button id="submitAddOrder" class="btn btn-primary w-full">Add Order (Production + Sale)</button>
     </form>
   </div>
 </div>
-@endsection
 
-@section('scripts')
 <script>
-    function openOrderModal() {
-        generateOrderBatchNumber();
-        document.getElementById("addOrderModal").classList.remove("hidden");
-    }
-    function closeOrderModal() {
-        document.getElementById("addOrderModal").classList.add("hidden");
-    }
-    function generateOrderBatchNumber() {
-        const now = new Date();
-        const pad = n => n.toString().padStart(2, '0');
-        const batch = `BATCH-${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-        document.getElementById("order_batch_number").value = batch;
-    }
+  const $$ = id => document.getElementById(id);
 
-    // Auto-calc expiry from production date + shelf life
-    (function autoExpiry(){
-        const prod = document.getElementById('production_date');
-        const exp  = document.getElementById('expiration_date');
-        const shelf = {{ (int)($product->shelf_life_days ?? 7) }};
-        function recalc(){
-            if(!prod.value) return;
-            const d = new Date(prod.value);
-            d.setDate(d.getDate() + shelf);
-            exp.value = d.toISOString().slice(0,10);
-            exp.min = prod.value;
+  function openOrderModal(){
+    syncExpiryPreview();
+    const sel = $$('#po_product_select');
+    if (sel) {
+      const opt = sel.options[sel.selectedIndex];
+      const name = opt.textContent.replace(/\s*\(Base\)\s*$/,'').trim();
+      updateFormForProduct(opt.value, name);
+      autoFillCostPriceForName(name);
+    }
+    const m = $$('#addOrderModal'); if (!m) return;
+    m.classList.remove('hidden'); m.classList.add('flex');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function closeOrderModal(){ const m=$$('#addOrderModal'); if(!m) return; m.classList.add('hidden'); m.classList.remove('flex'); }
+
+  function syncExpiryPreview(){
+    const shelf = {{ (int)($product->shelf_life_days ?? 7) }};
+    const prod  = $$('#po_prod_date');
+    const expPv = $$('#po_exp_preview');
+    const expHidden = $$('#po_expiration_date');
+    if(!prod || !expPv || !prod.value) return;
+    const d = new Date(prod.value);
+    d.setDate(d.getDate() + shelf);
+    const iso = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+    expPv.value = iso; expPv.min = prod.value;
+    if (expHidden) expHidden.value = iso;
+  }
+  document.addEventListener('change', e => { if (e.target && e.target.id === 'po_prod_date') syncExpiryPreview(); });
+
+  function autoFillCostPriceForName(name){
+    fetch(`{{ route('production.info', ':name') }}`.replace(':name', encodeURIComponent(name)))
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(info => {
+        if ($$('#po_cost') && !$$('#po_cost').value) $$('#po_cost').value = Number(info.unit_cost ?? 0).toFixed(2);
+        if ($$('#po_fc')   && !$$('#po_fc').value)   $$('#po_fc').value   = Number(info.forecasted_demand ?? 0);
+      })
+      .catch(()=>{});
+  }
+
+  (function(){
+    const form = $$('#addOrderForm'); const btn  = $$('#submitAddOrder');
+    if (!form || !btn) return;
+    form.addEventListener('submit', () => { btn.disabled = true; btn.textContent = 'Saving...'; });
+  })();
+
+  // Keep type label and legacy snapshot in sync
+  function setTypeLabel(val) {
+    const label = $$('#po_type_label');
+    if (label) label.value = val;
+    const snap  = $$('#po_product_name');
+    if (snap)   snap.value = val;
+  }
+
+  function updateFormForProduct(productId, productName){
+    const hid = $$('#po_product_id'); const hnm = $$('#po_product_name');
+    if (hid) hid.value = String(productId);
+    if (hnm && !$$('#po_type_label')?.value) hnm.value = productName;
+    if (!$$('#po_type_label')?.value) setTypeLabel(productName);
+    const title = document.getElementById('modalTitle');
+    if (title) title.textContent = `Add Order ({{ $product->product_name }} → ${productName})`;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const sel   = document.getElementById('po_product_select');
+    const wrap  = document.getElementById('po_new_wrap');
+    const tog   = document.getElementById('po_new_toggle');
+    const save  = document.getElementById('po_new_save');
+    const cancel= document.getElementById('po_new_cancel');
+    const err   = document.getElementById('po_new_err');
+
+    sel?.addEventListener('change', () => {
+      const opt = sel.options[sel.selectedIndex];
+      const name = opt.textContent.replace(/\s*\(Base\)\s*$/,'').trim();
+      updateFormForProduct(opt.value, name);
+      if (!$$('#po_type_label').value) setTypeLabel(name);
+      autoFillCostPriceForName(name);
+    });
+
+    document.querySelectorAll('.js-type-chip').forEach(ch => {
+      ch.addEventListener('click', () => setTypeLabel(ch.dataset.value || ch.textContent.trim()));
+    });
+
+    tog?.addEventListener('click', () => { wrap?.classList.toggle('hidden'); err?.classList.add('hidden'); err.textContent=''; });
+    cancel?.addEventListener('click', () => { wrap?.classList.add('hidden'); err?.classList.add('hidden'); err.textContent=''; });
+
+    // Save new variant under parent
+    save?.addEventListener('click', async () => {
+      const name  = document.getElementById('po_new_name')?.value?.trim();
+      const cost  = parseFloat(document.getElementById('po_new_cost')?.value || '0') || 0;
+      const shelf = parseInt(document.getElementById('po_new_shelf')?.value || '7', 10) || 7;
+      const parentId = {{ (int)$product->id }};
+
+      if (!name) { err.textContent = 'Variant name is required.'; err.classList.remove('hidden'); return; }
+
+      try {
+        const res = await fetch(@json(route('products.quick-store')), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': (document.querySelector('#addOrderForm input[name=_token]')?.value || ''),
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: JSON.stringify({ product_name: name, unit_cost: cost, shelf_life_days: shelf, parent_id: parentId })
+        });
+        if (!res.ok) throw new Error('Failed to create variant');
+        const data = await res.json();
+
+        const newId   = data.id ?? data?.product_id ?? null;
+        const newName = data.name ?? data?.product_name ?? name;
+        if (!newId) throw new Error('Invalid response');
+
+        const opt = new Option(newName, newId, true, true);
+        sel.add(opt); sel.value = newId;
+
+        updateFormForProduct(newId, newName);
+        setTypeLabel(newName);
+        if ($$('#po_cost') && !$$('#po_cost').value && typeof data.unit_cost !== 'undefined') {
+          $$('#po_cost').value = Number(data.unit_cost).toFixed(2);
         }
-        if (prod) { prod.addEventListener('change', recalc); }
-    })();
+
+        wrap?.classList.add('hidden'); err.classList.add('hidden'); err.textContent = '';
+      } catch (e) {
+        err.textContent = 'Could not save variant. Please try again.'; err.classList.remove('hidden');
+      }
+    });
+  });
 </script>
-@endsection

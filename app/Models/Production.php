@@ -31,9 +31,10 @@ class Production extends Model
         'batch_number',
         'forecasted_demand',
         'current_inventory',
-        'unit_cost',
         'unit_price_pack',
         'unit_price_bag',
+        'available_pack',        // counts UI
+        'available_bag',         // counts UI
         'production_date',
         'expiration_date',
         'quantity',
@@ -41,8 +42,8 @@ class Production extends Model
         'image_path',
         'image_medium_path',
         'image_thumb_path',
-        // 'notes',            // include only if the column exists
-        // 'archived_reason',  // optional column if you store a reason on delete
+        'remarks',               // NEW: free-text notes for the batch
+        // 'archived_reason',    // include only if the column exists
     ];
 
     /** Casts */
@@ -53,14 +54,17 @@ class Production extends Model
         'production_date'   => 'date',
         'expiration_date'   => 'date',
         'forecasted_demand' => 'float',
-        'unit_cost'         => 'float',
         'unit_price_pack'   => 'float',
         'unit_price_bag'    => 'float',
         'current_inventory' => 'integer',
         'quantity'          => 'integer',
+        'available_pack'    => 'integer',
+        'available_bag'     => 'integer',
+        'remarks'           => 'string',
         'deleted_at'        => 'datetime',
         'created_at'        => 'datetime',
         'updated_at'        => 'datetime',
+        // 'archived_reason'  => 'string',
     ];
 
     /** Virtuals for UI */
@@ -94,27 +98,17 @@ class Production extends Model
 
     /* ============================== Scopes ============================== */
 
-    /**
-     * Only archived (soft-deleted) rows.
-     */
     public function scopeArchived($q)
     {
         return $q->onlyTrashed();
     }
 
-    /**
-     * Explicitly hide archived (even inside complex joins that bypass SoftDeletingScope).
-     * Use: Production::visible()->get()
-     */
     public function scopeVisible($q)
     {
         $table = $this->getTable();
         return $q->whereNull("$table.deleted_at");
     }
 
-    /**
-     * Alias for visible()
-     */
     public function scopeNotArchived($q)
     {
         return $this->scopeVisible($q);
@@ -146,9 +140,6 @@ class Production extends Model
                  ->where('expiration_date', '<', Carbon::today()->toDateString());
     }
 
-    /**
-     * Flexible archived search by batch/type/product/notes.
-     */
     public function scopeSearchArchived($q, ?string $term)
     {
         $s = trim((string)$term);
@@ -157,6 +148,7 @@ class Production extends Model
         return $q->where(function($qq) use ($s) {
             $qq->where('batch_number', 'like', "%{$s}%")
                ->orWhere('product_name_snapshot', 'like', "%{$s}%")
+               ->orWhere('remarks', 'like', "%{$s}%")
                ->orWhere('archived_reason', 'like', "%{$s}%")
                ->orWhereHas('product', function($qp) use ($s){
                     $qp->where('product_name','like',"%{$s}%");
@@ -168,7 +160,6 @@ class Production extends Model
     }
 
     /**
-     * Sort helper for archived list.
      * @param string $sort One of: deleted_at|date|product|batch|qty
      */
     public function scopeSortArchived($q, string $sort = 'deleted_at')
@@ -218,19 +209,13 @@ class Production extends Model
 
     /**
      * Purge-at timestamp used by the Archived UI.
-     * Defaults to deleted_at + N days (N = config('app.archive_ttl_days', 7)).
-     * If you store a real column named `purge_at`, this accessor will
-     * still return that when present; otherwise it computes on the fly.
      */
     public function getPurgeAtAttribute(): ?string
     {
-        // Respect real DB column if it exists at runtime
         if (array_key_exists('purge_at', $this->attributes) && !empty($this->attributes['purge_at'])) {
             try {
                 return Carbon::parse($this->attributes['purge_at'])->toDateTimeString();
-            } catch (\Throwable $e) {
-                // fall through to computed
-            }
+            } catch (\Throwable $e) { /* fall through */ }
         }
 
         if (!$this->deleted_at) return null;
@@ -274,7 +259,6 @@ class Production extends Model
 
     /**
      * Human-friendly "Type" derived from per-order snapshot and parent.
-     * We do NOT fall back to category here — the snapshot is the source of truth.
      */
     public function getTypeNameAttribute(): string
     {
@@ -284,10 +268,10 @@ class Production extends Model
         if ($childName !== '') {
             if ($parentName !== '' && stripos($childName, $parentName) !== false) {
                 $type = trim(preg_replace('/\s+/', ' ', str_ireplace($parentName, '', $childName)));
-                if ($type !== '') return $type; // e.g., "Garlic skinless"
+                if ($type !== '') return $type;
             }
             if ($parentName === '' || strcasecmp($childName, $parentName) !== 0) {
-                return $childName; // distinct variant/label
+                return $childName;
             }
         }
 
@@ -301,7 +285,7 @@ class Production extends Model
             mb_strtolower($this->product_name_snapshot ?: $this->product?->product_name ?: ''),
             mb_strtolower($this->parentProduct?->product_name ?: ''),
             mb_strtolower($this->batch_number ?: ''),
-            mb_strtolower($this->notes ?? ''), // only if your schema has notes
+            mb_strtolower($this->remarks ?? ''), // UPDATED: use remarks, not notes
         ];
         return trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($parts))));
     }
@@ -318,41 +302,45 @@ class Production extends Model
         $this->attributes['batch_number'] = mb_strtoupper($norm);
     }
 
+    public function setRemarksAttribute($value): void
+    {
+        if (is_null($value)) {
+            $this->attributes['remarks'] = null;
+            return;
+        }
+        $norm = trim((string)$value);
+        // soft clamp – DB column still enforces the real max
+        $this->attributes['remarks'] = mb_substr($norm, 0, 500);
+    }
+
     /* =========================== Model Events ========================== */
 
     protected static function booted(): void
     {
-        // Normalize & ensure NOT NULL numeric fields before save
         static::saving(function (self $m) {
-            // numbers
+            // numeric coercions & clamps
             $m->quantity          = is_numeric($m->quantity) ? (int)$m->quantity : 0;
             $m->current_inventory = is_numeric($m->current_inventory) ? (int)$m->current_inventory : null;
-            $m->unit_cost         = is_numeric($m->unit_cost) ? (float)$m->unit_cost : 0.0;
             $m->forecasted_demand = is_numeric($m->forecasted_demand) ? (float)$m->forecasted_demand : 0.0;
             $m->unit_price_pack   = is_numeric($m->unit_price_pack) ? max(0.0, (float)$m->unit_price_pack) : 0.0;
             $m->unit_price_bag    = is_numeric($m->unit_price_bag)  ? max(0.0, (float)$m->unit_price_bag)  : 0.0;
 
-            // clamps
-            if ($m->quantity < 0) $m->quantity = 0;
-            if (($m->current_inventory ?? 0) < 0) $m->current_inventory = 0;
-            if ($m->unit_cost < 0) $m->unit_cost = 0.0;
+            // availability fields
+            $m->available_pack = is_numeric($m->available_pack) ? max(0, (int)$m->available_pack) : 0;
+            $m->available_bag  = is_numeric($m->available_bag)  ? max(0, (int)$m->available_bag)  : 0;
 
-            // default current_inventory on create
+            // defaults
             if ($m->exists === false && ($m->current_inventory === null || $m->current_inventory === '')) {
                 $m->current_inventory = (int) $m->quantity;
             }
-
-            // image disk default
             if (empty($m->image_disk)) {
                 $m->image_disk = 'public';
             }
-
-            // production date default
             if (empty($m->production_date)) {
                 $m->production_date = Carbon::today();
             }
 
-            // **Guarantee parent_product_id** (parent of chosen variant, else itself)
+            // ensure parent_product_id
             if (empty($m->parent_product_id) && !empty($m->product_id)) {
                 if ($m->relationLoaded('product') && $m->product) {
                     $m->parent_product_id = (int) ($m->product->parent_id ?: $m->product_id);
@@ -362,7 +350,7 @@ class Production extends Model
                 }
             }
 
-            // **Guarantee per-order snapshot** (this drives the Type column)
+            // snapshot label (type)
             if (empty($m->product_name_snapshot)) {
                 $cat = null; $pname = null;
                 if ($m->relationLoaded('product') && $m->product) {
@@ -373,11 +361,10 @@ class Production extends Model
                     $cat   = trim((string)($prod->category ?? ''));
                     $pname = trim((string)($prod->product_name ?? ''));
                 }
-                // Prefer category (e.g. Garlic skinless). If empty, fall back to product name.
                 $m->product_name_snapshot = $cat !== '' ? $cat : ($pname ?: 'Base');
             }
 
-            // expiration auto-calc (if shelf life known)
+            // expiration auto-calc
             if (empty($m->expiration_date) && !empty($m->production_date)) {
                 $days = null;
                 if ($m->relationLoaded('product') && $m->product) {
@@ -391,7 +378,6 @@ class Production extends Model
             }
         });
 
-        // After any change, recompute balances for the child/variant product
         $recompute = function (self $m) {
             if ($m->product_id) {
                 if (App::bound(\App\Services\InventoryService::class)) {
@@ -415,7 +401,6 @@ class Production extends Model
     {
         $produced = (float) static::where('product_id', $productId)->sum('quantity');
 
-        // Sold: prefer new schema quantity_kg, fall back to legacy quantity
         $sold = (float) Sale::where('product_id', $productId)
             ->selectRaw('COALESCE(SUM(quantity_kg),0) + COALESCE(SUM(quantity),0) as s')
             ->value('s');
@@ -432,10 +417,6 @@ class Production extends Model
 
     /* ============================ Convenience ============================ */
 
-    /**
-     * Soft-delete by id with a quick guard (returns bool).
-     * Handy in controllers: Production::archiveById($id);
-     */
     public static function archiveById(int $id): bool
     {
         $row = static::find($id);
@@ -443,10 +424,6 @@ class Production extends Model
         return (bool) $row->delete();
     }
 
-    /**
-     * Ensure a query never shows archived items, even if someone used joins or withTrashed.
-     * Use: Production::query()->visible()->get();
-     */
     public static function visibleQuery()
     {
         return static::query()->visible();
