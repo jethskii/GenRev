@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use App\Models\Product;
 use App\Models\Sale;
 
@@ -39,7 +40,8 @@ class Production extends Model
         'image_path',
         'image_medium_path',
         'image_thumb_path',
-        // 'notes', // include only if the column exists
+        // 'notes',            // include only if the column exists
+        // 'archived_reason',  // optional column if you store a reason on delete
     ];
 
     /** Casts */
@@ -69,6 +71,7 @@ class Production extends Model
         'image_srcset',
         'type_name',       // derived per-order
         'type_keywords',   // for client-side search
+        'purge_at',        // computed: deleted_at + TTL days
     ];
 
     /* ========================== Relationships ========================== */
@@ -89,6 +92,14 @@ class Production extends Model
     }
 
     /* ============================== Scopes ============================== */
+
+    /**
+     * Only archived (soft-deleted) rows.
+     */
+    public function scopeArchived($q)
+    {
+        return $q->onlyTrashed();
+    }
 
     public function scopeByProduct($q, int $productId)
     {
@@ -116,6 +127,51 @@ class Production extends Model
                  ->where('expiration_date', '<', Carbon::today()->toDateString());
     }
 
+    /**
+     * Flexible archived search by batch/type/product/notes.
+     */
+    public function scopeSearchArchived($q, ?string $term)
+    {
+        $s = trim((string)$term);
+        if ($s === '') return $q;
+
+        return $q->where(function($qq) use ($s) {
+            $qq->where('batch_number', 'like', "%{$s}%")
+               ->orWhere('product_name_snapshot', 'like', "%{$s}%")
+               ->orWhere('archived_reason', 'like', "%{$s}%")
+               ->orWhereHas('product', function($qp) use ($s){
+                    $qp->where('product_name','like',"%{$s}%");
+               })
+               ->orWhereHas('parentProduct', function($qp) use ($s){
+                    $qp->where('product_name','like',"%{$s}%");
+               });
+        });
+    }
+
+    /**
+     * Sort helper for archived list.
+     * @param string $sort One of: deleted_at|date|product|batch|qty
+     */
+    public function scopeSortArchived($q, string $sort = 'deleted_at')
+    {
+        switch ($sort) {
+            case 'date':
+                return $q->orderByDesc('production_date')->orderByDesc('id');
+            case 'product':
+                return $q->leftJoin('products','products.id','=','productions.product_id')
+                         ->orderBy('products.product_name')
+                         ->orderByDesc('productions.id')
+                         ->select('productions.*');
+            case 'batch':
+                return $q->orderBy('batch_number')->orderByDesc('id');
+            case 'qty':
+                return $q->orderByDesc('quantity')->orderByDesc('id');
+            case 'deleted_at':
+            default:
+                return $q->orderByDesc('deleted_at')->orderByDesc('id');
+        }
+    }
+
     /* ============================ Accessors ============================ */
 
     public function getRemainingQtyAttribute(): int
@@ -139,6 +195,28 @@ class Production extends Model
             Carbon::parse($this->expiration_date)->startOfDay(),
             false // negative if past
         );
+    }
+
+    /**
+     * Purge-at timestamp used by the Archived UI.
+     * Defaults to deleted_at + N days (N = config('app.archive_ttl_days', 7)).
+     * If you store a real column named `purge_at`, this accessor will
+     * still return that when present; otherwise it computes on the fly.
+     */
+    public function getPurgeAtAttribute(): ?string
+    {
+        // Respect real DB column if it exists at runtime
+        if (array_key_exists('purge_at', $this->attributes) && !empty($this->attributes['purge_at'])) {
+            try {
+                return Carbon::parse($this->attributes['purge_at'])->toDateTimeString();
+            } catch (\Throwable $e) {
+                // fall through to computed
+            }
+        }
+
+        if (!$this->deleted_at) return null;
+        $ttl = (int) config('app.archive_ttl_days', 7);
+        return Carbon::parse($this->deleted_at)->copy()->addDays(max(1, $ttl))->toDateTimeString();
     }
 
     public function getImageUrlAttribute(): string

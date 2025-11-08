@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>GenRev Admin Dashboard</title>
 
-  <!-- Tailwind CDN -->
+  <!-- Tailwind CDN (pinned major) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- Fonts -->
@@ -40,13 +40,22 @@
     .brand-title{ font-family:'Kalam',cursive; letter-spacing:.02em; color:var(--ink); } .muted{ color:var(--muted); }
     @media (max-width:1024px){ #sidebar{ transform:translateX(-100%); transition:transform .3s ease; } #sidebar.open{ transform:translateX(0); } }
     :where(a,button,[role="menuitem"],.side-link,.btn):focus{ outline:2px solid var(--green); outline-offset:2px; }
+
+    /* Reduced motion: respect OS settings */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+      .card { box-shadow: none; }
+    }
+
+    /* Utility for visually hidden text (a11y) */
+    .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,1px,1px); white-space:nowrap; border:0; }
   </style>
 </head>
 <body>
   <div class="flex min-h-screen">
 
     <!-- Sidebar -->
-    <aside id="sidebar" class="sidebar w-64 flex-shrink-0 flex flex-col" aria-label="Primary">
+    <aside id="sidebar" class="sidebar w-64 flex-shrink-0 flex flex-col" aria-label="Primary" tabindex="-1">
       <div class="p-6 border-b border-[var(--line)] flex justify-between items-center">
         <a href="{{ route('dashboard') }}" class="flex items-center gap-3" aria-label="GenRev Home">
           <div class="h-10 w-10 rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden flex items-center justify-center">
@@ -67,7 +76,7 @@
       <!-- User -->
       <div class="px-6 pt-4 pb-2">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white" style="background:var(--green);">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white" style="background:var(--green);" aria-hidden="true">
             {{ Auth::check() ? strtoupper(substr(Auth::user()->name, 0, 1)) : '?' }}
           </div>
           <div class="text-sm min-w-0">
@@ -82,7 +91,7 @@
       </div>
 
       <!-- Nav (role-aware) -->
-      <nav class="flex-1 mt-4 space-y-1 text-sm font-medium" role="navigation">
+      <nav class="flex-1 mt-4 space-y-1 text-sm font-medium" role="navigation" aria-label="Primary navigation">
         @php
           $modules = [];
           if (Auth::check() && method_exists(Auth::user(), 'allowedModules')) {
@@ -136,13 +145,13 @@
       <!-- Top Nav -->
       <header class="nav-surface px-6 py-4 flex justify-between items-center">
         <div class="flex items-center gap-4">
-          <button id="sidebarToggle" class="lg:hidden text-2xl" aria-label="Open sidebar">&#9776;</button>
+          <button id="sidebarToggle" class="lg:hidden text-2xl" aria-label="Open sidebar" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
           <h1 class="text-xl font-bold tracking-wide brand-title">Dashboard Overview</h1>
         </div>
 
         <div class="flex flex-wrap items-center gap-4">
           <label class="flex items-center gap-2 text-xs">
-            <input id="toggle3D" type="checkbox" checked class="sr-only">
+            <input id="toggle3D" type="checkbox" checked class="sr-only" aria-controls="productionChart salesChart expiryChart">
             <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">
               <span class="inline-block w-2 h-2 rounded-full align-middle mr-1 bg-[var(--red)]" id="dot3d"></span>
               3D ON/OFF
@@ -168,7 +177,7 @@
         <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
           {{-- Metrics Cards --}}
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" aria-live="polite">
             @php
               $metrics = [
                 ['label' => 'Total Products',        'value' => $totalProducts,                          'note' => 'Based on weekly production', 'icon' => '📦'],
@@ -180,7 +189,7 @@
             @foreach ($metrics as $metric)
               <div class="card p-5 rounded-2xl hover:shadow-lg transition">
                 <div class="flex items-center gap-4">
-                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-xl text-white" style="background:var(--blue);">
+                  <div class="w-10 h-10 rounded-full flex items-center justify-center text-xl text-white" style="background:var(--blue);" aria-hidden="true">
                     {{ $metric['icon'] }}
                   </div>
                   <div>
@@ -220,13 +229,16 @@
               @endphp
               @foreach($salesStats as $stat)
                 <div class="text-center">
-                  <div class="text-2xl mb-1">{{ $stat['icon'] }}</div>
+                  <div class="text-2xl mb-1" aria-hidden="true">{{ $stat['icon'] }}</div>
                   <div class="text-xs muted mb-1">{{ $stat['label'] }}</div>
                   <div class="text-sm font-semibold {{ $stat['color'] }}">{{ $stat['value'] }}</div>
                 </div>
               @endforeach
             </div>
-            <div class="h-32 relative"><canvas id="salesTrendsChart" aria-label="Sales trend chart"></canvas></div>
+            <div class="h-32 relative">
+              <p id="salesTrendsDesc" class="sr-only">Sparkline of revenue over the selected period.</p>
+              <canvas id="salesTrendsChart" aria-label="Sales trend chart" aria-describedby="salesTrendsDesc"></canvas>
+            </div>
           </div>
 
           {{-- Most Sold Products & Types --}}
@@ -236,46 +248,44 @@
                 <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products & Types</h2>
                 <p class="text-xs muted">Top 5 product–type combos by revenue</p>
               </div>
-              <a href="{{ route('sales') }}" class="btn btn-green text-xs">View all</a>
+              @if(\Illuminate\Support\Facades\Route::has('sales'))
+                <a href="{{ route('sales') }}" class="btn btn-green text-xs">View all</a>
+              @endif
             </div>
 
             @if(($topProducts ?? collect())->isEmpty())
-  <div class="text-center py-8">
-    <div class="text-4xl mb-2">📊</div>
-    <div class="text-sm muted">No sales data available</div>
-    <div class="text-xs muted mt-1">Start recording sales to see top product–type combos</div>
-  </div>
-@else
-  <div class="space-y-3">
-    @foreach($topProducts as $index => $product)
-      <div class="flex items-center gap-3 p-3 rounded-lg bg-[#fafafa] hover:bg-[#f3f4f6] transition">
-        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white" style="background:var(--red);">
-          {{ $index + 1 }}
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center justify-between mb-1">
-            <div class="font-medium truncate">{{ $product->product_name ?? 'Product' }}</div>
-            <div class="text-sm font-semibold text-[var(--blue)]">₱{{ number_format($product->revenue ?? 0, 2) }}</div>
-          </div>
-
-          {{-- type chip --}}
-          <div class="mb-1">
-            <span class="chip">{{ $product->sale_type ?? '—' }}</span>
-          </div>
-
-          <div class="flex items-center justify-between text-xs muted">
-            <span>{{ number_format($product->quantity ?? 0, 2) }} sold</span>
-            <span>{{ number_format($product->revenue_share ?? 0, 1) }}% of week</span>
-          </div>
-          <div class="w-full bg-[var(--line)]/40 rounded-full h-1.5 mt-2">
-            <div class="h-1.5 rounded-full" style="width: {{ min(($product->revenue_share ?? 0), 100) }}%; background:linear-gradient(90deg,var(--red),var(--yellow));"></div>
-          </div>
-        </div>
-      </div>
-    @endforeach
-  </div>
-@endif
-
+              <div class="text-center py-8">
+                <div class="text-4xl mb-2" aria-hidden="true">📊</div>
+                <div class="text-sm muted">No sales data available</div>
+                <div class="text-xs muted mt-1">Start recording sales to see top product–type combos</div>
+              </div>
+            @else
+              <div class="space-y-3">
+                @foreach($topProducts as $index => $product)
+                  <div class="flex items-center gap-3 p-3 rounded-lg bg-[#fafafa] hover:bg-[#f3f4f6] transition">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white" style="background:var(--red);" aria-label="Rank {{ $index + 1 }}">
+                      {{ $index + 1 }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between mb-1">
+                        <div class="font-medium truncate">{{ $product->product_name ?? 'Product' }}</div>
+                        <div class="text-sm font-semibold text-[var(--blue)]">₱{{ number_format($product->revenue ?? 0, 2) }}</div>
+                      </div>
+                      <div class="mb-1">
+                        <span class="chip">{{ $product->sale_type ?? '—' }}</span>
+                      </div>
+                      <div class="flex items-center justify-between text-xs muted">
+                        <span>{{ number_format($product->quantity ?? 0, 2) }} sold</span>
+                        <span>{{ number_format($product->revenue_share ?? 0, 1) }}% of week</span>
+                      </div>
+                      <div class="w-full bg-[var(--line)]/40 rounded-full h-1.5 mt-2" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ min(($product->revenue_share ?? 0), 100) }}">
+                        <div class="h-1.5 rounded-full" style="width: {{ min(($product->revenue_share ?? 0), 100) }}%; background:linear-gradient(90deg,var(--red),var(--yellow));"></div>
+                      </div>
+                    </div>
+                  </div>
+                @endforeach
+              </div>
+            @endif
           </div>
 
           {{-- Recent Sales --}}
@@ -285,38 +295,38 @@
                 <h2 class="text-base font-semibold mb-1">Recent Sales</h2>
                 <p class="text-xs muted mb-3">Latest from <strong>weekly product sales</strong></p>
               </div>
-              <a href="{{ route('sales') }}" class="btn btn-blue text-xs">View all</a>
+              @if(\Illuminate\Support\Facades\Route::has('sales'))
+                <a href="{{ route('sales') }}" class="btn btn-blue text-xs">View all</a>
+              @endif
             </div>
 
             <table class="text-sm text-left">
               <thead class="uppercase">
-              <tr>
-                <th class="py-2 px-3">Product</th>
-                <th class="py-2 px-3">Type</th>   {{-- NEW --}}
-                <th class="py-2 px-3">Qty</th>
-                <th class="py-2 px-3">Price</th>
-                <th class="py-2 px-3">Date</th>
-              </tr>
-            </thead>
-
+                <tr>
+                  <th scope="col" class="py-2 px-3">Product</th>
+                  <th scope="col" class="py-2 px-3">Type</th>
+                  <th scope="col" class="py-2 px-3 text-right">Qty</th>
+                  <th scope="col" class="py-2 px-3 text-right">Price</th>
+                  <th scope="col" class="py-2 px-3">Date</th>
+                </tr>
+              </thead>
               <tbody>
-          @forelse ($recentSales as $sale)
-            <tr class="border-t">
-              <td class="py-2 px-3">{{ $sale->product_name }}</td>
-              <td class="py-2 px-3">
-                <span class="chip">{{ $sale->sale_type ?? '—' }}</span>
-              </td>
-              <td class="py-2 px-3">{{ number_format($sale->quantity, 3) }}</td>
-              <td class="py-2 px-3">₱{{ number_format($sale->unit_price, 2) }}</td>
-              <td class="py-2 px-3">{{ \Carbon\Carbon::parse($sale->date)->format('M d, Y') }}</td>
-            </tr>
-          @empty
-            <tr>
-              <td colspan="5" class="py-3 text-center muted">No sales found.</td>
-            </tr>
-          @endforelse
-        </tbody>
-
+                @forelse ($recentSales as $sale)
+                  <tr class="border-t">
+                    <td class="py-2 px-3">{{ $sale->product_name }}</td>
+                    <td class="py-2 px-3">
+                      <span class="chip">{{ $sale->sale_type ?? '—' }}</span>
+                    </td>
+                    <td class="py-2 px-3 text-right">{{ number_format($sale->quantity, 3) }}</td>
+                    <td class="py-2 px-3 text-right">₱{{ number_format($sale->unit_price, 2) }}</td>
+                    <td class="py-2 px-3">{{ \Carbon\Carbon::parse($sale->date)->timezone('Asia/Manila')->format('M d, Y') }}</td>
+                  </tr>
+                @empty
+                  <tr>
+                    <td colspan="5" class="py-3 text-center muted">No sales found.</td>
+                  </tr>
+                @endforelse
+              </tbody>
             </table>
           </div>
 
@@ -333,17 +343,17 @@
               <table class="text-sm text-left">
                 <thead class="uppercase">
                   <tr>
-                    <th class="py-2 px-3">Material</th>
-                    <th class="py-2 px-3">Qty (kg)</th>
-                    <th class="py-2 px-3">Date</th>
+                    <th scope="col" class="py-2 px-3">Material</th>
+                    <th scope="col" class="py-2 px-3 text-right">Qty (kg)</th>
+                    <th scope="col" class="py-2 px-3">Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   @foreach($recentMaterials as $m)
                     <tr class="border-t">
                       <td class="py-2 px-3">{{ $m->name ?? $m->material_name ?? 'Material' }}</td>
-                      <td class="py-2 px-3">{{ number_format($m->quantity_kg, 2) }}</td>
-                      <td class="py-2 px-3">{{ \Carbon\Carbon::parse($m->created_at)->format('M d, Y') }}</td>
+                      <td class="py-2 px-3 text-right">{{ number_format($m->quantity_kg, 2) }}</td>
+                      <td class="py-2 px-3">{{ \Carbon\Carbon::parse($m->created_at)->timezone('Asia/Manila')->format('M d, Y') }}</td>
                     </tr>
                   @endforeach
                 </tbody>
@@ -361,7 +371,8 @@
               </label>
             </div>
             <div class="h-56 relative">
-              <canvas id="expiryChart" aria-label="Expiry chart"></canvas>
+              <p id="expiryDesc" class="sr-only">Bar chart of items expiring this week.</p>
+              <canvas id="expiryChart" aria-label="Expiry chart" aria-describedby="expiryDesc"></canvas>
               <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No expiries this week</div>
             </div>
           </div>
@@ -376,7 +387,8 @@
               </label>
             </div>
             <div class="h-56 relative">
-              <canvas id="productionChart" aria-label="Production chart"></canvas>
+              <p id="prodDesc" class="sr-only">Bar chart of weekly units produced.</p>
+              <canvas id="productionChart" aria-label="Production chart" aria-describedby="prodDesc"></canvas>
               <div id="prodEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
           </div>
@@ -391,7 +403,8 @@
               </label>
             </div>
             <div class="h-56 relative">
-              <canvas id="salesChart" aria-label="Sales chart"></canvas>
+              <p id="salesDesc" class="sr-only">Combo chart showing quantity sold and revenue.</p>
+              <canvas id="salesChart" aria-label="Sales chart" aria-describedby="salesDesc"></canvas>
               <div id="salesEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
           </div>
@@ -422,9 +435,9 @@
         <table class="text-sm text-left">
           <thead class="uppercase">
             <tr>
-              <th class="py-2 px-3">Material</th>
-              <th class="py-2 px-3 text-right">Qty Used</th>
-              <th class="py-2 px-3 text-right">Cost</th>
+              <th scope="col" class="py-2 px-3">Material</th>
+              <th scope="col" class="py-2 px-3 text-right">Qty Used</th>
+              <th scope="col" class="py-2 px-3 text-right">Cost</th>
             </tr>
           </thead>
           <tbody>
@@ -450,6 +463,9 @@
       id: 'bar3d',
       afterDatasetDraw(chart, args, opts) {
         if (!opts?.enabled) return;
+        // respect reduced motion
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
         const {ctx, chartArea} = chart;
         const meta = args.meta;
         if (meta.type !== 'bar') return;
@@ -508,16 +524,51 @@
       const openBtn = document.getElementById('sidebarToggle');
       const closeBtn = document.getElementById('sidebarClose');
 
-      // Mobile sidebar open/close
-      openBtn?.addEventListener('click', ()=> sidebar?.classList.add('open'));
-      closeBtn?.addEventListener('click', ()=> sidebar?.classList.remove('open'));
+      // --- Sidebar a11y: open/close + focus trap + scroll lock
+      const focusableSelector = 'a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+      let lastFocused = null;
 
+      const setAriaExpanded = (btn, expanded) => btn?.setAttribute('aria-expanded', String(expanded));
+
+      const trapFocus = (container, e) => {
+        const nodes = container.querySelectorAll(focusableSelector);
+        if (!nodes.length) return;
+        const first = nodes[0], last = nodes[nodes.length - 1];
+        if (e.key !== 'Tab') return;
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      };
+
+      const openSidebar = () => {
+        lastFocused = document.activeElement;
+        sidebar?.classList.add('open');
+        document.body.classList.add('overflow-hidden');
+        setAriaExpanded(openBtn, true);
+        sidebar?.focus();
+        document.addEventListener('keydown', escClose, { once: true });
+        sidebar?.addEventListener('keydown', (e)=>trapFocus(sidebar, e));
+      };
+
+      const closeSidebar = () => {
+        sidebar?.classList.remove('open');
+        document.body.classList.remove('overflow-hidden');
+        setAriaExpanded(openBtn, false);
+        lastFocused?.focus?.();
+      };
+
+      const escClose = (e) => { if (e.key === 'Escape') closeSidebar(); };
+
+      openBtn?.addEventListener('click', openSidebar);
+      closeBtn?.addEventListener('click', closeSidebar);
+
+      // --- Data (server-injected)
       const labels = @json($labels ?? []);
       const prod   = @json($weeklyProductionSeries ?? []);
       const qty    = @json($weeklySalesQtySeries ?? []);
       const rev    = @json($weeklySalesRevenueSeries ?? []);
       const exp    = @json($weeklyExpirySeries ?? []);
 
+      // --- Colors
       const C_RED='rgba(239,68,68,1)', C_RED_30='rgba(239,68,68,.3)';
       const C_GREEN='rgba(16,185,129,1)', C_GREEN_30='rgba(16,185,129,.3)';
       const C_BLUE='rgba(37,99,235,1)', C_BLUE_30='rgba(37,99,235,.3)';
@@ -531,6 +582,11 @@
         el.classList.toggle('hidden', !empty);
         el.classList.add('flex');
       };
+
+      // Prefer reduced motion: disable 3D by default if user asks
+      const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const toggle3D = document.getElementById('toggle3D');
+      if (prefersReduced && toggle3D) toggle3D.checked = false;
 
       showIfEmpty(prod, 'prodEmpty');
       const productionChart = new Chart(document.getElementById('productionChart'), {
@@ -595,7 +651,7 @@
         }
       });
 
-      const toggle3D = document.getElementById('toggle3D');
+      // --- 3D toggles with debounced updates
       const toggleProduction = document.getElementById('toggleProduction');
       const toggleSales = document.getElementById('toggleSales');
       const toggleExpiry = document.getElementById('toggleExpiry');
@@ -605,19 +661,22 @@
       const liftVal = document.getElementById('liftVal');
       const dot3d = document.getElementById('dot3d');
 
+      let debounceTimer;
+      const debounce = (fn, ms=120) => (...args) => { clearTimeout(debounceTimer); debounceTimer = setTimeout(()=>fn(...args), ms); };
+
       const apply3D = () => {
         const master = toggle3D?.checked ?? true;
         const depth = Number(depthRange?.value ?? 10);
         const lift  = Number(liftRange?.value ?? -6);
-        depthVal.textContent = depth;
-        liftVal.textContent = lift;
-        dot3d.style.background = master ? 'var(--green)' : 'var(--red)';
+        if (depthVal) depthVal.textContent = depth;
+        if (liftVal) liftVal.textContent = lift;
+        if (dot3d) dot3d.style.background = master ? 'var(--green)' : 'var(--red)';
 
         const set = (chart, enabled) => {
           if (!chart) return;
           chart.options.plugins = chart.options.plugins || {};
           chart.options.plugins.bar3d = chart.options.plugins.bar3d || {};
-          chart.options.plugins.bar3d.enabled = enabled && master;
+          chart.options.plugins.bar3d.enabled = enabled && master && !prefersReduced;
           chart.options.plugins.bar3d.depth = depth;
           chart.options.plugins.bar3d.lift = lift;
           chart.update();
@@ -628,7 +687,9 @@
         set(expiryChart, toggleExpiry?.checked);
       };
 
-      [toggle3D, toggleProduction, toggleSales, toggleExpiry, depthRange, liftRange].forEach(el => el?.addEventListener('input', apply3D));
+      [toggle3D, toggleProduction, toggleSales, toggleExpiry, depthRange, liftRange]
+        .forEach(el => el?.addEventListener('input', debounce(apply3D)));
+
       apply3D();
     });
   </script>

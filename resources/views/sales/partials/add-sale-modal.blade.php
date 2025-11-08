@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const typeList    = document.getElementById('typeList');
   const nextTypeTxt = document.getElementById('nextTypeText');
 
-  const batchesUrlBase  = "{{ url('/production/api/by-product') }}/"; // returns minimal batch list
+  const batchesUrlBase  = "{{ url('/production/api/by-product') }}/"; // returns minimal batch list (now includes prices)
   const productAvailUrl = "{{ route('sales.available') }}";           // returns { available, price }
   const typesApiUrl     = "{{ route('sales.api.types') }}";           // returns { ok, list:[], next:"Type N" }
 
@@ -213,6 +213,53 @@ document.addEventListener('DOMContentLoaded', function () {
     qtyInput.removeAttribute('max');
   }
 
+  // --- NEW: helpers for automatic unit price --------------------------------
+  function currentUnitType() {
+    return (unitType?.value || '').toLowerCase().trim();
+  }
+
+  function selectedBatchOption() {
+    return batchSel?.options?.[batchSel.selectedIndex] || null;
+  }
+
+  function selectedProductOption() {
+    return productSel?.options?.[productSel.selectedIndex] || null;
+  }
+
+  function getSuggestedPriceFor(unit) {
+    const opt = selectedBatchOption();
+    if (opt) {
+      if (unit === 'pack' && opt.dataset.pack && !isNaN(parseFloat(opt.dataset.pack))) {
+        return parseFloat(opt.dataset.pack);
+      }
+      if (unit === 'bag' && opt.dataset.bag && !isNaN(parseFloat(opt.dataset.bag))) {
+        return parseFloat(opt.dataset.bag);
+      }
+    }
+    // Fallback to product default price
+    const pOpt = selectedProductOption();
+    if (pOpt) {
+      const prodPrice = parseFloat(pOpt.getAttribute('data-price') || 'NaN');
+      if (!isNaN(prodPrice)) return prodPrice;
+    }
+    return null;
+  }
+
+  // Set price from the currently selected unit/batch.
+  // If force=true, overwrite whatever is there; else only fill if blank/zero.
+  function applyUnitPriceFromSelection(force = false) {
+    const unit = currentUnitType();
+    if (!unit) { updateTotal(); return; } // 'Auto' → do nothing
+    const suggested = getSuggestedPriceFor(unit);
+    if (suggested !== null) {
+      if (force || priceInput.value === '' || +priceInput.value === 0) {
+        priceInput.value = suggested.toFixed(2);
+      }
+    }
+    updateTotal();
+  }
+  // ---------------------------------------------------------------------------
+
   async function fetchProductAvailability(productId) {
     try {
       const url = productAvailUrl + "?product_id=" + encodeURIComponent(productId);
@@ -229,11 +276,11 @@ document.addEventListener('DOMContentLoaded', function () {
         qtyInput.removeAttribute('max');
       }
 
-      if ((priceInput.value==='' || +priceInput.value===0) && typeof data.price !== 'undefined') {
-        priceInput.value = data.price;
-      } else if (priceInput.value==='') {
-        const opt = productSel.options[productSel.selectedIndex];
-        priceInput.value = opt?.getAttribute('data-price') || '';
+      // Only set a base price if price is empty and unit type is not Pack/Bag, the specific
+      // per-unit setting will happen via applyUnitPriceFromSelection when user picks unit.
+      if (priceInput.value === '') {
+        const opt = selectedProductOption();
+        priceInput.value = (opt?.getAttribute('data-price') || (typeof data.price !== 'undefined' ? data.price : '') );
       }
 
       updateTotal();
@@ -251,15 +298,25 @@ document.addEventListener('DOMContentLoaded', function () {
       const batches = await res.json();
       batches.forEach(b => {
         const opt = document.createElement('option');
+
+        // NEW: persist per-pack and per-bag prices on the option
+        // so we can read them when user chooses Pack/Bag.
+        opt.dataset.pack = (b.unit_price_pack ?? '') === '' ? '' : String(b.unit_price_pack);
+        opt.dataset.bag  = (b.unit_price_bag  ?? '') === '' ? '' : String(b.unit_price_bag);
+
         const date = b.production_date ?? '';
         const qty  = (b.quantity ?? 0);
         const inv  = (b.current_inventory ?? 0);
+
         opt.value = b.id;
         opt.textContent = `${b.batch_number ?? 'Batch'} — Qty ${qty} — Inv ${inv}${date ? ' — ' + date : ''}`;
         opt.dataset.inv = inv;
         batchSel.appendChild(opt);
       });
       batchSel.disabled = false;
+
+      // If a unit type is already chosen, try to auto-apply its price now.
+      applyUnitPriceFromSelection(/*force*/ false);
     } catch {}
   }
 
@@ -293,8 +350,9 @@ document.addEventListener('DOMContentLoaded', function () {
     qtyInput.value = '';
     qtyInput.removeAttribute('max');
 
-    const opt = this.options[this.selectedIndex];
-    if (priceInput.value==='') {
+    // Base price from product; per-unit override happens on unit/batch change
+    const opt = selectedProductOption();
+    if (priceInput.value === '') {
       priceInput.value = opt?.getAttribute('data-price') || '';
     }
     updateTotal();
@@ -302,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (hasValue) {
       fetchProductAvailability(this.value);
       loadBatches(this.value);
-      loadTypes(this.value); // <<— load Type suggestions + next "Type N"
+      loadTypes(this.value);
     } else {
       typeList.innerHTML = '';
       nextTypeTxt.textContent = 'Type 1';
@@ -310,7 +368,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   batchSel?.addEventListener('change', function () {
-    const selOpt = this.options[this.selectedIndex];
+    const selOpt = selectedBatchOption();
     const inv = selOpt?.dataset?.inv ?? '';
     if (inv !== '') {
       batchInfo.textContent = `Batch available inventory: ${inv}`;
@@ -323,7 +381,9 @@ document.addEventListener('DOMContentLoaded', function () {
       batchInfo.classList.add('hidden');
       qtyInput.removeAttribute('max');
     }
-    updateTotal();
+
+    // NEW: when batch changes, re-apply price for current Pack/Bag selection
+    applyUnitPriceFromSelection(/*force*/ true);
   });
 
   qtyInput?.addEventListener('input', function () {
@@ -334,8 +394,13 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   priceInput?.addEventListener('input', updateTotal);
-  unitType?.addEventListener('change', updateTotal);
 
+  // NEW: when user picks Pack/Bag, set the correct price from the selected batch
+  unitType?.addEventListener('change', function () {
+    applyUnitPriceFromSelection(/*force*/ true);
+  });
+
+  // Initial compute
   updateTotal();
 });
 </script>

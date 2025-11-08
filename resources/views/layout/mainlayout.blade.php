@@ -12,9 +12,24 @@
 
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inria+Sans:wght@300;400;700&display=swap" rel="stylesheet">
+  {{-- Added: fonts used by Appearance (no removal) --}}
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   @yield('head')
   @stack('head')
+
+  {{-- Added: read per-user appearance (kept everything else) --}}
+  @php
+    $g = $appearanceGlobals ?? ['theme'=>'light','accent'=>'#3b82f6','font_style'=>'default'];
+    $__fontFamily = $g['font_style']==='rounded'
+        ? 'Jost'
+        : ($g['font_style']==='mono' ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'Inter');
+  @endphp
+
+  {{-- Added: apply accent early (kept your original style below) --}}
+  <style>
+    :root { --accent: {{ $g['accent'] }}; }
+  </style>
 
   <style>
     :root{
@@ -57,8 +72,30 @@
     :where(a,button,[role="menuitem"],.nav-link,.btn):focus{outline:2px solid var(--accent-green);outline-offset:2px}
   </style>
 
+  {{-- Added: override font-family based on per-user font_style (non-breaking) --}}
+  <style>
+    body { font-family: {{ $__fontFamily }}, system-ui, -apple-system, Segoe UI, Roboto, sans-serif !important; }
+  </style>
+
   @yield('styles')
   @stack('styles')
+
+  {{-- Added: apply theme before paint to prevent flash (keeps your dark-mode class logic) --}}
+  <script>
+    (function(){
+      try{
+        var cfg = @json($g);
+        var theme = cfg.theme || 'light';
+        if(theme === 'system'){
+          theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        if(theme === 'dark'){
+          document.documentElement.classList.add('js-applied-dark');
+          document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('dark-mode'); });
+        }
+      }catch(e){}
+    })();
+  </script>
 </head>
 
 <body class="chart-palette">
@@ -101,6 +138,12 @@
         $isOn = fn($patterns) => request()->routeIs(...(array)$patterns);
         $cls  = fn($patterns) => $isOn($patterns) ? 'nav-active' : '';
         $aria = fn($patterns) => $isOn($patterns) ? 'aria-current=page' : '';
+
+        $roleRaw   = (string) ($user->role ?? 'masters admin');
+        $roleLower = \Illuminate\Support\Str::lower($roleRaw);
+
+        // Only Masters Admin and Production Manager can see Archive
+        $canSeeArchive = in_array($roleLower, ['masters admin', 'production manager'], true);
 
         $roleLabel = \Illuminate\Support\Str::headline(
           \Illuminate\Support\Str::lower((string) ($user->role ?? 'masters admin'))
@@ -148,30 +191,40 @@
 
           @if($can('production'))
             <a href="{{ route('production.index') }}" class="nav-link {{ $cls('production.*') }}" {{ $aria('production.*') }}>Production</a>
+
+            {{-- Archive visible only to Masters Admin and Production Manager --}}
+            @if($canSeeArchive)
+              <a href="{{ route('production.archived') }}"
+                 class="nav-link {{ $cls('production.archived') }}"
+                 {{ $aria('production.archived') }}>
+                Archive
+              </a>
+              <div class="mx-6 my-2 border-t" style="border-color:var(--line)"></div>
+            @endif
           @endif
 
           @if($can('sales'))
-            <a href="{{ route('sales.index') }}" class="nav-link {{ $cls('sales.*') }}" {{ $aria('sales.*') }}>Sales</a>
+            <a href="{{ route('sales.index') }}" class="nav-link {{ $cls('sales.*') }}" {{ $aria('sales.*') }}">Sales</a>
           @endif
 
           @if($can('inventory'))
-            <a href="{{ route('inventory.index') }}" class="nav-link {{ $cls('inventory.*') }}" {{ $aria('inventory.*') }}>Inventory</a>
+            <a href="{{ route('inventory.index') }}" class="nav-link {{ $cls('inventory.*') }}" {{ $aria('inventory.*') }}">Inventory</a>
           @endif
 
           @if($can('products'))
-            <a href="{{ route('products.index') }}" class="nav-link {{ $cls('products.*') }}" {{ $aria('products.*') }}>Products</a>
+            <a href="{{ route('products.index') }}" class="nav-link {{ $cls('products.*') }}" {{ $aria('products.*') }}">Products</a>
           @endif
 
           @if($can('materials'))
-            <a href="{{ route('materials.index') }}" class="nav-link {{ $cls('materials.*') }}" {{ $aria('materials.*') }}>Materials</a>
+            <a href="{{ route('materials.index') }}" class="nav-link {{ $cls('materials.*') }}" {{ $aria('materials.*') }}">Materials</a>
           @endif
 
           @if($can('employee'))
-            <a href="{{ route('employees.index') }}" class="nav-link {{ $cls('employees.*') }}" {{ $aria('employees.*') }}>Employee</a>
+            <a href="{{ route('employees.index') }}" class="nav-link {{ $cls('employees.*') }}" {{ $aria('employees.*') }}">Employee</a>
           @endif
 
           @if($can('settings'))
-            <a href="{{ route('settings.index') }}" class="nav-link {{ $cls('settings.*') }}" {{ $aria('settings.*') }}>Settings</a>
+            <a href="{{ route('settings.index') }}" class="nav-link {{ $cls('settings.*') }}" {{ $aria('settings.*') }}">Settings</a>
           @endif
 
           @if(request()->routeIs('products.materials.*') && $can('products'))
@@ -195,6 +248,15 @@
           </div>
 
           <div class="flex items-center gap-4">
+            {{-- Archive button visible only to Masters Admin and Production Manager --}}
+            @if($canSeeArchive)
+              <a href="{{ route('production.archived') }}"
+                 class="btn btn-secondary-green"
+                 title="View archived production orders">
+                Archive
+              </a>
+            @endif>
+
             <!-- Theme Toggle -->
             <div class="relative" title="Toggle Light/Dark Mode">
               <label class="inline-flex items-center gap-2 cursor-pointer">
@@ -309,9 +371,21 @@
         if (this.checked){ document.body.classList.add('dark-mode'); localStorage.setItem('theme','dark'); }
         else { document.body.classList.remove('dark-mode'); localStorage.setItem('theme','light'); }
         setLabel();
+
+        // Added: sync with per-user appearance if route exists
+        try {
+          const cfg = @json($g);
+          const data = new URLSearchParams({
+            theme: this.checked ? 'dark' : 'light',
+            accent: cfg.accent || '#3b82f6',
+            font_style: cfg.font_style || 'default'
+          });
+          // Fire-and-forget
+          window.csrfFetch("{{ route('settings.appearance.update') }}", { method: 'POST', body: data }).catch(()=>{});
+        } catch(e) {}
       });
 
-      // Reduce motion preference for smoother experience
+      // Reduce motion preference
       if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.querySelectorAll('*').forEach(el => el.style.scrollBehavior = 'auto');
       }

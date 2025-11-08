@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Setting;
-
+use App\Models\UserSetting;
 class SettingsController extends Controller
 {
     /**
@@ -87,5 +87,61 @@ class SettingsController extends Controller
         $user->save();
 
         return redirect()->route('settings.account')->with('success', 'Account updated successfully!');
+    }
+
+    // -----------------------------
+    // Appearance (new)
+    // -----------------------------
+
+    /**
+     * Show the Appearance settings page.
+     */
+    public function appearance()
+    {
+        $userId = Auth::id();
+        $appearance = UserSetting::appearanceFor($userId); // ['theme','accent','font_style']
+
+        // Blade: resources/views/settings/appearance.blade.php
+        return view('settings.appearance', compact('appearance'));
+    }
+
+    /**
+     * Save Appearance settings.
+     */
+     public function appearanceUpdate(Request $request)
+    {
+        $data = $request->validate([
+            'theme'      => 'required|in:light,dark,system',
+            'accent'     => 'required|string|max:20',
+            'font_style' => 'required|in:default,rounded,mono',
+        ]);
+
+        UserSetting::putAppearance(Auth::id(), $data);
+
+        return redirect()
+            ->route('settings.appearance')
+            ->with('status', 'Appearance saved ✅');
+    }
+
+    /** Reset per-user Appearance */
+    public function appearanceReset()
+    {
+        UserSetting::resetAppearance(Auth::id());
+
+        return redirect()
+            ->route('settings.appearance')
+            ->with('status', 'Appearance reset 🔄');
+    }
+
+    /**
+     * Defaults for appearance settings.
+     */
+    private function appearanceDefaults(): array
+    {
+        return [
+            'theme'      => 'light',
+            'accent'     => '#3b82f6',
+            'font_style' => 'default',
+        ];
     }
 }

@@ -267,14 +267,11 @@ class SalesController extends Controller
         $qty         = (float) $validated['quantity'];
         $unitType    = $validated['unit_type'] ?? null;
 
-        // --- Soft validation UX guards (friendly flashes) ---
-        if ($qty > 5000) {
-            session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
-        }
+        // Soft UX guards
+        if ($qty > 5000) session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
         if (isset($validated['price']) && (float)$validated['price'] === 0.0) {
             session()->flash('info', 'Unit price is zero. If this is intentional, you can ignore this note.');
         }
-        // -----------------------------------------------------
 
         // Resolve batch if not provided
         $orderDateStr = $validated['date'];
@@ -289,17 +286,14 @@ class SalesController extends Controller
         $total = round($qty * $unit, 2);
         $status = $validated['status'] ?? 'Completed';
 
-        // Final type label (explicit > batch snapshot)
+        // Final type label
         $typeLabel = trim((string)($validated['type_label'] ?? ''));
-        if ($typeLabel === '' && $batch) {
-            $typeLabel = (string)($batch->product_name_snapshot ?? '');
-        }
+        if ($typeLabel === '' && $batch) $typeLabel = (string)($batch->product_name_snapshot ?? '');
         if ($typeLabel === '') $typeLabel = null;
 
         $debugUuid = (string) Str::uuid();
         Log::info("[sales.store] START {$debugUuid}", ['request' => $request->all()]);
 
-        // capture created sale for audit trail
         $createdSale = null;
 
         try {
@@ -311,30 +305,19 @@ class SalesController extends Controller
                 ];
 
                 $map = [
-                    // identifiers
                     'order_number'    => $invoice,
                     'invoice_number'  => $invoice,
-
-                    // dates
                     'order_date'      => $validated['date'],
                     'date'            => $validated['date'],
-
-                    // name/desc
                     'product'         => $displayName,
-                    'type_label'      => $typeLabel,                     // NEW
-
-                    // numbers
+                    'type_label'      => $typeLabel,
                     'quantity_kg'     => $qty,
                     'quantity'        => $qty,
                     'unit_price'      => $unit,
                     'price'           => $unit,
                     'total_price'     => $total,
                     'total'           => $total,
-
-                    // unit type label (if column exists)
                     $this->unitTypeColumn() => $unitType,
-
-                    // optional meta
                     'customer_name'   => $validated['customer_name'] ?? null,
                     'notes'           => $validated['notes'] ?? null,
                     'production_date' => $validated['production_date'] ?? null,
@@ -356,7 +339,7 @@ class SalesController extends Controller
 
             Log::info("[sales.store] COMMIT {$debugUuid}");
 
-            // --- Audit trail: persist change_log JSON if provided ---
+            // Optional audit trail
             $rawChanges = $request->input('change_log');
             if ($createdSale && $rawChanges && class_exists(\App\Models\SaleChange::class)) {
                 try {
@@ -369,7 +352,6 @@ class SalesController extends Controller
                     Log::warning('[sales.store] SaleChange save failed', ['error' => $e->getMessage()]);
                 }
             }
-            // -------------------------------------------------------
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => true, 'message' => 'Sale saved.']);
@@ -424,7 +406,7 @@ class SalesController extends Controller
             'product_id'      => ['required','integer','exists:products,id'],
             'production_id'   => ['nullable','integer','exists:productions,id'],
             'unit_type'       => ['nullable','in:kg,pack,bag'],
-            'type_label'      => ['nullable','string','max:255'], // NEW
+            'type_label'      => ['nullable','string','max:255'],
             'date'            => ['nullable','date'],
             'order_date'      => ['nullable','date'],
             'quantity'        => ['required','numeric','min:0.001'],
@@ -457,14 +439,10 @@ class SalesController extends Controller
         $qty          = (float) $validated['quantity'];
         $unitType     = $validated['unit_type'] ?? $this->readUnitTypeFromSale($sale);
 
-        // --- Soft validation UX guards (friendly flashes) ---
-        if ($qty > 5000) {
-            session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
-        }
+        if ($qty > 5000) session()->flash('info', 'Heads up: quantity above 5000 kg. Please double-check.');
         if (isset($validated['price']) && (float)$validated['price'] === 0.0) {
             session()->flash('info', 'Unit price is zero. If this is intentional, you can ignore this note.');
         }
-        // -----------------------------------------------------
 
         $orderDateStr = $validated['date'];
         if (empty($resolvedProductionId)) {
@@ -473,16 +451,12 @@ class SalesController extends Controller
         }
         $batch = $resolvedProductionId ? Production::find($resolvedProductionId) : null;
 
-        // Compute (or keep) unit price
         $unit  = $this->determineUnitPrice($product, $batch, $unitType, $validated['price'] ?? null, $fallbackCurrent = $this->inferCurrentUnitPrice($sale));
         $total = round($qty * $unit, 2);
         $status = $validated['status'] ?? ($sale->status ?: 'Completed');
 
-        // Final type label
         $typeLabel = trim((string)($validated['type_label'] ?? ''));
-        if ($typeLabel === '' && $batch) {
-            $typeLabel = (string)($batch->product_name_snapshot ?? '');
-        }
+        if ($typeLabel === '' && $batch) $typeLabel = (string)($batch->product_name_snapshot ?? '');
         if ($typeLabel === '') $typeLabel = null;
 
         $debugUuid = (string) Str::uuid();
@@ -500,7 +474,7 @@ class SalesController extends Controller
                     'order_date'      => $validated['date'],
                     'date'            => $validated['date'],
                     'product'         => $displayName,
-                    'type_label'      => $typeLabel,                // NEW
+                    'type_label'      => $typeLabel,
                     'quantity_kg'     => $qty,
                     'quantity'        => $qty,
                     'unit_price'      => $unit,
@@ -529,7 +503,7 @@ class SalesController extends Controller
 
             Log::info("[sales.update] COMMIT {$debugUuid}");
 
-            // --- Audit trail: persist change_log JSON if provided ---
+            // Optional audit trail
             $rawChanges = $request->input('change_log');
             if ($rawChanges && class_exists(\App\Models\SaleChange::class)) {
                 try {
@@ -542,7 +516,6 @@ class SalesController extends Controller
                     Log::warning('[sales.update] SaleChange save failed', ['error' => $e->getMessage()]);
                 }
             }
-            // -------------------------------------------------------
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => true, 'message' => 'Sale updated.']);
@@ -560,13 +533,114 @@ class SalesController extends Controller
         }
     }
 
+    /**
+     * Soft-delete the sale AND also archive the linked Production batch (soft delete),
+     * then redirect straight to the Production Archive page so both are visible there.
+     */
     public function destroy(Sale $sale)
     {
-        $productId = (int)$sale->product_id;
-        $sale->delete();
+        $productId     = (int) $sale->product_id;
+        $productionId  = (int) ($sale->production_id ?? 0);
+
+        DB::transaction(function () use ($sale, $productionId) {
+            // Soft delete sale
+            $sale->delete();
+
+            // Also archive the linked production batch (soft delete), if any
+            if ($productionId > 0) {
+                $batch = Production::withTrashed()->find($productionId);
+                if ($batch && is_null($batch->deleted_at)) {
+                    $batch->delete();
+                }
+            }
+        });
+
         $this->recomputeProductBalance($productId);
-        return redirect()->route('sales')->with('success', 'Sale deleted.');
+
+        // Redirect to Production Archive so user sees both archived entities together
+        return redirect()->route('production.archived')->with('success', 'Sale archived and related batch moved to Production archive.');
     }
+
+    /* ============================== Sales Archive (Trash) ============================== */
+
+    /** List soft-deleted sales */
+    public function archivedIndex(Request $request)
+    {
+        $sales = Sale::onlyTrashed()
+            ->with(['productRef:id,product_name', 'production' => function($q) {
+                $q->withTrashed()->select('id','product_id','batch_number','deleted_at');
+            }])
+            ->orderByDesc('deleted_at')
+            ->paginate(30);
+
+        return view('sales.archived', compact('sales'));
+    }
+
+    /** Restore a soft-deleted sale */
+    public function restore($id)
+    {
+        $sale = Sale::onlyTrashed()->findOrFail($id);
+        $sale->restore();
+
+        $this->recomputeProductBalance((int)$sale->product_id);
+
+        return redirect()->route('sales.archived')->with('success', 'Sale restored.');
+    }
+
+    /** Permanently delete a soft-deleted sale */
+    public function forceDelete($id)
+    {
+        $sale = Sale::onlyTrashed()->findOrFail($id);
+        $productId = (int) $sale->product_id;
+
+        $sale->forceDelete();
+
+        $this->recomputeProductBalance($productId);
+
+        return redirect()->route('sales.archived')->with('success', 'Sale permanently deleted.');
+    }
+
+    /** Bulk restore */
+    public function restoreMany(Request $request)
+    {
+        $ids = array_filter((array) $request->input('ids', []), 'is_numeric');
+        if (empty($ids)) return back()->with('info', 'No items selected.');
+
+        $productIds = [];
+        DB::transaction(function () use ($ids, &$productIds) {
+            $toRestore = Sale::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($toRestore as $s) {
+                $productIds[] = (int)$s->product_id;
+                $s->restore();
+            }
+        });
+
+        foreach (array_unique($productIds) as $pid) $this->recomputeProductBalance($pid);
+
+        return back()->with('success', 'Selected sales restored.');
+    }
+
+    /** Bulk force delete */
+    public function forceDeleteMany(Request $request)
+    {
+        $ids = array_filter((array) $request->input('ids', []), 'is_numeric');
+        if (empty($ids)) return back()->with('info', 'No items selected.');
+
+        $productIds = [];
+        DB::transaction(function () use ($ids, &$productIds) {
+            $toDelete = Sale::onlyTrashed()->whereIn('id', $ids)->get();
+            foreach ($toDelete as $s) {
+                $productIds[] = (int)$s->product_id;
+                $s->forceDelete();
+            }
+        });
+
+        foreach (array_unique($productIds) as $pid) $this->recomputeProductBalance($pid);
+
+        return back()->with('success', 'Selected sales permanently deleted.');
+    }
+
+    /* ============================== Lightweight APIs / Utility ============================== */
 
     public function available(Request $request)
     {
@@ -588,8 +662,8 @@ class SalesController extends Controller
             'product_id'    => ['required','integer','exists:products,id'],
             'quantity'      => ['nullable','numeric','min:0.001'],
             'price'         => ['nullable','numeric','min:0'],
-            'unit_type'     => ['nullable','in:kg,pack,bag'],     // allow kg
-            'type_label'    => ['nullable','string','max:255'],   // NEW
+            'unit_type'     => ['nullable','in:kg,pack,bag'],
+            'type_label'    => ['nullable','string','max:255'],
             'production_id' => ['nullable','integer','exists:productions,id'],
             'date'          => ['nullable','date'],
             'order_date'    => ['nullable','date'],
@@ -619,9 +693,7 @@ class SalesController extends Controller
 
         // Final type label
         $typeLabel = trim((string)($validated['type_label'] ?? ''));
-        if ($typeLabel === '' && $batch) {
-            $typeLabel = (string)($batch->product_name_snapshot ?? '');
-        }
+        if ($typeLabel === '' && $batch) $typeLabel = (string)($batch->product_name_snapshot ?? '');
         if ($typeLabel === '') $typeLabel = null;
 
         $invoice   = $this->nextInvoiceNumber();
@@ -641,7 +713,7 @@ class SalesController extends Controller
                 'order_date'      => $date,
                 'date'            => $date,
                 'product'         => $product->product_name,
-                'type_label'      => $typeLabel,          // NEW
+                'type_label'      => $typeLabel,
                 'quantity_kg'     => $quantity,
                 'quantity'        => $quantity,
                 'unit_price'      => $unit,
@@ -1003,7 +1075,7 @@ class SalesController extends Controller
             'order_date'      => $orderDate,
             'quantity'        => $qty,
             'unit_price'      => $unit,
-            'unit_type_label' => $unitTypeLabel,   // per pack / per bag chip
+            'unit_type_label' => $unitTypeLabel,
             'total'           => $total,
             'status'          => $sale->status ?? 'Completed',
             'customer_name'   => $sale->customer_name ?? null,
@@ -1086,5 +1158,61 @@ class SalesController extends Controller
                : (Schema::hasColumn('sales','price') ? 'price' : null);
 
         return ['total' => $total, 'qty' => $qty, 'unit' => $unit];
+    }
+
+    /* ----------------------------- Types API for Add Sale modal ----------------------------- */
+    public function apiTypes(Request $request)
+    {
+        $productId = (int) $request->query('product_id');
+        if ($productId <= 0) {
+            return response()->json(['ok' => false, 'list' => [], 'next' => 'Type 1'], 422);
+        }
+
+        $parent = Product::find($productId);
+        if (!$parent) {
+            return response()->json(['ok' => false, 'list' => [], 'next' => 'Type 1'], 404);
+        }
+
+        // Gather distinct type labels from production orders (snapshot) + child variants + maybe category
+        $fromOrders = Production::query()
+            ->where(function($q) use ($parent){
+                $q->where('parent_product_id', $parent->id)
+                  ->orWhere(function($q2) use ($parent){
+                      $q2->whereNull('parent_product_id')
+                         ->where('product_id', $parent->id);
+                  });
+            })
+            ->whereNotNull('product_name_snapshot')
+            ->pluck('product_name_snapshot');
+
+        $fromVariants = Product::where('parent_id', $parent->id)->pluck('product_name');
+        $maybeCat     = collect($parent->category ? [$parent->category] : []);
+
+        $list = $fromOrders
+            ->merge($fromVariants)
+            ->merge($maybeCat)
+            ->map(fn($s)=>trim((string)$s))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
+
+        // Compute a suggested next label like “Type N+1”
+        $existing = $list->values();
+        $maxN = 0;
+        foreach ($existing as $label) {
+            if (preg_match('/\bType\s+(\d+)\b/i', (string)$label, $m)) {
+                $n = (int)$m[1];
+                if ($n > $maxN) $maxN = $n;
+            }
+        }
+        $candidate = $maxN > 0 ? $maxN + 1 : ($existing->count() + 1);
+        $next = "Type {$candidate}";
+
+        return response()->json([
+            'ok'   => true,
+            'list' => $existing->all(),
+            'next' => $next,
+        ]);
     }
 }

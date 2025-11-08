@@ -18,39 +18,104 @@ use App\Models\Material;
 class ProductionController extends Controller
 {
     /* ============================= INDEX / FILTER ============================= */
-    // App\Http\Controllers\ProductionController.php
 
-public function suggestTypes(Product $parent): JsonResponse
-{
-    // Distinct per-order snapshots used under this parent
-    $fromOrders = \App\Models\Production::query()
-        ->where(function($q) use ($parent){
-            $q->where('parent_product_id', $parent->id)
-              ->orWhere(function($q2) use ($parent){
-                  $q2->whereNull('parent_product_id')->where('product_id', $parent->id);
-              });
-        })
-        ->whereNotNull('product_name_snapshot')
-        ->pluck('product_name_snapshot');
+    // /production/{parent}/types  (route-model bound)
+    public function suggestTypes(Product $parent): JsonResponse
+    {
+        $fromOrders = Production::query()
+            ->where(function($q) use ($parent){
+                $q->where('parent_product_id', $parent->id)
+                  ->orWhere(function($q2) use ($parent){
+                      $q2->whereNull('parent_product_id')
+                         ->where('product_id', $parent->id);
+                  });
+            })
+            ->whereNotNull('product_name_snapshot')
+            ->pluck('product_name_snapshot');
 
-    // Variant product names (children under this parent)
-    $fromVariants = Product::where('parent_id', $parent->id)
-        ->pluck('product_name');
+        $fromVariants = Product::where('parent_id', $parent->id)->pluck('product_name');
+        $maybeCat = collect($parent->category ? [$parent->category] : []);
 
-    // Optional: include parent->category if it looks like a type label
-    $maybeCat = collect($parent->category ? [$parent->category] : []);
+        $types = $fromOrders
+            ->merge($fromVariants)
+            ->merge($maybeCat)
+            ->map(fn($s)=>trim((string)$s))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values();
 
-    $types = $fromOrders
-        ->merge($fromVariants)
-        ->merge($maybeCat)
-        ->map(fn($s)=>trim((string)$s))
-        ->filter()
-        ->unique()
-        ->sort()
-        ->values();
+        return response()->json(['types' => $types]);
+    }
 
-    return response()->json(['types' => $types]);
-}
+    private function computeNextTypeLabel(Product $parent, \Illuminate\Support\Collection $existing): string
+    {
+        $maxN = 0;
+        foreach ($existing as $label) {
+            if (preg_match('/\bType\s+(\d+)\b/i', (string)$label, $m)) {
+                $n = (int)$m[1];
+                if ($n > $maxN) $maxN = $n;
+            }
+        }
+
+        $candidate = $maxN > 0 ? $maxN + 1 : ($existing->count() + 1);
+
+        $proposed = "Type {$candidate}";
+        $i = 0;
+        while ($existing->contains(fn($v) => 0 === strcasecmp(trim((string)$v), $proposed))) {
+            $i++;
+            $proposed = "Type " . ($candidate + $i);
+            if ($i > 999) break;
+        }
+
+        return $proposed;
+    }
+
+    // Lightweight sales types API: /production/sales-types?product_id=123
+    public function salesTypes(Request $request): JsonResponse
+    {
+        $productId = (int) $request->get('product_id');
+        if ($productId <= 0) {
+            return response()->json(['ok' => false, 'list' => [], 'next' => 'Type 1'], 422);
+        }
+
+        $parent = Product::find($productId);
+        if (!$parent) {
+            return response()->json(['ok' => false, 'list' => [], 'next' => 'Type 1'], 404);
+        }
+
+        $fromOrders = Production::query()
+            ->where(function($q) use ($parent){
+                $q->where('parent_product_id', $parent->id)
+                  ->orWhere(function($q2) use ($parent){
+                      $q2->whereNull('parent_product_id')
+                         ->where('product_id', $parent->id);
+                  });
+            })
+            ->whereNotNull('product_name_snapshot')
+            ->pluck('product_name_snapshot');
+
+        $fromVariants = Product::where('parent_id', $parent->id)->pluck('product_name');
+        $maybeCat     = collect($parent->category ? [$parent->category] : []);
+
+        $list = $fromOrders
+            ->merge($fromVariants)
+            ->merge($maybeCat)
+            ->map(fn($s)=>trim((string)$s))
+            ->filter()
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
+        $next = $this->computeNextTypeLabel($parent, collect($list));
+
+        return response()->json([
+            'ok'   => true,
+            'list' => array_values($list),
+            'next' => $next,
+        ]);
+    }
 
     public function index(Request $request)
     {
@@ -234,10 +299,10 @@ public function suggestTypes(Product $parent): JsonResponse
     public function storeOrder(Request $request)
     {
         $validated = $request->validate([
-            'parent_product_id'     => ['nullable','integer','exists:products,id'], // parent (e.g., Skinless Longganisa)
-            'product_id'            => ['required','integer','exists:products,id'], // child/variant or base
-            'product_name_snapshot' => ['nullable','string','max:255'],             // legacy support (hidden field)
-            'type_label'            => ['nullable','string','max:255'],             // NEW: per-order type/variant label
+            'parent_product_id'     => ['nullable','integer','exists:products,id'],
+            'product_id'            => ['required','integer','exists:products,id'],
+            'product_name_snapshot' => ['nullable','string','max:255'],
+            'type_label'            => ['nullable','string','max:255'],
             'batch_number'          => ['nullable','string','max:255'],
             'production_date'       => ['required','date'],
             'expiration_date'       => ['nullable','date','after_or_equal:production_date'],
@@ -248,8 +313,6 @@ public function suggestTypes(Product $parent): JsonResponse
         ]);
 
         $product  = Product::findOrFail((int)$validated['product_id']);
-
-        // Determine the parent: explicit from form, else variant’s parent_id, else itself.
         $parentProductId = (int)($validated['parent_product_id'] ?? $product->parent_id ?? $product->id);
 
         $prodDate = Carbon::parse($validated['production_date']);
@@ -261,16 +324,10 @@ public function suggestTypes(Product $parent): JsonResponse
             ? $this->uniqueBatchNumber($product, $validated['batch_number'])
             : $this->uniqueBatchNumber($product);
 
-        // Build snapshot driving the Type column
         $typeLabel    = trim((string)($validated['type_label'] ?? ''));
         $snapshotName = trim((string)($validated['product_name_snapshot'] ?? ''));
-
-        if ($typeLabel !== '') {
-            $snapshotName = $typeLabel;                       // prefer explicit order type
-        }
-        if ($snapshotName === '') {
-            $snapshotName = $product->category ?: $product->product_name; // final fallback
-        }
+        if ($typeLabel !== '') $snapshotName = $typeLabel;
+        if ($snapshotName === '') $snapshotName = $product->category ?: $product->product_name;
 
         try {
             DB::transaction(function () use ($product, $parentProductId, $snapshotName, $validated, $prodDate, $expiry, &$batchNumber) {
@@ -281,13 +338,12 @@ public function suggestTypes(Product $parent): JsonResponse
                     $this->consumeMaterials($product, (float)$validated['quantity']);
                 }
 
-                // Retry once on duplicate key (race)
                 for ($attempt = 1; $attempt <= 2; $attempt++) {
                     try {
                         Production::create([
                             'parent_product_id'     => $parentProductId,
                             'product_id'            => $product->id,
-                            'product_name_snapshot' => $snapshotName,    // <- per-order type/variant label
+                            'product_name_snapshot' => $snapshotName,
                             'batch_number'          => $batchNumber,
                             'forecasted_demand'     => (float)($product->forecasted_demand ?? 0),
                             'current_inventory'     => (int)$validated['quantity'],
@@ -309,7 +365,6 @@ public function suggestTypes(Product $parent): JsonResponse
                 }
             });
 
-            // Recompute balances for the actual child/variant
             $this->recomputeProductBalance($product->id);
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -338,7 +393,6 @@ public function suggestTypes(Product $parent): JsonResponse
     {
         $product = Product::findOrFail($id);
 
-        // All orders attached to this parent (and legacy rows where product_id = parent)
         $orders = Production::query()
             ->where(function ($q) use ($id) {
                 $q->where('parent_product_id', $id)
@@ -346,7 +400,7 @@ public function suggestTypes(Product $parent): JsonResponse
                       $q2->whereNull('parent_product_id')->where('product_id', $id);
                   });
             })
-            ->with(['product','parentProduct']) // for accessor type_name
+            ->with(['product','parentProduct'])
             ->orderByDesc('production_date')->orderByDesc('id')
             ->get();
 
@@ -369,11 +423,10 @@ public function suggestTypes(Product $parent): JsonResponse
     public function showOrders($id) { return $this->show($id); }
 
     public function edit($id)
-        {
-            $product = Production::findOrFail($id);
-            return view('production.edit', compact('product'));
-        }
-
+    {
+        $product = Production::findOrFail($id);
+        return view('production.edit', compact('product'));
+    }
 
     public function update(Request $request, $id)
     {
@@ -482,7 +535,113 @@ public function suggestTypes(Product $parent): JsonResponse
         ]);
     }
 
+    /* =============================== ARCHIVE PAGES & ACTIONS =============================== */
+
+    // GET /production/archived
+    public function archivedIndex(Request $request)
+    {
+        $q    = trim((string)$request->get('q', ''));
+        $sort = (string)$request->get('sort', 'deleted_at'); // deleted_at|batch|product|date|qty
+
+        $items = Production::onlyTrashed()
+            ->when($q !== '', function($qry) use ($q) {
+                $qry->where(function($w) use ($q){
+                    $w->where('batch_number', 'like', "%{$q}%")
+                      ->orWhere('product_name_snapshot', 'like', "%{$q}%");
+                });
+            })
+            ->with(['product','parentProduct'])
+            ->when($sort === 'batch',   fn($x)=>$x->orderBy('batch_number'))
+            ->when($sort === 'product', fn($x)=>$x->orderBy('product_id'))
+            ->when($sort === 'date',    fn($x)=>$x->orderByDesc('production_date'))
+            ->when($sort === 'qty',     fn($x)=>$x->orderByDesc('quantity'))
+            ->when($sort === 'deleted_at', fn($x)=>$x->orderByDesc('deleted_at'))
+            ->paginate(15)
+            ->through(function($p){
+                // Compute purge_at = deleted_at + 7 days (display only)
+                $p->purge_at = $p->deleted_at ? Carbon::parse($p->deleted_at)->addDays(7) : null;
+                return $p;
+            });
+
+        return view('production.archived', compact('items', 'q', 'sort'));
+    }
+
+    // POST /production/{id}/archive  (soft delete + optional archived_* fields)
+    public function archive($id, Request $request)
+    {
+        $p = Production::findOrFail((int)$id);
+
+        if (Sale::where('production_id', $p->id)->exists()) {
+            return $this->archiveJsonOrBack($request, false, 'Cannot archive. This batch has linked sales.');
+        }
+
+        // Set archive metadata if columns exist
+        $meta = [];
+        if (Schema::hasColumn('productions', 'archived_at')) {
+            $meta['archived_at'] = now();
+        }
+        if (Schema::hasColumn('productions', 'archived_reason')) {
+            $meta['archived_reason'] = trim((string)$request->get('reason', ''));
+        }
+        if (!empty($meta)) {
+            $p->fill($meta);
+        }
+
+        $p->delete(); // soft delete
+
+        $this->recomputeProductBalance((int)$p->product_id);
+
+        return $this->archiveJsonOrBack($request, true, 'Moved to Archive for 7 days.');
+    }
+
+    // POST /production/{id}/restore
+    public function restore($id, Request $request)
+    {
+        $p = Production::withTrashed()->findOrFail((int)$id);
+        if (!$p->trashed()) {
+            return $this->archiveJsonOrBack($request, true, 'Record is already active.');
+        }
+
+        $p->restore();
+
+        // Clear archive metadata if present
+        $dirty = false;
+        if (Schema::hasColumn('productions', 'archived_at')) { $p->archived_at = null; $dirty = true; }
+        if (Schema::hasColumn('productions', 'archived_reason')) { $p->archived_reason = null; $dirty = true; }
+        if ($dirty) { $p->save(); }
+
+        $this->recomputeProductBalance((int)$p->product_id);
+
+        return $this->archiveJsonOrBack($request, true, 'Production restored.');
+    }
+
+    // DELETE /production/{id}/force
+    public function destroyForever($id, Request $request)
+    {
+        $p = Production::withTrashed()->findOrFail((int)$id);
+
+        if (Sale::where('production_id', $p->id)->exists()) {
+            return $this->archiveJsonOrBack($request, false, 'Cannot delete forever. This batch has linked sales.');
+        }
+
+        $productId = (int) $p->product_id;
+        $p->forceDelete();
+
+        $this->recomputeProductBalance($productId);
+
+        return $this->archiveJsonOrBack($request, true, 'Production permanently deleted.');
+    }
+
+    private function archiveJsonOrBack(Request $request, bool $ok, string $msg)
+    {
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json(['ok' => $ok, 'message' => $msg]);
+        }
+        return back()->with($ok ? 'success' : 'error', $msg);
+    }
+
     /* =============================== LIGHTWEIGHT APIS =============================== */
+
     public function getProductInfo($name): JsonResponse
     {
         $product = Product::where('product_name', $name)->latest('production_date')->first();
@@ -497,41 +656,33 @@ public function suggestTypes(Product $parent): JsonResponse
         ]);
     }
 
+    // Used by: /production/api/by-product/{product}
     public function apiByProduct(Product $product): JsonResponse
     {
         $batches = Production::where('product_id', $product->id)
-            ->orderByDesc('production_date')->orderByDesc('id')
-            ->get(['id','batch_number','quantity','current_inventory','production_date','expiration_date']);
+            ->orderByDesc('production_date')
+            ->orderByDesc('id')
+            ->get([
+                'id',
+                'batch_number',
+                'quantity',
+                'current_inventory',
+                'production_date',
+                'expiration_date',
+                'unit_price_pack',
+                'unit_price_bag',
+                'product_name_snapshot',
+            ]);
+
+        $batches = $batches->map(function ($b) {
+            $b->unit_price_pack   = isset($b->unit_price_pack) ? (float)$b->unit_price_pack : null;
+            $b->unit_price_bag    = isset($b->unit_price_bag)  ? (float)$b->unit_price_bag  : null;
+            $b->quantity          = isset($b->quantity)        ? (float)$b->quantity        : 0.0;
+            $b->current_inventory = isset($b->current_inventory) ? (float)$b->current_inventory : 0.0;
+            return $b;
+        });
 
         return response()->json($batches);
-    }
-
-    public function quickAddPayload(Product $product): JsonResponse
-    {
-        $price = (float)($product->price ?? $product->default_price ?? 0);
-
-        $latestBatch = Production::where('product_id', $product->id)
-            ->orderByDesc('production_date')->orderByDesc('id')->first();
-
-        $productionDate = $latestBatch?->production_date
-            ? Carbon::parse($latestBatch->production_date)->toDateString()
-            : null;
-
-        $expirationDate = $latestBatch?->expiration_date
-            ? Carbon::parse($latestBatch->expiration_date)->toDateString()
-            : ($productionDate
-                ? Carbon::parse($productionDate)->addDays((int)($product->shelf_life_days ?? 7))->toDateString()
-                : null
-            );
-
-        return response()->json([
-            'id'               => $product->id,
-            'name'             => $product->product_name,
-            'price'            => $price,
-            'production_id'    => $latestBatch?->id,
-            'production_date'  => $productionDate,
-            'expiration_date'  => $expirationDate,
-        ]);
     }
 
     /* ================================= HELPERS ================================= */
@@ -776,5 +927,72 @@ public function suggestTypes(Product $parent): JsonResponse
     {
         if (!method_exists($product, 'recipes')) return false;
         return $product->recipes()->exists();
+    }
+
+    /* =============================== ROUTE STUBS TO MATCH YOUR ROUTES =============================== */
+
+    public function create()
+    {
+        if (View::exists('production.create')) {
+            return view('production.create');
+        }
+        return redirect()->route('production.index')
+            ->with('info', 'Create view not found. Using dashboard instead.');
+    }
+
+    public function pdf($id)
+    {
+        try {
+            $production = Production::with(['product','parentProduct'])->findOrFail((int)$id);
+
+            if (View::exists('production.pdf')) {
+                if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('production.pdf', ['production' => $production]);
+                    $filename = 'production-'.$production->id.'.pdf';
+                    return $pdf->download($filename);
+                }
+                return view('production.pdf', ['production' => $production]);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'PDF view not found; returning JSON payload.',
+                'data' => $production,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('PDF generation failed', ['id' => $id, 'error' => $e->getMessage()]);
+            return response()->json([
+                'ok' => false,
+                'message' => 'PDF generation not available on this environment.',
+            ], 501);
+        }
+    }
+
+    public function quickAddPayload(Product $product): JsonResponse
+    {
+        $price = (float)($product->price ?? $product->default_price ?? 0);
+
+        $latestBatch = Production::where('product_id', $product->id)
+            ->orderByDesc('production_date')->orderByDesc('id')->first();
+
+        $productionDate = $latestBatch?->production_date
+            ? Carbon::parse($latestBatch->production_date)->toDateString()
+            : null;
+
+        $expirationDate = $latestBatch?->expiration_date
+            ? Carbon::parse($latestBatch->expiration_date)->toDateString()
+            : ($productionDate
+                ? Carbon::parse($productionDate)->addDays((int)($product->shelf_life_days ?? 7))->toDateString()
+                : null
+            );
+
+        return response()->json([
+            'id'               => $product->id,
+            'name'             => $product->product_name,
+            'price'            => $price,
+            'production_id'    => $latestBatch?->id,
+            'production_date'  => $productionDate,
+            'expiration_date'  => $expirationDate,
+        ]);
     }
 }

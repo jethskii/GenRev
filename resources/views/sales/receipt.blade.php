@@ -82,7 +82,7 @@
     {{-- Header --}}
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
       <div>
-        <h2 class="text-2xl font-bold">Receipt</h2>
+        <h2 class="text-2xl font-bold">Invoice</h2>
         <p class="text-sm muted">Thank you for your purchase.</p>
       </div>
       <span class="text-xs sm:text-sm chip mono">
