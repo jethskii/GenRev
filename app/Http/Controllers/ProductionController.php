@@ -175,7 +175,6 @@ class ProductionController extends Controller
     /* =============================== CREATE (DASHBOARD CARD) =============================== */
     public function store(Request $request)
     {
-        // Updated: no current_inventory/unit_cost required; accept remarks and available_*.
         $validated = $request->validate([
             'product_id'        => ['nullable','integer','exists:products,id'],
             'product_name'      => ['nullable','string','max:255'],
@@ -190,7 +189,7 @@ class ProductionController extends Controller
             'category'          => ['nullable','string','max:120'],
             'remarks'           => ['nullable','string','max:500'],
             'image'             => ['nullable','image','mimes:jpg,jpeg,png,webp','max:5120'],
-            // legacy fields (accepted but ignored safely)
+            // legacy accepted
             'current_inventory' => ['nullable','numeric','min:0'],
             'unit_cost'         => ['nullable','numeric','min:0'],
         ]);
@@ -245,7 +244,7 @@ class ProductionController extends Controller
                 ? $this->uniqueBatchNumber($product, $validated['batch_number'])
                 : $this->uniqueBatchNumber($product);
 
-            // infer qty (kg or units proxy) from inputs
+            // infer qty
             $qty = $this->inferQuantity($validated);
 
             if (config('app.consume_materials', false)) {
@@ -304,7 +303,6 @@ class ProductionController extends Controller
     /* =============================== CREATE (ORDERS PAGE) =============================== */
     public function storeOrder(Request $request)
     {
-        // Accept legacy 'quantity' and new counts; remarks supported
         $rules = [
             'parent_product_id'     => ['nullable','integer','exists:products,id'],
             'product_id'            => ['required','integer','exists:products,id'],
@@ -313,8 +311,8 @@ class ProductionController extends Controller
             'batch_number'          => ['nullable','string','max:255'],
             'production_date'       => ['required','date'],
             'expiration_date'       => ['nullable','date','after_or_equal:production_date'],
-            'quantity'              => ['nullable','numeric','min:0'],     // legacy
-            'produced_qty_kg'       => ['nullable','numeric','min:0'],     // legacy alt
+            'quantity'              => ['nullable','numeric','min:0'],
+            'produced_qty_kg'       => ['nullable','numeric','min:0'],
             'unit_price_pack'       => ['nullable','numeric','min:0'],
             'unit_price_bag'        => ['nullable','numeric','min:0'],
             'available_pack'        => ['nullable','integer','min:0'],
@@ -343,7 +341,6 @@ class ProductionController extends Controller
         if ($typeLabel !== '') $snapshotName = $typeLabel;
         if ($snapshotName === '') $snapshotName = $product->category ?: $product->product_name;
 
-        // infer qty from legacy fields or counts
         $qty = $this->inferQuantity($validated);
 
         try {
@@ -461,7 +458,6 @@ class ProductionController extends Controller
 
     public function update(Request $request, $id)
     {
-        // Updated: make fields optional, drop unit_cost requirement, support remarks and available_*.
         $validated = $request->validate([
             'forecasted_demand'   => ['nullable','numeric','min:0'],
             'current_inventory'   => ['nullable','integer','min:0'],
@@ -478,7 +474,6 @@ class ProductionController extends Controller
 
         $production = Production::findOrFail($id);
 
-        // Base payload
         $payload = [
             'forecasted_demand' => $validated['forecasted_demand'] ?? $production->forecasted_demand,
             'current_inventory' => array_key_exists('current_inventory', $validated) ? (int)$validated['current_inventory'] : $production->current_inventory,
@@ -597,7 +592,26 @@ class ProductionController extends Controller
         $q    = trim((string)$request->get('q', ''));
         $sort = (string)$request->get('sort', 'deleted_at'); // deleted_at|batch|product|date|qty
 
+        // --- Auto-purge anything past its purge date (7 days after delete) ---
+        $now = Carbon::now();
+        $purgedCount = 0;
+
+        try {
+            $purgeCutoff = $now->copy()->subDays(7);
+            $purgeQuery = Production::onlyTrashed()
+                ->where('deleted_at', '<=', $purgeCutoff);
+
+            $purgedCount = (clone $purgeQuery)->count();
+            if ($purgedCount > 0) {
+                $purgeQuery->forceDelete();
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Production auto-purge failed', ['error' => $e->getMessage()]);
+        }
+
+        // List only records still within the 7-day window
         $items = Production::onlyTrashed()
+            ->where('deleted_at', '>', $now->copy()->subDays(7))
             ->when($q !== '', function($qry) use ($q) {
                 $qry->where(function($w) use ($q){
                     $w->where('batch_number', 'like', "%{$q}%")
@@ -616,7 +630,7 @@ class ProductionController extends Controller
                 return $p;
             });
 
-        return view('production.archived', compact('items', 'q', 'sort'));
+        return view('production.archived', compact('items', 'q', 'sort', 'purgedCount'));
     }
 
     public function archive($id, Request $request)
@@ -937,7 +951,6 @@ class ProductionController extends Controller
 
     private function createBatchAndRecompute(Product $product, array $validated, Carbon $prodDate, Carbon $expiry, string $batchNumber): void
     {
-        // prefer legacy current_inventory/quantity; else fall back to inferred qty
         $qty = isset($validated['current_inventory'])
             ? (int)$validated['current_inventory']
             : (isset($validated['quantity']) ? (int)$validated['quantity'] : (int)($validated['__inferred_qty'] ?? 0));
@@ -1072,7 +1085,6 @@ class ProductionController extends Controller
     /* =============== NEW: central qty inference =============== */
     private function inferQuantity(array $data): int
     {
-        // Prefer explicit legacy fields if present
         if (isset($data['current_inventory'])) {
             return (int) max(0, (int) $data['current_inventory']);
         }
@@ -1083,7 +1095,6 @@ class ProductionController extends Controller
             return (int) max(0, (float) $data['produced_qty_kg']);
         }
 
-        // Fallback: use counts as a proxy until pack/bag weights are formalized
         $packs = (int)($data['available_pack'] ?? 0);
         $bags  = (int)($data['available_bag']  ?? 0);
         return max(0, $packs + $bags);

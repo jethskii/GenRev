@@ -11,6 +11,7 @@
   $perPage = request('per_page', 50);
   $search  = trim((string) request('search', ''));
   $cat     = request('category');
+  $lowOnly = (bool) request()->boolean('low_stock', false);
 
   $sortOptions = [
     'name_asc'=>'Name ↑','name_desc'=>'Name ↓','qty_desc'=>'Quantity ↓','qty_asc'=>'Quantity ↑',
@@ -64,7 +65,6 @@
   })($rows);
 @endphp
 
-{{-- Page-scoped light theme helpers (consistent with Sales/Products/Production) --}}
 <style>
   .page-wrap { background:#f7f8fb; }
   .light-card{ background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 8px 18px rgba(17,24,39,.04); }
@@ -78,20 +78,13 @@
   .input-light:focus{ box-shadow:0 0 0 2px rgba(59,130,246,.2); border-color:#93c5fd; transform:translateY(-1px); }
 
   .btn{ display:inline-flex; align-items:center; justify-content:center; gap:.5rem; padding:.72rem 1.05rem; border-radius:12px; font-weight:700; border:1px solid transparent; }
-  /* Primary = RED */
   .btn-primary{ background:#ef4444; color:#fff; border-color:#ef4444; }
   .btn-primary:hover{ filter:brightness(.96); }
-  /* Ghost/secondary (neutral) */
   .btn-ghost{ background:#fff; border:1px solid #e5e7eb; color:#111827; }
   .btn-ghost:hover{ background:#f3f4f6; }
+  .btn-green{ background:#10b981; color:#fff; border-color:#10b981; }
+  .btn-green:hover{ filter:brightness(.96); }
 
-  /* Links as secondary accents */
-  .link-blue{ color:#1d4ed8; font-weight:600; }
-  .link-blue:hover{ text-decoration:underline; }
-  .link-green{ color:#047857; font-weight:600; }
-  .link-green:hover{ text-decoration:underline; }
-
-  /* Chips / badges */
   .chip{ display:inline-block; padding:.42rem .75rem; border-radius:999px; font-weight:700; font-size:.72rem; border:1px solid #e5e7eb; background:#fff; color:#111827; }
   .badge{ padding:.28rem .65rem; font-size:.72rem; border-radius:999px; border:1px solid #e5e7eb; display:inline-block; background:#fff; color:#111827; }
   .b-green{ background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
@@ -99,10 +92,8 @@
   .b-blue{ background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
   .b-gray{ background:#f9fafb; border-color:#e5e7eb; color:#374151; }
 
-  /* KPIs */
   .kpi { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem; box-shadow:0 4px 12px rgba(17,24,39,.04); }
 
-  /* Table */
   table{ border-collapse:separate; border-spacing:0; }
   thead th{ background:#f9fafb; color:#374151; font-weight:800; }
   tbody td{ color:#111827; }
@@ -110,13 +101,14 @@
   tbody tr:hover{ background:#f3f4f6; }
   th, td{ border-color:#e5e7eb !important; }
 
-  /* Modals (dialog) */
   dialog.modal{ border:0; padding:0; background:transparent; z-index:60; }
   dialog::backdrop{ background:rgba(0,0,0,.55); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
   dialog[open]{ display:block; }
   .modal-box{ transform:translateY(8px) scale(.985); opacity:0; transition:.18s ease;
               background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 20px 48px rgba(0,0,0,.12); padding:1.25rem; }
   dialog[open] .modal-box{ transform:translateY(0) scale(1); opacity:1; }
+
+  .table-actions{ display:flex; align-items:center; justify-content:center; gap:.5rem; flex-wrap:wrap; }
 </style>
 
 <div class="page-wrap rounded-2xl p-6 text-gray-900">
@@ -153,7 +145,7 @@
 
     {{-- Filters --}}
     <form id="filterForm" action="{{ route('materials.index') }}" method="GET" class="mb-4" role="search">
-      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
         <div class="md:col-span-2">
           <label class="text-xs text-gray-600 mb-1 block" for="searchBox">Search</label>
           <div class="flex gap-2">
@@ -187,6 +179,10 @@
             @endforeach
           </select>
         </div>
+        <div class="flex items-center gap-2">
+          <input id="low_stock" type="checkbox" name="low_stock" value="1" {{ $lowOnly ? 'checked' : '' }} onchange="this.form.submit()"/>
+          <label for="low_stock" class="text-sm text-gray-700">Low Stock Only</label>
+        </div>
       </div>
 
       {{-- quick chips --}}
@@ -213,9 +209,9 @@
             <th class="py-3 px-4 border-b w-32 text-right">Unit Price</th>
             <th class="py-3 px-4 border-b w-32 text-right">Quantity</th>
             <th class="py-3 px-4 border-b w-36 text-right">Line Value</th>
-            <th class="py-3 px-4 border-b w-36">SKU</th>
+            <th class="py-3 px-4 border-b w-24 text-center">Used In</th>
             <th class="py-3 px-4 border-b w-40">Updated</th>
-            <th class="py-3 px-4 border-b w-40 text-center">Actions</th>
+            <th class="py-3 px-4 border-b w-[320px] text-center">Actions</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
@@ -226,12 +222,13 @@
             $price    = (float)($m->unit_price ?? 0);
             $lineVal  = $qty * $price;
             $badgeClass = (str_contains($category,'Spices') || str_contains($category,'Fillers')) ? 'b-amber' : 'b-green';
+            $isLow = !is_null($m->min_stock_kg ?? null) && $qty < (float)$m->min_stock_kg;
           @endphp
-          @if(!$cat || $cat === $category)
+          @if((!$cat || $cat === $category) && (!$lowOnly || $isLow))
             <tr class="hover:bg-gray-50 transition-colors">
               <td class="py-3 px-4">
                 <div class="font-semibold flex items-center gap-2">
-                  <span class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                  <span class="inline-block h-2.5 w-2.5 rounded-full {{ $isLow ? 'bg-amber-500' : 'bg-emerald-500' }}"></span>
                   {{ $m->material_name }}
                 </div>
               </td>
@@ -240,10 +237,12 @@
               <td class="py-3 px-4 text-right">₱ {{ number_format($price, 2) }}</td>
               <td class="py-3 px-4 text-right">{{ number_format($qty, 3) }}</td>
               <td class="py-3 px-4 text-right">₱ {{ number_format($lineVal, 2) }}</td>
-              <td class="py-3 px-4 text-gray-700">{{ $m->sku ?? '—' }}</td>
+              <td class="py-3 px-4 text-center">
+                <span class="badge b-gray">{{ (int)($m->used_in_products ?? 0) }}</span>
+              </td>
               <td class="py-3 px-4 text-gray-600">{{ optional($m->updated_at)->format('Y-m-d H:i') }}</td>
               <td class="py-3 px-4">
-                <div class="flex items-center justify-center gap-2">
+                <div class="table-actions">
                   <button type="button"
                           class="btn btn-ghost text-[.85rem]"
                           data-fetch-url="{{ route('materials.edit',$m->id) }}"
@@ -251,6 +250,15 @@
                           title="Edit {{ $m->material_name }}">
                     Edit
                   </button>
+
+                  <button type="button"
+                          class="btn btn-green text-[.85rem]"
+                          data-adjust-url="{{ route('materials.adjust',$m->id) }}"
+                          data-name="{{ $m->material_name }}"
+                          title="Adjust stock for {{ $m->material_name }}">
+                    Adjust
+                  </button>
+
                   <form action="{{ route('materials.destroy',$m->id) }}" method="POST" onsubmit="return confirm('Delete this material?');">
                     @csrf @method('DELETE')
                     <button type="submit" class="btn btn-primary" title="Delete {{ $m->material_name }}">Delete</button>
@@ -272,7 +280,7 @@
   </div>
 </div>
 
-{{-- CREATE MODAL (Light) --}}
+{{-- CREATE MODAL --}}
 <dialog id="modalCreate" class="modal" aria-label="Add Material">
   <form method="POST" action="{{ route('materials.store') }}" class="modal-box w-full max-w-2xl">
     @csrf
@@ -319,7 +327,7 @@
   </form>
 </dialog>
 
-{{-- EDIT MODAL (Light) --}}
+{{-- EDIT MODAL --}}
 <dialog id="modalEdit" class="modal" aria-label="Edit Material">
   <form id="editForm" method="POST" class="modal-box w-full max-w-2xl">
     @csrf @method('PUT')
@@ -365,6 +373,29 @@
     </div>
   </form>
 </dialog>
+
+{{-- ADJUST STOCK MODAL --}}
+<dialog id="modalAdjust" class="modal" aria-label="Adjust Stock">
+  <form id="adjustForm" method="POST" class="modal-box w-full max-w-md">
+    @csrf
+    <h3 class="font-bold text-lg mb-4 text-gray-900">Adjust Stock</h3>
+    <p class="text-sm text-gray-600 mb-3">Material: <span id="adjustName" class="font-semibold"></span></p>
+    <div class="grid grid-cols-1 gap-4">
+      <div>
+        <label class="text-xs text-gray-600 mb-1 block">Delta (kg)</label>
+        <input name="delta_kg" type="number" step="0.001" class="input-light" placeholder="e.g., 5 or -2.5" required />
+      </div>
+      <div>
+        <label class="text-xs text-gray-600 mb-1 block">Reason (optional)</label>
+        <input name="reason" class="input-light" placeholder="Receiving PO-123, Correction, etc." />
+      </div>
+    </div>
+    <div class="flex justify-end gap-2 mt-6">
+      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+      <button type="submit" class="btn btn-green">Apply</button>
+    </div>
+  </form>
+</dialog>
 @endsection
 
 @push('scripts')
@@ -374,7 +405,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
   const byId = (id) => document.getElementById(id);
 
-  // Open/close dialogs via global handlers (layout already wired)
+  // Open any dialog by [data-open]
+  document.addEventListener('click', (e) => {
+    const openId = e.target?.getAttribute('data-open');
+    if (openId) {
+      const dlg = byId(openId);
+      if (dlg?.showModal) dlg.showModal(); else dlg?.setAttribute('open','open');
+    }
+  });
+
+  // Close dialog via [data-close]
   document.addEventListener('click', (e) => {
     if (e.target?.hasAttribute('data-close')) {
       const dlg = e.target.closest('dialog');
@@ -392,10 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         const res = await fetch(fetchUrl, {
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json'
-          }
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
         });
         if (!res.ok) throw new Error('Load failed');
 
@@ -411,13 +448,50 @@ document.addEventListener('DOMContentLoaded', () => {
         form.querySelector('[name="sku"]').value = mat.sku ?? '';
 
         const modal = byId('modalEdit');
-        if (modal?.showModal) modal.showModal();
-        else modal?.setAttribute('open','open');
-      } catch (e) {
+        if (modal?.showModal) modal.showModal(); else modal?.setAttribute('open','open');
+      } catch (err) {
         alert('Could not load material details.');
-        console.warn(e);
+        console.warn(err);
       }
     });
+  });
+
+  // ADJUST: open and bind action url
+  const adjustModal = byId('modalAdjust');
+  const adjustForm  = byId('adjustForm');
+  const adjustName  = byId('adjustName');
+
+  $$('.btn[data-adjust-url]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const url  = btn.dataset.adjustUrl;
+      const name = btn.dataset.name || '—';
+      adjustForm.setAttribute('action', url);
+      adjustName.textContent = name;
+      if (adjustModal?.showModal) adjustModal.showModal(); else adjustModal?.setAttribute('open','open');
+    });
+  });
+
+  // ADJUST: submit via fetch; fallback to normal submit if fetch fails
+  adjustForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const action = adjustForm.getAttribute('action');
+    const fd = new FormData(adjustForm);
+
+    try {
+      const res = await fetch(action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+        body: fd
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.message || 'Failed');
+      alert(json.message || 'Stock adjusted.');
+      location.reload();
+    } catch (err) {
+      console.warn(err);
+      // fallback
+      adjustForm.submit();
+    }
   });
 });
 </script>

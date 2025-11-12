@@ -8,7 +8,9 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Support\Arr;
 
+// Related models
 use App\Models\Production;
 use App\Models\Sale;
 use App\Models\ProductRecipe;
@@ -23,10 +25,10 @@ class Product extends Model
     public $incrementing  = true;
     protected $keyType    = 'int';
 
-    /** Columns expected from controllers + schema (now includes parent_id) */
+    /** Columns expected from controllers + schema (includes parent_id) */
     protected $fillable = [
         // Parent/Variant
-        'parent_id',               // <-- ensures we can save variants under a parent
+        'parent_id',
 
         // Identity
         'product_code',
@@ -57,8 +59,9 @@ class Product extends Model
         'max_run_qty',
         'line_constraints',
 
-        // Status / unit (optional, but controller may set)
+        // Status / unit
         'status',
+        'stock_status',
         'unit',
 
         // Media
@@ -70,7 +73,6 @@ class Product extends Model
 
         // Legacy/optional
         'production_date',
-        'stock_status',
     ];
 
     protected $casts = [
@@ -100,51 +102,56 @@ class Product extends Model
         'line_constraints'    => 'array',
     ];
 
+    /**
+     * Appended accessors for UI.
+     * latest_* fields come from scalar subqueries (scopeWithLatestProductionSnapshot)
+     * or fall back to relation when not present.
+     */
     protected $appends = [
         'effective_unit_cost',
         'gross_margin_pct',
         'produced_qty_kg',
         'sold_qty_kg',
         'available_stock_kg',
-        'image_url',            // accessor respects existing DB value
+        'image_url',
         'unit_material_cost',
         'display_name',
-        'is_variant',           // NEW: quick boolean
-        'base_name',            // NEW: parent display name (if any)
+        'is_variant',
+        'base_name',
+
+        // Production snapshot fields
+        'latest_batch_number',
+        'latest_production_date',
+        'latest_expiration_date',
+        'latest_unit_price_pack',
+        'latest_unit_price_bag',
+        'latest_available_pack',
+        'latest_available_bag',
+
+        // Rollup availability (sums)
+        'total_available_pack',
+        'total_available_bag',
     ];
 
     /* ----------------------------------------------------------------------
-     | Relationships (parent → children/variants)
+     | Relationships
      * ---------------------------------------------------------------------*/
-    public function parent()
-    {
-        return $this->belongsTo(Product::class, 'parent_id');
-    }
+    public function parent()      { return $this->belongsTo(Product::class, 'parent_id'); }
+    public function children()    { return $this->hasMany(Product::class, 'parent_id'); }
+    public function variants()    { return $this->children(); }
+    public function productions() { return $this->hasMany(Production::class); }
+    public function sales()       { return $this->hasMany(Sale::class); }
+    public function recipes()     { return $this->hasMany(ProductRecipe::class)->with('material'); }
 
-    public function children()
+    /**
+     * Latest production record (DB-level, no N+1 when eager loaded).
+     * Requires Laravel 9+ for latestOfMany().
+     */
+    public function latestProduction()
     {
-        return $this->hasMany(Product::class, 'parent_id');
-    }
-
-    /** Alias that reads semantically with your UI */
-    public function variants()
-    {
-        return $this->children();
-    }
-
-    public function productions()
-    {
-        return $this->hasMany(Production::class);
-    }
-
-    public function sales()
-    {
-        return $this->hasMany(Sale::class);
-    }
-
-    public function recipes()
-    {
-        return $this->hasMany(ProductRecipe::class)->with('material');
+        return $this->hasOne(Production::class)->latestOfMany(function ($q) {
+            $q->orderBy('production_date')->orderBy('id');
+        });
     }
 
     /* ----------------------------------------------------------------------
@@ -153,8 +160,8 @@ class Product extends Model
     protected function displayName(): Attribute
     {
         return Attribute::get(function () {
-            $raw = $this->getAttributes();
-            return $raw['name'] ?? $this->product_name;
+            $raw = $this->getAttributes(); // safe plain array
+            return Arr::get($raw, 'name', $this->product_name);
         });
     }
 
@@ -182,21 +189,15 @@ class Product extends Model
     }
 
     /** Public URL for images; prefer DB `image_url` if present */
-    public function getImageUrlAttribute(): string
+    public function getImageUrlAttribute($value): string
     {
-        $raw = $this->getAttributes();
-        if (!empty($raw['image_url'])) {
-            return (string)$raw['image_url'];
-        }
+        if (!empty($value)) return (string)$value;
 
         $path = $this->image_path ?: null;
         if ($path) {
             $disk = $this->image_disk ?: config('filesystems.default', 'public');
-            try {
-                return Storage::disk($disk)->url(ltrim($path, '/'));
-            } catch (\Throwable $e) {
-                return asset('storage/' . ltrim($path, '/'));
-            }
+            try { return Storage::disk($disk)->url(ltrim($path, '/')); }
+            catch (\Throwable $e) { return asset('storage/' . ltrim($path, '/')); }
         }
         return asset('images/default-product.png');
     }
@@ -205,8 +206,13 @@ class Product extends Model
     public function getUnitMaterialCostAttribute(): float
     {
         $rows = $this->relationLoaded('recipes') ? $this->recipes : $this->recipes()->get();
-        $sum  = $rows->sum(fn ($r) => (float)($r->qty ?? 0) * (float)($r->unit_price_snapshot ?? 0));
-        return round((float)$sum, 2);
+        $sum  = 0.0;
+        foreach ($rows as $r) {
+            $qty  = is_numeric($r->qty) ? (float)$r->qty : 0.0;
+            $unit = is_numeric($r->unit_price_snapshot) ? (float)$r->unit_price_snapshot : 0.0;
+            $sum += $qty * $unit;
+        }
+        return round($sum, 2);
     }
 
     /** Effective unit cost: prefer declared unit_cost; else fallback to BOM cost */
@@ -217,13 +223,13 @@ class Product extends Model
     }
 
     /** Preferred selling price for UI/Quick Sale */
-    public function getPriceAttribute(): float
+    public function getPriceAttribute($value): float
     {
-        $raw = $this->getAttributes();
-        $p = $raw['price'] ?? $this->attributes['price'] ?? null;
-        $p = $p ?? ($this->attributes['default_price'] ?? null);
-        $p = $p ?? ($this->attributes['selling_price'] ?? null); // legacy
-        return (float) ($p !== null ? $p : $this->effective_unit_cost);
+        $p = $value
+            ?? $this->getRawOriginal('default_price')
+            ?? $this->getRawOriginal('selling_price'); // legacy
+
+        return (float)($p !== null ? $p : $this->effective_unit_cost);
     }
 
     /** Gross margin percentage (price vs effective unit cost) */
@@ -256,13 +262,11 @@ class Product extends Model
         return $available > 0 ? (float)$available : 0.0;
     }
 
-    /** NEW: is this a variant (child) of a base/parent product? */
     public function getIsVariantAttribute(): bool
     {
         return !empty($this->parent_id);
     }
 
-    /** NEW: convenience for UI text — the parent's name if it exists */
     public function getBaseNameAttribute(): ?string
     {
         return $this->parent?->product_name;
@@ -274,6 +278,108 @@ class Product extends Model
         if (!$productionDate || !$this->shelf_life_days) return null;
         $c = \Carbon\Carbon::make($productionDate) ?? \Carbon\Carbon::parse($productionDate);
         return $c->addDays((int)$this->shelf_life_days)->toDateString();
+    }
+
+    /* ---------- Production snapshot accessors (use subselects when present) ----------- */
+
+    public function getLatestBatchNumberAttribute(): ?string
+    {
+        $snap = $this->getRawOriginal('latest_batch_number');
+        if ($snap !== null) return $snap;
+
+        $latest = $this->relationLoaded('latestProduction')
+            ? $this->latestProduction
+            : $this->latestProduction()->first();
+
+        return $latest?->batch_number;
+    }
+
+    public function getLatestProductionDateAttribute(): ?string
+    {
+        $snap = $this->getRawOriginal('latest_production_date');
+        if ($snap !== null) return $snap;
+
+        $latest = $this->relationLoaded('latestProduction')
+            ? $this->latestProduction
+            : $this->latestProduction()->first();
+
+        return optional($latest?->production_date)?->toDateString();
+    }
+
+    public function getLatestExpirationDateAttribute(): ?string
+    {
+        $snap = $this->getRawOriginal('latest_expiration_date');
+        if ($snap !== null) return $snap;
+
+        $latest = $this->relationLoaded('latestProduction')
+            ? $this->latestProduction
+            : $this->latestProduction()->first();
+
+        return optional($latest?->expiration_date)?->toDateString();
+    }
+
+    public function getLatestUnitPricePackAttribute(): ?float
+    {
+        $snap = $this->getRawOriginal('latest_unit_price_pack');
+        if ($snap !== null) return (float)$snap;
+
+        $latest = $this->relationLoaded('latestProduction')
+            ? $this->latestProduction
+            : $this->latestProduction()->first();
+
+        return $latest?->unit_price_pack !== null ? (float)$latest->unit_price_pack : null;
+    }
+
+    public function getLatestUnitPriceBagAttribute(): ?float
+    {
+        $snap = $this->getRawOriginal('latest_unit_price_bag');
+        if ($snap !== null) return (float)$snap;
+
+        $latest = $this->relationLoaded('latestProduction')
+            ? $this->latestProduction
+            : $this->latestProduction()->first();
+
+        return $latest?->unit_price_bag !== null ? (float)$latest->unit_price_bag : null;
+    }
+
+    public function getLatestAvailablePackAttribute(): ?int
+    {
+        $snap = $this->getRawOriginal('latest_available_pack');
+        if ($snap !== null) return (int)$snap;
+
+        $latest = $this->relationLoaded('latestProduction')
+            ? $this->latestProduction
+            : $this->latestProduction()->first();
+
+        return $latest?->available_pack !== null ? (int)$latest->available_pack : null;
+    }
+
+    public function getLatestAvailableBagAttribute(): ?int
+    {
+        $snap = $this->getRawOriginal('latest_available_bag');
+        if ($snap !== null) return (int)$snap;
+
+        $latest = $this->relationLoaded('latestProduction')
+            ? $this->latestProduction
+            : $this->latestProduction()->first();
+
+        return $latest?->available_bag !== null ? (int)$latest->available_bag : null;
+    }
+
+    public function getTotalAvailablePackAttribute(): int
+    {
+        $snap = $this->getRawOriginal('total_available_pack');
+        if ($snap !== null) return (int)$snap;
+
+        return (int) $this->productions()->sum('available_pack');
+    }
+
+    public function getTotalAvailableBagAttribute(): int
+    {
+        $snap = $this->getRawOriginal('total_available_bag');
+        if ($snap !== null) return (int)$snap;
+
+        return (int) $this->productions()->sum('available_bag');
     }
 
     /* ----------------------------------------------------------------------
@@ -303,15 +409,9 @@ class Product extends Model
         static::saving(function (self $m) {
             $has = fn (string $c) => Schema::hasColumn($m->getTable(), $c);
 
-            if ($has('quantity') && $m->quantity === null) {
-                $m->quantity = 0;
-            }
-            if ($has('forecasted_demand') && $m->forecasted_demand === null) {
-                $m->forecasted_demand = 0;
-            }
-            if ($has('stock_status') && empty($m->stock_status)) {
-                $m->stock_status = 'in_stock';
-            }
+            if ($has('quantity') && $m->quantity === null)                   $m->quantity = 0;
+            if ($has('forecasted_demand') && $m->forecasted_demand === null) $m->forecasted_demand = 0;
+            if ($has('stock_status') && empty($m->stock_status))             $m->stock_status = 'in_stock';
         });
 
         static::updating(function (self $model) {
@@ -363,9 +463,7 @@ class Product extends Model
         return $q->where('category', $category);
     }
 
-    /**
-     * If 'status' exists, use it; else fall back to 'stock_status'.
-     */
+    /** If 'status' exists, use it; else fall back to 'stock_status'. */
     public function scopeStatus($q, $status)
     {
         if (empty($status)) return $q;
@@ -400,16 +498,58 @@ class Product extends Model
         return $q->orderBy($col, $dir);
     }
 
-    /** NEW: only base/parent products (no parent) */
-    public function scopeRoots($q)
-    {
-        return $q->whereNull('parent_id');
-    }
+    /** Only base/parent products (no parent) */
+    public function scopeRoots($q) { return $q->whereNull('parent_id'); }
 
-    /** NEW: only variants of a specific parent */
-    public function scopeVariantsOf($q, int $parentId)
+    /** Only variants of a specific parent */
+    public function scopeVariantsOf($q, int $parentId) { return $q->where('parent_id', $parentId); }
+
+    /**
+     * PRODUCTION SNAPSHOT (zero N+1):
+     * Adds scalar subselects for latest batch number, dates, prices, and availability,
+     * plus rollup totals for availability across all active productions.
+     * Use on indexes: Product::query()->withLatestProductionSnapshot()->get();
+     */
+    public function scopeWithLatestProductionSnapshot($q)
     {
-        return $q->where('parent_id', $parentId);
+        $q->addSelect([
+            // Batch number
+            'latest_batch_number' => Production::select('batch_number')
+                ->whereColumn('productions.product_id', 'products.id')
+                ->orderByDesc('production_date')->orderByDesc('id')->limit(1),
+
+            // Dates
+            'latest_production_date' => Production::select('production_date')
+                ->whereColumn('productions.product_id', 'products.id')
+                ->orderByDesc('production_date')->orderByDesc('id')->limit(1),
+            'latest_expiration_date' => Production::select('expiration_date')
+                ->whereColumn('productions.product_id', 'products.id')
+                ->orderByDesc('production_date')->orderByDesc('id')->limit(1),
+
+            // Prices
+            'latest_unit_price_pack' => Production::select('unit_price_pack')
+                ->whereColumn('productions.product_id', 'products.id')
+                ->orderByDesc('production_date')->orderByDesc('id')->limit(1),
+            'latest_unit_price_bag' => Production::select('unit_price_bag')
+                ->whereColumn('productions.product_id', 'products.id')
+                ->orderByDesc('production_date')->orderByDesc('id')->limit(1),
+
+            // Availability from latest batch
+            'latest_available_pack' => Production::select('available_pack')
+                ->whereColumn('productions.product_id', 'products.id')
+                ->orderByDesc('production_date')->orderByDesc('id')->limit(1),
+            'latest_available_bag' => Production::select('available_bag')
+                ->whereColumn('productions.product_id', 'products.id')
+                ->orderByDesc('production_date')->orderByDesc('id')->limit(1),
+
+            // Rollup totals across all batches (for quick “Total” display)
+            'total_available_pack' => Production::selectRaw('COALESCE(SUM(available_pack),0)')
+                ->whereColumn('productions.product_id', 'products.id'),
+            'total_available_bag'  => Production::selectRaw('COALESCE(SUM(available_bag),0)')
+                ->whereColumn('productions.product_id', 'products.id'),
+        ]);
+
+        return $q;
     }
 
     /* ----------------------------------------------------------------------
