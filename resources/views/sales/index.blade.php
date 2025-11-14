@@ -1,4 +1,4 @@
-{{-- resources/views/sales/index.blade.php (LIGHT THEME + PACK/BAG PRICES + FIXED CHART INIT + PDF EXPORT) --}}
+{{-- resources/views/sales/index.blade.php (LIGHT THEME + PACK/BAG PRICES + FIXED CHART INIT + PDF EXPORT + MULTI-SELECT) --}}
 @php
     /** @var \Illuminate\Support\Collection|\App\Models\Sale[] $sales */
     $statusColors = [
@@ -59,6 +59,13 @@
   .input-light::placeholder{ color:#9ca3af; }
   .input-light:focus{ outline:none; box-shadow:0 0 0 2px rgba(59,130,246,.25); border-color:#93c5fd; }
 
+  .btn{ @apply inline-flex items-center justify-center px-3 py-2 rounded-md border text-sm font-medium; }
+  .btn-primary{ @apply bg-blue-600 text-white border-blue-600 hover:bg-blue-700; }
+  .btn-secondary{ @apply bg-white text-gray-700 border-gray-300 hover:bg-gray-50; }
+  .btn-secondary-blue{ @apply bg-white text-blue-700 border-blue-200 hover:bg-blue-50; }
+  .btn-secondary-green{ @apply bg-white text-green-700 border-green-200 hover:bg-green-50; }
+  .btn-ghost{ @apply bg-transparent; }
+
   .chip{ border:1px solid; padding:.25rem .6rem; border-radius:999px; font-size:.72rem; font-weight:600; }
   .table-wrap{ border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; }
   thead th{ background:#f9fafb; color:#374151; font-weight:700; }
@@ -82,9 +89,19 @@
   /* Exporting state */
   #salesOverviewRoot.exporting .light-card { background:#ffffff !important; }
 
+  /* Selection column */
+  .select-col{ width: 38px; }
+  .row-select{ width: 16px; height: 16px; }
+
+  /* Bulk bar */
+  #bulkBar{
+    position: sticky; top: 0; z-index: 30;
+    display: none;
+  }
+  #bulkBar.active{ display: block; }
   @media print{
     body{ background:#ffffff !important; }
-    .btn, .input-light, #exportPdfBtn, [onclick]{ display:none !important; }
+    .btn, .input-light, #exportPdfBtn, #bulkBar, [onclick]{ display:none !important; }
     .light-card{ break-inside: avoid; box-shadow:none; border:1px solid #e5e7eb; }
     thead{ display: table-header-group; }
     tfoot{ display: table-footer-group; }
@@ -139,6 +156,20 @@
 
   {{-- SALES TABLE --}}
   <div class="light-card">
+    {{-- Bulk action bar (appears when selection > 0) --}}
+    <div id="bulkBar" class="px-5 py-3 bg-blue-50 border-b border-blue-200 rounded-t-[14px]">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="text-sm font-medium text-blue-900">
+          <span id="bulkCount">0</span> selected
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="btn btn-secondary-blue" id="bulkOpenReceipts">Open Receipts</button>
+          <button type="button" class="btn btn-secondary" id="bulkExportPdf">Export Selected PDF</button>
+          <button type="button" class="btn btn-ghost text-rose-700 border border-rose-200 hover:bg-rose-50" id="bulkDelete">Delete Selected</button>
+        </div>
+      </div>
+    </div>
+
     <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 px-5 py-4">
       <h2 class="text-xl font-semibold">Sales</h2>
       <div class="flex flex-wrap items-center gap-3">
@@ -157,6 +188,9 @@
         <table class="min-w-full border-collapse">
           <thead>
             <tr class="text-sm">
+              <th class="select-col px-3 py-3 text-center">
+                <input type="checkbox" id="selectAll" aria-label="Select all visible rows" class="row-select">
+              </th>
               <th class="px-4 py-3 text-left">Invoice</th>
               <th class="px-4 py-3 text-left">Product</th>
               <th class="px-4 py-3 text-left">Type</th>
@@ -176,7 +210,7 @@
                 $qty     = (float) ($row->quantity_kg ?? $row->quantity ?? 0);
                 $unit    = (float) ($row->unit_price ?? $row->price ?? 0);
                 $tot     = (float) ($row->total_price ?? $row->total ?? ($qty * $unit));
-                $invoice = $row->invoice_number ?? $row->order_number;
+                $invoice = $row->invoice_number ?? $row->order_number ?? ('INV-'.str_pad((string)$row->id,3,'0',STR_PAD_LEFT));
 
                 $uTypeRaw = $row->unit_type ?? $row->unit ?? null;
                 $uType    = in_array($uTypeRaw, ['kg','pack','bag'], true) ? $uTypeRaw : 'kg';
@@ -193,7 +227,13 @@
                 $hasPack = is_numeric($packPrice);
                 $hasBag  = is_numeric($bagPrice);
               @endphp
-              <tr class="hover:bg-gray-50 transition-colors">
+              <tr class="hover:bg-gray-50 transition-colors" data-row-id="{{ $row->id }}">
+                <td class="select-col px-3 py-3 text-center">
+                  <input type="checkbox"
+                         class="row-select"
+                         aria-label="Select row {{ $invoice }}"
+                         data-row-id="{{ $row->id }}">
+                </td>
                 <td class="px-4 py-3 whitespace-nowrap">{{ $invoice }}</td>
 
                 {{-- Product + per-pack/bag chips --}}
@@ -249,9 +289,9 @@
 
                 <td class="px-4 py-3">
                   <div class="flex items-center justify-center gap-2">
-                    <a href="{{ route('sales.receipt', $row) }}" class="btn btn-secondary-blue">Receipt</a>
+                    <a href="{{ route('sales.receipt', $row) }}" class="btn btn-secondary-blue receipt-link">Receipt</a>
                     <a href="{{ route('sales.edit', $row) }}" class="btn btn-secondary-green">Edit</a>
-                    <form action="{{ route('sales.destroy', $row) }}" method="POST" onsubmit="return confirm('Delete this sale?')" class="inline">
+                    <form action="{{ route('sales.destroy', $row) }}" method="POST" onsubmit="return confirm('Delete this sale?')" class="inline delete-form">
                       @csrf @method('DELETE')
                       <button class="btn btn-ghost text-rose-700 border border-rose-200 hover:bg-rose-50">Delete</button>
                     </form>
@@ -260,7 +300,7 @@
               </tr>
             @empty
               <tr>
-                <td colspan="9" class="px-4 py-6 text-center text-gray-600">No sales yet.</td>
+                <td colspan="10" class="px-4 py-6 text-center text-gray-600">No sales yet.</td>
               </tr>
             @endforelse
           </tbody>
@@ -301,14 +341,19 @@ document.addEventListener('DOMContentLoaded', function(){
     const date = (dateFilter?.value || '');
     rows.forEach(tr => {
       const tds = tr.querySelectorAll('td'); if (!tds.length) return;
-      const invoice = (tds[0].textContent || '').toLowerCase();
-      const product = (tds[1].textContent || '').toLowerCase();
-      const typeCol = (tds[2].textContent || '').toLowerCase();
-      const rowDate = (tds[3].textContent || '').trim();
-      const status  = (tds[7].textContent || '').toLowerCase();
+      const invoice = (tds[1].textContent || '').toLowerCase();
+      const product = (tds[2].textContent || '').toLowerCase();
+      const typeCol = (tds[3].textContent || '').toLowerCase();
+      const rowDate = (tds[4].textContent || '').trim();
+      const status  = (tds[8].textContent || '').toLowerCase();
       const matchTerm = !term || invoice.includes(term) || product.includes(term) || typeCol.includes(term) || status.includes(term);
       const matchDate = !date || rowDate === date;
       tr.style.display = (matchTerm && matchDate) ? '' : 'none';
+      // If hidden, uncheck
+      if (tr.style.display === 'none') {
+        const cb = tr.querySelector('.row-select');
+        if (cb && cb.checked) { cb.checked = false; selected.delete(tr.dataset.rowId); updateBulkUI(); }
+      }
     });
   }
   search?.addEventListener('input', applyFilters);
@@ -430,7 +475,7 @@ document.addEventListener('DOMContentLoaded', function(){
     } catch (e) { console.error('Donut chart error:', e); }
   }
 
-  /* ---------- PDF EXPORT ---------- */
+  /* ---------- PDF EXPORT (Full Page) ---------- */
   const btn = document.getElementById('exportPdfBtn');
   const ROOT = document.getElementById('salesOverviewRoot');
   if (btn && ROOT) {
@@ -486,6 +531,178 @@ document.addEventListener('DOMContentLoaded', function(){
       }
     });
   }
+
+  /* ---------- MULTI-SELECT ---------- */
+  const selectAll = document.getElementById('selectAll');
+  const rowCbs = () => Array.from(document.querySelectorAll('#salesTableBody .row-select'));
+  const selected = new Set();
+  const bulkBar = document.getElementById('bulkBar');
+  const bulkCount = document.getElementById('bulkCount');
+  const bulkOpenReceipts = document.getElementById('bulkOpenReceipts');
+  const bulkDelete = document.getElementById('bulkDelete');
+  const bulkExportPdf = document.getElementById('bulkExportPdf');
+
+  function updateBulkUI(){
+    const count = selected.size;
+    bulkCount.textContent = count;
+    bulkBar.classList.toggle('active', count > 0);
+    // Sync header checkbox when all visible are selected
+    const visibles = rowCbs().filter(cb => cb.closest('tr').style.display !== 'none');
+    const allVisibleChecked = visibles.length > 0 && visibles.every(cb => cb.checked);
+    selectAll.checked = allVisibleChecked;
+    selectAll.indeterminate = count > 0 && !allVisibleChecked;
+  }
+
+  // Handle Select All (visible only)
+  selectAll?.addEventListener('change', () => {
+    const visibleRows = Array.from(document.querySelectorAll('#salesTableBody tr')).filter(tr => tr.style.display !== 'none');
+    visibleRows.forEach(tr => {
+      const cb = tr.querySelector('.row-select');
+      if (!cb) return;
+      cb.checked = selectAll.checked;
+      const id = tr.dataset.rowId;
+      if (cb.checked) selected.add(id); else selected.delete(id);
+    });
+    updateBulkUI();
+  });
+
+  // Handle each row checkbox
+  document.getElementById('salesTableBody')?.addEventListener('change', (e) => {
+    if (!e.target.matches('.row-select')) return;
+    const tr = e.target.closest('tr');
+    const id = tr?.dataset.rowId;
+    if (!id) return;
+    if (e.target.checked) selected.add(id); else selected.delete(id);
+    updateBulkUI();
+  });
+
+  // Bulk: Open Receipts
+  bulkOpenReceipts?.addEventListener('click', () => {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    ids.forEach((id, i) => {
+      const tr = document.querySelector(`tr[data-row-id="${id}"]`);
+      const a = tr?.querySelector('.receipt-link');
+      if (a && a.href) {
+        setTimeout(()=> window.open(a.href, '_blank'), i * 120);
+      }
+    });
+  });
+
+  // Bulk: Delete (reuses each row's delete form)
+  bulkDelete?.addEventListener('click', async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`Delete ${selected.size} selected sale(s)?`)) return;
+    // Submit one by one to preserve existing flow and CSRF
+    const ids = Array.from(selected);
+    for (let i = 0; i < ids.length; i++){
+      const id = ids[i];
+      const tr = document.querySelector(`tr[data-row-id="${id}"]`);
+      const form = tr?.querySelector('form.delete-form');
+      if (form) form.submit();
+      // Slight delay to allow redirect/processing when using non-AJAX forms
+      await new Promise(r => setTimeout(r, 150));
+    }
+  });
+
+  // Bulk: Export Selected PDF (table-only, clean)
+  bulkExportPdf?.addEventListener('click', async () => {
+    if (selected.size === 0) return;
+    try{
+      const ids = Array.from(selected);
+      // Build a minimal table clone with selected rows
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Invoice</th>
+            <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Product</th>
+            <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Type</th>
+            <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Date</th>
+            <th style="text-align:right;padding:8px;border:1px solid #e5e7eb;">Qty</th>
+            <th style="text-align:right;padding:8px;border:1px solid #e5e7eb;">Unit</th>
+            <th style="text-align:right;padding:8px;border:1px solid #e5e7eb;">Total</th>
+            <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Status</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+      const tbody = table.querySelector('tbody');
+
+      ids.forEach(id => {
+        const tr = document.querySelector(`tr[data-row-id="${id}"]`);
+        if (!tr) return;
+        const tds = tr.querySelectorAll('td');
+        const row = document.createElement('tr');
+        const safeText = (el) => (el?.textContent || '').trim();
+        row.innerHTML = `
+          <td style="padding:8px;border:1px solid #e5e7eb;">${safeText(tds[1])}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;">${safeText(tds[2])}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;">${safeText(tds[3])}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;">${safeText(tds[4])}</td>
+          <td style="padding:8px;text-align:right;border:1px solid #e5e7eb;">${safeText(tds[5])}</td>
+          <td style="padding:8px;text-align:right;border:1px solid #e5e7eb;">${safeText(tds[6])}</td>
+          <td style="padding:8px;text-align:right;border:1px solid #e5e7eb;">${safeText(tds[7])}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;">${safeText(tds[8])}</td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      const wrap = document.createElement('div');
+      wrap.style.padding = '20px';
+      const title = document.createElement('h2');
+      title.textContent = 'Selected Sales';
+      title.style.margin = '0 0 12px 0';
+      title.style.font = '600 16px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+      wrap.appendChild(title);
+      wrap.appendChild(table);
+      document.body.appendChild(wrap);
+
+      const canvas = await html2canvas(wrap, {
+        backgroundColor:'#ffffff',
+        scale: Math.min(Math.max(window.devicePixelRatio || 1, 2), 3)
+      });
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation:'p', unit:'pt', format:'a4' });
+      const pageWidth  = pdf.internal.pageSize.getWidth();
+      const imgWidth = pageWidth - 40; // margins
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let y = 20;
+      if (imgHeight + 40 <= pdf.internal.pageSize.getHeight()){
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 20, y, imgWidth, imgHeight, undefined, 'FAST');
+      }else{
+        // slice into pages
+        const pageHeight = pdf.internal.pageSize.getHeight() - 40;
+        const sliceHeightPx = (pageHeight * canvas.width) / imgWidth;
+        let top = 0, page = 0;
+        while (top < canvas.height){
+          const part = document.createElement('canvas');
+          part.width = canvas.width;
+          part.height = Math.min(sliceHeightPx, canvas.height - top);
+          const ctx = part.getContext('2d');
+          ctx.drawImage(canvas, 0, top, part.width, part.height, 0, 0, part.width, part.height);
+
+          const partData = part.toDataURL('image/jpeg', 0.95);
+          if (page > 0) pdf.addPage();
+          pdf.addImage(partData, 'JPEG', 20, 20, imgWidth, (part.height * imgWidth) / part.width, undefined, 'FAST');
+
+          top += sliceHeightPx; page++;
+        }
+      }
+      const d = new Date();
+      pdf.save(`Sales_Selected_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.pdf`);
+
+      document.body.removeChild(wrap);
+    }catch(e){
+      console.error(e);
+      alert('Export failed. Please try again.');
+    }
+  });
+
 });
 </script>
 @endpush

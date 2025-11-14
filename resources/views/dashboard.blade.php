@@ -437,6 +437,78 @@
             </div>
           </div>
 
+          <!-- Predictive Analytics · Demand vs Inventory Forecast -->
+          @php
+            $forecastSummary       = $forecastSummary ?? [];
+            $forecastHorizonDays   = $forecastSummary['horizon_days'] ?? 30;
+            $globalStockoutDateRaw = $forecastSummary['global_stockout_date'] ?? null;
+            $globalStockoutLabel   = $globalStockoutDateRaw
+                ? \Carbon\Carbon::parse($globalStockoutDateRaw)->timezone('Asia/Manila')->format('M d, Y')
+                : 'No projected stockout';
+            $globalRecommendedProd = $forecastSummary['total_recommended_production'] ?? null;
+            $forecastTopProducts   = $forecastTopProducts ?? collect();
+          @endphp
+
+          <div class="card p-5 rounded-2xl">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h2 class="text-base font-semibold">🔮 Predictive Analytics</h2>
+                <p class="text-xs muted">Projected demand vs inventory (next {{ $forecastHorizonDays }} days)</p>
+              </div>
+              <div class="text-right text-xs">
+                <div class="muted">Global stockout:</div>
+                <div class="font-semibold">{{ $globalStockoutLabel }}</div>
+                @if(!is_null($globalRecommendedProd))
+                  <div class="mt-1 text-[10px] muted">Recommended production: <span class="font-semibold">{{ number_format($globalRecommendedProd, 2) }} kg</span></div>
+                @endif
+              </div>
+            </div>
+
+            <div class="h-56 relative mb-3">
+              <p id="forecastDesc" class="sr-only">Forecasted daily demand and inventory for the upcoming days.</p>
+              <canvas id="forecastChart" aria-label="Forecast chart" aria-describedby="forecastDesc"></canvas>
+              <div id="forecastEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted text-center px-4">
+                Not enough historical data yet to generate a forecast. Keep recording production and sales to unlock predictive analytics.
+              </div>
+            </div>
+
+            <div class="border-t border-[var(--line)] pt-3 mt-1">
+              <div class="flex items-center justify-between mb-2">
+                <p class="text-xs font-semibold uppercase muted">Products to watch</p>
+              </div>
+              @if($forecastTopProducts instanceof \Illuminate\Support\Collection && $forecastTopProducts->isNotEmpty())
+                <div class="space-y-2">
+                  @foreach($forecastTopProducts as $row)
+                    <div class="flex items-center justify-between text-xs">
+                      <div class="flex-1 min-w-0">
+                        <div class="font-medium truncate">{{ $row->name ?? $row['name'] ?? 'Product' }}</div>
+                        <div class="muted text-[11px]">
+                          Daily demand ~ {{ number_format($row->daily_demand ?? $row['daily_demand'] ?? 0, 2) }} kg
+                        </div>
+                      </div>
+                      <div class="text-right ml-3">
+                        @php
+                          $daysLeft = $row->days_to_stockout ?? $row['days_to_stockout'] ?? null;
+                          $rec      = $row->recommended_production ?? $row['recommended_production'] ?? null;
+                        @endphp
+                        @if(!is_null($daysLeft))
+                          <div class="text-[11px] {{ $daysLeft <= 3 ? 'text-red-600' : ($daysLeft <= 7 ? 'text-amber-500' : 'text-green-600') }}">
+                            {{ $daysLeft <= 0 ? 'Out of stock' : $daysLeft . ' days left' }}
+                          </div>
+                        @endif
+                        @if(!is_null($rec))
+                          <div class="text-[11px] muted">Produce: <span class="font-semibold">{{ number_format($rec, 1) }} kg</span></div>
+                        @endif
+                      </div>
+                    </div>
+                  @endforeach
+                </div>
+              @else
+                <p class="text-xs muted">Once enough sales history exists, this section will highlight which products are closest to running out.</p>
+              @endif
+            </div>
+          </div>
+
         </div>
       </main>
     </div>
@@ -548,9 +620,9 @@ const Bar3DPlugin = {
     }
   }
 };
-</script>
+  </script>
 
-<script>
+  <script>
 document.addEventListener('DOMContentLoaded', () => {
   // 1) Ensure Chart.js loaded
   if (typeof Chart === 'undefined') {
@@ -565,6 +637,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const qty    = (@json($weeklySalesQtySeries ?? []) || []).map(v=>Number(v)||0);
   const rev    = (@json($weeklySalesRevenueSeries ?? []) || []).map(v=>Number(v)||0);
   const exp    = (@json($weeklyExpirySeries ?? []) || []).map(v=>Number(v)||0);
+
+  // NEW: forecast data (next N days)
+  const forecastLabelsRaw   = @json($forecastLabels ?? []);
+  const forecastDemandRaw   = @json($forecastDemandSeries ?? []);
+  const forecastInventoryRaw= @json($forecastInventorySeries ?? []);
+  const forecastLabels      = Array.isArray(forecastLabelsRaw) ? forecastLabelsRaw : [];
+  const forecastDemand      = (forecastDemandRaw || []).map(v => Number(v) || 0);
+  const forecastInventory   = (forecastInventoryRaw || []).map(v => Number(v) || 0);
 
   // 3) Colors
   const C_RED='rgba(239,68,68,1)',     C_RED_30='rgba(239,68,68,.3)';
@@ -657,6 +737,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Predictive Analytics chart
+  setEmptyBanner([...forecastDemand, ...forecastInventory], 'forecastEmpty');
+  const forecastChart = mk('forecastChart', {
+    type: 'line',
+    data: {
+      labels: forecastLabels,
+      datasets: [
+        {
+          label: 'Projected Demand',
+          data: forecastDemand,
+          borderColor: C_RED,
+          backgroundColor: C_RED_30,
+          borderWidth: 2,
+          tension: .35,
+          pointRadius: 2,
+          fill: false
+        },
+        {
+          label: 'Projected Inventory',
+          data: forecastInventory,
+          borderColor: C_GREEN,
+          backgroundColor: C_GREEN_30,
+          borderWidth: 2,
+          tension: .35,
+          pointRadius: 2,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: tickColor } },
+        title:  { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const val = Number(ctx.parsed.y);
+              const ds  = ctx.dataset.label || '';
+              return `${ds}: ${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })} kg`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks:{ color: tickColor }, grid:{ color: gridColor } },
+        y: {
+          beginAtZero: true,
+          ticks: { color: tickColor },
+          grid: { color: gridColor }
+        }
+      }
+    }
+  });
+
   // 5) Master 3D toggles
   const toggleProduction = document.getElementById('toggleProduction');
   const toggleSales = document.getElementById('toggleSales');
@@ -690,6 +826,7 @@ document.addEventListener('DOMContentLoaded', () => {
     set3D(productionChart, toggleProduction?.checked, depth, lift);
     set3D(salesChart,      toggleSales?.checked,      depth, lift);
     set3D(expiryChart,     toggleExpiry?.checked,     depth, lift);
+    // forecastChart is line-only (no 3D)
   };
 
   [toggle3D, toggleProduction, toggleSales, toggleExpiry, depthRange, liftRange]
@@ -698,6 +835,8 @@ document.addEventListener('DOMContentLoaded', () => {
   apply3D();
 
   // For quick debugging
-  window.GenRevDashboard = { productionChart, salesChart, expiryChart, spark, apply3D };
+  window.GenRevDashboard = { productionChart, salesChart, expiryChart, spark, forecastChart, apply3D };
 });
-</script>
+  </script>
+</body>
+</html>

@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Arr;
 
-// Related models
 use App\Models\Production;
 use App\Models\Sale;
 use App\Models\ProductRecipe;
@@ -104,8 +103,6 @@ class Product extends Model
 
     /**
      * Appended accessors for UI.
-     * latest_* fields come from scalar subqueries (scopeWithLatestProductionSnapshot)
-     * or fall back to relation when not present.
      */
     protected $appends = [
         'effective_unit_cost',
@@ -119,7 +116,7 @@ class Product extends Model
         'is_variant',
         'base_name',
 
-        // Production snapshot fields
+        // Latest production snapshot
         'latest_batch_number',
         'latest_production_date',
         'latest_expiration_date',
@@ -128,7 +125,7 @@ class Product extends Model
         'latest_available_pack',
         'latest_available_bag',
 
-        // Rollup availability (sums)
+        // Rollups
         'total_available_pack',
         'total_available_bag',
     ];
@@ -139,19 +136,18 @@ class Product extends Model
     public function parent()      { return $this->belongsTo(Product::class, 'parent_id'); }
     public function children()    { return $this->hasMany(Product::class, 'parent_id'); }
     public function variants()    { return $this->children(); }
-    public function productions() { return $this->hasMany(Production::class); }
-    public function sales()       { return $this->hasMany(Sale::class); }
+    public function productions() { return $this->hasMany(Production::class, 'product_id'); }
+    public function sales()       { return $this->hasMany(Sale::class, 'product_id'); }
     public function recipes()     { return $this->hasMany(ProductRecipe::class)->with('material'); }
 
     /**
-     * Latest production record (DB-level, no N+1 when eager loaded).
-     * Requires Laravel 9+ for latestOfMany().
+     * Latest production record (no N+1 when eager loaded).
+     * FIX: use ofMany('production_date','max') with the correct FK.
      */
     public function latestProduction()
     {
-        return $this->hasOne(Production::class)->latestOfMany(function ($q) {
-            $q->orderBy('production_date')->orderBy('id');
-        });
+        return $this->hasOne(Production::class, 'product_id')
+                    ->ofMany('production_date', 'max');
     }
 
     /* ----------------------------------------------------------------------
@@ -280,7 +276,7 @@ class Product extends Model
         return $c->addDays((int)$this->shelf_life_days)->toDateString();
     }
 
-    /* ---------- Production snapshot accessors (use subselects when present) ----------- */
+    /* ---------- Production snapshot accessors ----------- */
 
     public function getLatestBatchNumberAttribute(): ?string
     {
@@ -506,9 +502,6 @@ class Product extends Model
 
     /**
      * PRODUCTION SNAPSHOT (zero N+1):
-     * Adds scalar subselects for latest batch number, dates, prices, and availability,
-     * plus rollup totals for availability across all active productions.
-     * Use on indexes: Product::query()->withLatestProductionSnapshot()->get();
      */
     public function scopeWithLatestProductionSnapshot($q)
     {
@@ -542,7 +535,7 @@ class Product extends Model
                 ->whereColumn('productions.product_id', 'products.id')
                 ->orderByDesc('production_date')->orderByDesc('id')->limit(1),
 
-            // Rollup totals across all batches (for quick “Total” display)
+            // Rollups
             'total_available_pack' => Production::selectRaw('COALESCE(SUM(available_pack),0)')
                 ->whereColumn('productions.product_id', 'products.id'),
             'total_available_bag'  => Production::selectRaw('COALESCE(SUM(available_bag),0)')

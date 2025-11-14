@@ -1,78 +1,103 @@
+{{-- resources/views/production/partials/product-cards.blade.php --}}
 @php
 /** @var \Illuminate\Support\Collection|\App\Models\Product[] $products */
-use Illuminate\Support\Str;
 @endphp
 
 @once
 <style>
-  /* ===== Card + image (light) ===== */
+  /* ===== Card container (soft bubble look) ===== */
+  .prod-card{
+    position:relative;
+    display:flex; flex-direction:column;
+    gap:1rem;
+    background:#fff;
+    border:1px solid #e5e7eb;
+    border-radius:20px;
+    padding:1rem 1rem 1.1rem;
+    box-shadow:0 8px 18px rgba(17,24,39,.06);
+    overflow:hidden;
+  }
+
+  /* ===== Image: auto-adjust (responsive 4:3) ===== */
   .prod-card-img{
-    width: 100%;
-    height: 10rem;
-    object-fit: cover;
-    border-radius: 12px;
-    border: 1px solid rgba(0,0,0,.08);
-    background: #f3f4f6; /* gray-100 */
-  }
-  .prod-card:hover .prod-card-img{ filter: brightness(1.02); }
-  .prod-card { pointer-events: auto; }
-  .btn-busy { opacity: .7; pointer-events: none; }
-
-  /* ===== 3D Buttons (light) ===== */
-  .btn-3d{
-    position: relative;
-    border-radius: 14px;
-    font-weight: 700;
-    padding: .55rem .9rem;
-    border: 1px solid rgba(0,0,0,.08);
-    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease, background .12s ease;
-    box-shadow:
-      0 10px 18px rgba(0,0,0,.10),
-      0 2px 0 rgba(255,255,255,.9) inset,
-      0 -2px 0 rgba(0,0,0,.06) inset;
-    backdrop-filter: blur(3px);
-    line-height: 1;
-  }
-  .btn-3d:hover{ transform: translateY(-1px); filter: brightness(1.03); }
-  .btn-3d:active{
-    transform: translateY(0px);
-    box-shadow:
-      0 3px 10px rgba(0,0,0,.10),
-      0 -2px 0 rgba(255,255,255,.6) inset,
-      0 2px 0 rgba(0,0,0,.08) inset;
+    width:100%;
+    height:auto;                 /* let aspect-ratio drive height */
+    aspect-ratio:4 / 3;          /* consistent frame without distortion */
+    object-fit:cover;            /* crop gracefully when needed */
+    object-position:center;
+    border-radius:14px;
+    border:1px solid rgba(0,0,0,.08);
+    background:#f3f4f6;
+    image-rendering:auto;
   }
 
-  .btn-3d-danger{
-    color:#991b1b; /* red-800 text on soft bg */
-    background: linear-gradient(180deg, #fee2e2 0%, #fecaca 100%);
-    border-color: #fecaca;
+  /* ===== Skeleton while image loads (prevents layout shift) ===== */
+  .img-skeleton{
+    width:100%;
+    aspect-ratio:4 / 3;
+    border-radius:14px;
+    border:1px solid rgba(0,0,0,.08);
+    background: linear-gradient(90deg,#f3f4f6 0%,#f9fafb 40%,#f3f4f6 80%);
+    background-size:200% 100%;
+    animation: shimmer 1.2s infinite linear;
   }
-  .btn-3d-danger:hover{ background: linear-gradient(180deg, #fecaca 0%, #fca5a5 100%); }
+  @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+  @media (prefers-reduced-motion: reduce){
+    .img-skeleton{animation:none}
+  }
 
-  .btn-3d-neutral{
-    color:#374151;
-    background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
-    border-color: #e5e7eb;
+  .prod-card:hover .prod-card-img{ filter:brightness(1.02); }
+
+  /* ===== Stat chip ===== */
+  .stat-chip{
+    background:#f8fafc;
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    padding:.9rem .9rem .8rem;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.6);
+  }
+  .stat-label{ color:#6b7280; font-size:.82rem; }
+  .stat-val{ color:#0f172a; font-weight:700; }
+
+  /* ===== Action buttons (neumorphic pills) ===== */
+  .neo-btn{
+    --padx:14px; --pady:10px;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    padding:var(--pady) var(--padx);
+    border-radius:14px; font-weight:700; font-size:.92rem; line-height:1;
+    background:#fff; color:#111827; border:1px solid #e6e8f0;
+    box-shadow:0 10px 18px rgba(17,24,39,.10),
+               inset 0 2px 0 rgba(255,255,255,.9),
+               inset 0 -2px 0 rgba(0,0,0,.06);
+    transition:transform .12s, box-shadow .12s, background .12s, filter .12s;
+    white-space:nowrap; flex:0 0 auto;
+  }
+  .neo-btn:hover{ transform:translateY(-1px); filter:brightness(1.03); }
+  .neo-btn:active{ transform:translateY(0);
+    box-shadow:0 3px 10px rgba(0,0,0,.10),
+               inset 0 -2px 0 rgba(255,255,255,.6),
+               inset 0 2px 0 rgba(0,0,0,.08); }
+  .neo-btn--indigo{ color:#4338ca; border-color:#dfe2ff; }
+  .neo-btn--indigo:hover{ background:#eef0ff; }
+  .neo-btn--red{ color:#b91c1c; border-color:#ffe0e0; }
+  .neo-btn--red:hover{ background:#fff4f4; }
+  .neo-btn--green{ color:#047857; border-color:#d6f5e9; }
+  .neo-btn--green:hover{ background:#e8fbf4; }
+
+  /* ===== Actions row ===== */
+  .card-actions{
+    margin-top:.2rem;
+    display:flex; align-items:center; justify-content:center;
+    gap:.75rem; flex-wrap:wrap;
+  }
+  @media (max-width: 420px){
+    .card-actions .neo-btn{ width: calc(50% - .38rem); justify-content:center; }
+  }
+  @media (max-width: 360px){
+    .card-actions .neo-btn{ width:100%; }
   }
 
-  /* ===== Modal (light) ===== */
-  .modal-overlay{
-    position: fixed; inset: 0; z-index: 60;
-    display: none; align-items: center; justify-content: center;
-    background: rgba(17,24,39,.45);
-  }
-  .modal-overlay.show{ display:flex; }
-  .modal-card{
-    width: 100%; max-width: 460px;
-    border-radius: 18px;
-    background: #ffffff;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 20px 48px rgba(0,0,0,.20);
-    color: #111827;
-  }
-  .modal-header{ padding: 14px 16px; border-bottom: 1px solid #e5e7eb; }
-  .modal-body{ padding: 16px; color: #374151; }
-  .modal-actions{ padding: 14px 16px; display:flex; gap:.5rem; justify-content:flex-end; border-top: 1px solid #e5e7eb; }
+  .btn-busy{ opacity:.7; pointer-events:none; }
 </style>
 @endonce
 
@@ -83,13 +108,14 @@ use Illuminate\Support\Str;
     $unit    = number_format((float)($p->unit_cost ?? 0), 2);
     $status  = $p->stock_status ?? ((float)($p->quantity ?? 0) > 0 ? 'in_stock' : 'out_of_stock');
 
+    // ring state
     $delta = (float)($p->quantity ?? 0) - (float)($p->forecasted_demand ?? 0);
     $ring  = $delta <= 0 ? 'ring-1 ring-red-200' : ($delta <= 10 ? 'ring-1 ring-amber-200' : '');
 
     $badge = null; $badgeCls = '';
     if (isset($p->is_expired) || isset($p->days_to_expiry)) {
-        if ($p->is_expired ?? false) { $badge = 'Expired'; $badgeCls = 'bg-red-100 text-red-700 border border-red-200'; }
-        elseif (($p->days_to_expiry ?? 99) <= 3) { $badge = ($p->days_to_expiry).'d left'; $badgeCls = 'bg-amber-100 text-amber-700 border border-amber-200'; }
+      if ($p->is_expired ?? false) { $badge='Expired'; $badgeCls='bg-red-100 text-red-700 border border-red-200'; }
+      elseif (($p->days_to_expiry ?? 99) <= 3) { $badge=($p->days_to_expiry).'d left'; $badgeCls='bg-amber-100 text-amber-700 border border-amber-200'; }
     }
 
     $imgPrimary   = $p->card_image_url ?? $p->image_thumb_url ?? $p->image_url ?? asset('images/default-product.png');
@@ -98,28 +124,29 @@ use Illuminate\Support\Str;
     $defaultPrice = (float)($p->default_price ?? $p->price ?? $p->unit_cost ?? 0);
   @endphp
 
-  <div
-    class="prod-card bg-white rounded-2xl border border-gray-200 p-4 flex flex-col gap-3 hover:bg-gray-50 transition shadow-sm {{ $ring }}"
-    id="product-card-{{ $p->id }}"
-    data-id="{{ $p->id }}"
-    data-name="{{ e($p->product_name) }}"
-    data-price="{{ $defaultPrice }}"
-  >
-    {{-- Image --}}
+  <div id="product-card-{{ $p->id }}"
+       class="prod-card {{ $ring }}"
+       data-id="{{ $p->id }}"
+       data-name="{{ e($p->product_name) }}"
+       data-price="{{ $defaultPrice }}">
+
+    {{-- Image (skeleton + responsive) --}}
     <div class="relative">
+      <div class="img-skeleton" aria-hidden="true"></div>
       <img
-        @if($srcset) srcset="{{ $srcset }}" sizes="(min-width:1280px) 25vw, (min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw" @endif
+        @if($srcset)
+          srcset="{{ $srcset }}"
+          sizes="(min-width:1280px) 25vw, (min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw"
+        @endif
         src="{{ $imgPrimary }}"
         alt="{{ $p->product_name }} image"
         class="prod-card-img"
-        width="400" height="300"
         loading="lazy" decoding="async"
-        onerror="this.onerror=null;this.src='{{ asset('images/default-product.png') }}';"
+        onload="this.previousElementSibling?.remove()"
+        onerror="this.onerror=null;this.src='{{ asset('images/default-product.png') }}';this.previousElementSibling?.remove();"
       >
       @if($badge)
-        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs {{ $badgeCls }}">
-          {{ $badge }}
-        </span>
+        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs {{ $badgeCls }}">{{ $badge }}</span>
       @endif
       @if(!empty($p->category))
         <span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs bg-white border border-gray-200 text-gray-700">
@@ -128,29 +155,28 @@ use Illuminate\Support\Str;
       @endif
     </div>
 
-    {{-- Info --}}
-    <div class="flex items-start justify-between gap-3">
-      <div class="min-w-0">
-        <h3 class="text-lg font-semibold text-gray-900 truncate" title="{{ $p->product_name }}">{{ $p->product_name }}</h3>
-        <p class="text-xs text-gray-500">SKU: {{ $sku }}</p>
-      </div>
+    {{-- Title --}}
+    <div>
+      <h3 class="text-lg font-semibold text-gray-900 truncate" title="{{ $p->product_name }}">{{ $p->product_name }}</h3>
+      <p class="text-xs text-gray-500">SKU: {{ $sku }}</p>
     </div>
 
+    {{-- Stats grid --}}
     <div class="grid grid-cols-2 gap-3 text-sm">
-      <div class="bg-gray-50 rounded-xl p-3 border border-gray-200">
-        <p class="text-gray-500">Inventory</p>
-        <p class="text-gray-900 font-semibold">{{ $qty }} kg</p>
+      <div class="stat-chip">
+        <p class="stat-label">Inventory</p>
+        <p class="stat-val">{{ $qty }} kg</p>
       </div>
-      <div class="bg-gray-50 rounded-xl p-3 border border-gray-200">
-        <p class="text-gray-500">Forecasted Demand</p>
-        <p class="text-gray-900 font-semibold">{{ $demand }} kg</p>
+      <div class="stat-chip">
+        <p class="stat-label">Forecasted Demand</p>
+        <p class="stat-val">{{ $demand }} kg</p>
       </div>
-      <div class="bg-gray-50 rounded-xl p-3 border border-gray-200">
-        <p class="text-gray-500">Unit Cost</p>
-        <p class="text-gray-900 font-semibold">₱ {{ $unit }}</p>
+      <div class="stat-chip">
+        <p class="stat-label">Unit Cost</p>
+        <p class="stat-val">₱ {{ $unit }}</p>
       </div>
-      <div class="bg-gray-50 rounded-xl p-3 border border-gray-200">
-        <p class="text-gray-500">Status</p>
+      <div class="stat-chip">
+        <p class="stat-label">Status</p>
         @php
           $cls = $status === 'in_stock'
             ? 'bg-green-100 text-green-700 border-green-200'
@@ -162,216 +188,43 @@ use Illuminate\Support\Str;
     </div>
 
     {{-- Actions --}}
-    <div class="flex items-center justify-between gap-2 pt-2">
-      <div class="flex items-center gap-2">
-        @if (Route::has('production.show'))
-          <a href="{{ route('production.show', $p->id) }}"
-             class="px-3 py-2 rounded-xl bg-gray-100 border border-gray-200 text-gray-800 hover:bg-gray-200">
-            Manage Orders
-          </a>
-        @endif
-      </div>
+    <div class="card-actions">
+      @if (Route::has('production.show'))
+        <a href="{{ route('production.show', $p->id) }}"
+           class="neo-btn neo-btn--indigo"
+           title="Manage production orders for this product">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18"/>
+          </svg>
+          Manage Orders
+        </a>
+      @endif
 
-      <div class="flex items-center gap-2">
-        {{-- Delete Product (3D) --}}
-        <button
-          type="button"
-          class="js-open-delete-product btn-3d btn-3d-danger text-sm"
-          data-product-id="{{ (int)$p->id }}"
-          data-product-name="{{ e($p->product_name) }}"
-          aria-haspopup="dialog"
-          title="Permanently delete this product and all related data"
-        >
-          Delete Product
-        </button>
+      <button type="button"
+              class="js-open-delete-product neo-btn neo-btn--red text-sm"
+              data-product-id="{{ (int)$p->id }}"
+              data-product-name="{{ e($p->product_name) }}"
+              aria-haspopup="dialog"
+              title="Permanently delete this product and all related data">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2h.293l.853 10.24A2 2 0 007.139 18h5.722a2 2 0 001.993-1.76L15.707 6H16a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9z" clip-rule="evenodd" />
+        </svg>
+        Delete Product
+      </button>
 
-        {{-- Quick Add to Sales (pastel blue like screenshot “Quick Add”) --}}
-        <button
-          type="button"
-          class="js-quick-add px-3 py-2 rounded-xl bg-blue-100 text-blue-700 font-semibold hover:bg-blue-200"
-          data-id="{{ (int)$p->id }}"
-          data-name="{{ e($p->product_name) }}"
-          data-price="{{ $defaultPrice }}"
-        >
-          + Quick Add
-        </button>
-      </div>
+      <button type="button"
+              class="js-quick-add neo-btn neo-btn--green text-sm"
+              data-id="{{ (int)$p->id }}"
+              data-name="{{ e($p->product_name) }}"
+              data-price="{{ $defaultPrice }}"
+              title="Quick add this product to Sales">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+        </svg>
+        Quick Add
+      </button>
     </div>
   </div>
 @empty
   <div class="col-span-full text-center text-gray-500 py-10">No products yet.</div>
 @endforelse
-
-{{-- ===== Global Delete Product Modal (single reusable instance) ===== --}}
-@once
-<div id="confirmDeleteProductModal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="delTitle" aria-hidden="true">
-  <div class="modal-card">
-    <div class="modal-header">
-      <h3 id="delTitle" class="text-lg font-semibold">Delete Product?</h3>
-    </div>
-    <div class="modal-body">
-      <p class="text-sm leading-relaxed">
-        This action will permanently remove <span id="delProductName" class="font-semibold text-gray-900"></span> and
-        all related data. Are you sure you want to continue?
-      </p>
-    </div>
-    <div class="modal-actions">
-      <button type="button" class="btn-3d btn-3d-neutral js-cancel-del">Cancel</button>
-      <button type="button" class="btn-3d btn-3d-danger js-confirm-del">Confirm Delete</button>
-    </div>
-  </div>
-</div>
-
-<script>
-(function () {
-  if (window.__prodCardsBound) return;
-  window.__prodCardsBound = true;
-
-  function toast(message, type='info') {
-    const el = document.createElement('div');
-    el.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl text-sm shadow z-[9999] ${
-      type==='success' ? 'bg-green-600 text-white' : type==='error' ? 'bg-red-600 text-white' : 'bg-gray-900 text-white'
-    }`;
-    el.textContent = message;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 2500);
-  }
-
-  async function fetchQuickAddPayload(productId) {
-    const url = '{{ route('production.quickAdd', 0) }}'.replace('/0', '/' + productId);
-    const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }});
-    if (!res.ok) throw new Error('Failed to load product defaults');
-    return res.json();
-  }
-
-  async function handleQuickAdd(btn) {
-    const card = btn.closest('.prod-card') || btn;
-    const fallback = {
-      id: Number(card.dataset.id || btn.dataset.id || 0),
-      name: card.dataset.name || btn.dataset.name || '',
-      price: Number(card.dataset.price || btn.dataset.price || 0),
-    };
-
-    btn.classList.add('btn-busy');
-    const original = btn.textContent;
-    btn.textContent = 'Loading…';
-
-    try {
-      const payload = await fetchQuickAddPayload(fallback.id);
-      const data = {
-        id: payload.id ?? fallback.id,
-        name: payload.name ?? fallback.name,
-        price: (typeof payload.price === 'number' ? payload.price : fallback.price) || 0,
-        production_id: payload.production_id ?? null,
-        production_date: payload.production_date ?? '',
-        expiration_date: payload.expiration_date ?? ''
-      };
-
-      if (typeof window.prefillSaleModal === 'function') {
-        window.prefillSaleModal(data);
-      } else {
-        const sel = document.getElementById('sale_product_id');
-        const pIn = document.getElementById('sale_price');
-        const qIn = document.getElementById('sale_quantity');
-        const dP  = document.getElementById('sale_production_date');
-        const dE  = document.getElementById('sale_expiration_date');
-        const bId = document.getElementById('sale_production_id');
-
-        if (sel) { sel.value = String(data.id); sel.dispatchEvent(new Event('change', {bubbles:true})); }
-        if (pIn) pIn.value = Number(data.price || 0).toFixed(2);
-        if (qIn && !qIn.value) qIn.value = '1';
-        if (dP) dP.value = data.production_date || '';
-        if (dE) dE.value = data.expiration_date || '';
-        if (bId) bId.value = data.production_id || '';
-
-        const modal = document.getElementById('saleModal');
-        if (modal) { modal.classList.remove('hidden'); modal.removeAttribute('aria-hidden'); }
-        else { toast('Sales modal not found.', 'error'); }
-      }
-    } catch (e) {
-      console.warn(e);
-      if (typeof window.prefillSaleModal === 'function') {
-        window.prefillSaleModal({ id: fallback.id, name: fallback.name, price: fallback.price });
-      } else {
-        toast('Could not prefill from server. Using fallback.', 'error');
-      }
-    } finally {
-      btn.classList.remove('btn-busy');
-      btn.textContent = original;
-    }
-  }
-
-  /* ===== Delete Product (modal flow) ===== */
-  const delModal   = document.getElementById('confirmDeleteProductModal');
-  const delNameEl  = document.getElementById('delProductName');
-  const btnCancel  = delModal?.querySelector('.js-cancel-del');
-  const btnConfirm = delModal?.querySelector('.js-confirm-del');
-  let activeProductId = null;
-
-  function openDelModal(id, name){
-    activeProductId = id;
-    if (delNameEl) delNameEl.textContent = name || 'this product';
-    delModal?.classList.add('show');
-    delModal?.setAttribute('aria-hidden', 'false');
-  }
-  function closeDelModal(){
-    delModal?.classList.remove('show');
-    delModal?.setAttribute('aria-hidden', 'true');
-    activeProductId = null;
-  }
-
-  async function confirmDeleteProduct(){
-    if (!activeProductId) return;
-    btnConfirm?.classList.add('btn-busy');
-
-    try {
-      const url = '{{ route('products.destroy', 0) }}'.replace('/0', '/' + activeProductId);
-      const res = await fetch(url, {
-        method: 'DELETE',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRF-TOKEN': '{{ csrf_token() }}',
-          'Accept': 'application/json'
-        }
-      });
-
-      if (!res.ok) {
-        let msg = 'Failed to delete product.';
-        try { const data = await res.json(); if (data?.message) msg = data.message; } catch(_) {}
-        throw new Error(msg);
-      }
-
-      const card = document.getElementById(`product-card-${activeProductId}`);
-      if (card) card.remove();
-      toast('Product permanently deleted.', 'success');
-      closeDelModal();
-    } catch (err) {
-      toast(err.message || 'Could not delete product.', 'error');
-    } finally {
-      btnConfirm?.classList.remove('btn-busy');
-    }
-  }
-
-  document.addEventListener('click', (e) => {
-    const quick = e.target.closest('.js-quick-add');
-    if (quick) { handleQuickAdd(quick); return; }
-
-    const delProd = e.target.closest('.js-open-delete-product');
-    if (delProd) {
-      const id   = Number(delProd.dataset.productId || 0);
-      const name = delProd.dataset.productName || '';
-      openDelModal(id, name);
-      return;
-    }
-
-    if (e.target === delModal) closeDelModal();
-  }, true);
-
-  btnCancel?.addEventListener('click', closeDelModal);
-  btnConfirm?.addEventListener('click', confirmDeleteProduct);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && delModal?.classList.contains('show')) closeDelModal();
-  });
-})();
-</script>
-@endonce

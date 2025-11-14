@@ -25,25 +25,26 @@ class Production extends Model
 
     /** Mass assignable (mirror table columns) */
     protected $fillable = [
-        'parent_product_id',     // parent (e.g., Skinless Longganisa)
-        'product_id',            // child/variant product id
-        'product_name_snapshot', // per-order type/variant label captured at order time
+        'parent_product_id',
+        'product_id',
+        'product_name_snapshot',
         'batch_number',
         'forecasted_demand',
         'current_inventory',
         'unit_price_pack',
         'unit_price_bag',
-        'available_pack',        // counts UI
-        'available_bag',         // counts UI
+        'available_pack',
+        'available_bag',
         'production_date',
         'expiration_date',
         'quantity',
+        // Optional per-batch media (kept for backward-compat)
         'image_disk',
         'image_path',
         'image_medium_path',
         'image_thumb_path',
-        'remarks',               // NEW: free-text notes for the batch
-        // 'archived_reason',    // include only if the column exists
+        'remarks',
+        // 'archived_reason',
     ];
 
     /** Casts */
@@ -74,9 +75,10 @@ class Production extends Model
         'days_to_expiry',
         'image_url',
         'image_srcset',
-        'type_name',       // derived per-order
-        'type_keywords',   // for client-side search
-        'purge_at',        // computed: deleted_at + TTL days
+        'type_name',
+        'type_keywords',
+        'purge_at',
+        'batch_label',
     ];
 
     /* ========================== Relationships ========================== */
@@ -167,15 +169,20 @@ class Production extends Model
         switch ($sort) {
             case 'date':
                 return $q->orderByDesc('production_date')->orderByDesc('id');
+
             case 'product':
                 return $q->leftJoin('products','products.id','=','productions.product_id')
                          ->orderBy('products.product_name')
                          ->orderByDesc('productions.id')
                          ->select('productions.*');
+
             case 'batch':
-                return $q->orderBy('batch_number')->orderByDesc('id');
+                // Numeric-friendly order: puts 2 before 10
+                return $q->orderBy(DB::raw('CAST(batch_number AS UNSIGNED)'))->orderBy('id');
+
             case 'qty':
                 return $q->orderByDesc('quantity')->orderByDesc('id');
+
             case 'deleted_at':
             default:
                 return $q->orderByDesc('deleted_at')->orderByDesc('id');
@@ -215,16 +222,32 @@ class Production extends Model
         if (array_key_exists('purge_at', $this->attributes) && !empty($this->attributes['purge_at'])) {
             try {
                 return Carbon::parse($this->attributes['purge_at'])->toDateTimeString();
-            } catch (\Throwable $e) { /* fall through */ }
+            } catch (\Throwable $e) { /* ignore parse fail */ }
         }
 
         if (!$this->deleted_at) return null;
-        $ttl = (int) config('app.archive_ttl_days', 7);
-        return Carbon::parse($this->deleted_at)->copy()->addDays(max(1, $ttl))->toDateTimeString();
+
+        $ttl = (int) config('app.archive_ttl_days', 30);
+        return Carbon::parse($this->deleted_at)
+                    ->copy()
+                    ->addDays(max(1, $ttl))
+                    ->toDateTimeString();
     }
 
+    /**
+     * Prefer product’s processed card image; then batch image; else default.
+     */
     public function getImageUrlAttribute(): string
     {
+        // Prefer product-derived fields created by the controller’s image pipeline.
+        if ($this->product) {
+            $primary = $this->product->card_image_url ?: $this->product->image_url;
+            if (!empty($primary)) {
+                return (string) $primary;
+            }
+        }
+
+        // Fallback to batch-level stored paths (legacy support).
         if (!empty($this->image_path)) {
             $disk = $this->image_disk ?: 'public';
             try {
@@ -233,11 +256,21 @@ class Production extends Model
                 return asset('storage/' . ltrim($this->image_path, '/'));
             }
         }
-        return $this->product?->image_url ?? asset('images/default-product.png');
+
+        return asset('images/default-product.png');
     }
 
+    /**
+     * Prefer product’s responsive srcset; else compose from batch image sizes.
+     */
     public function getImageSrcsetAttribute(): ?string
     {
+        // If product has a srcset (set by controller), use that.
+        if ($this->product && !empty($this->product->card_image_srcset)) {
+            return (string) $this->product->card_image_srcset;
+        }
+
+        // Compose from batch-level stored sizes (legacy).
         $disk = $this->image_disk ?: 'public';
         $parts = [];
 
@@ -251,6 +284,7 @@ class Production extends Model
             $parts[] = "{$url} {$size}";
         };
 
+        // Map legacy sizes to width hints; adjust if your stored sizes differ.
         $push($this->image_thumb_path,  '150w');
         $push($this->image_medium_path, '600w');
 
@@ -284,21 +318,39 @@ class Production extends Model
             mb_strtolower($this->type_name),
             mb_strtolower($this->product_name_snapshot ?: $this->product?->product_name ?: ''),
             mb_strtolower($this->parentProduct?->product_name ?: ''),
-            mb_strtolower($this->batch_number ?: ''),
-            mb_strtolower($this->remarks ?? ''), // UPDATED: use remarks, not notes
+            mb_strtolower((string)($this->batch_number ?? '')),
+            mb_strtolower($this->remarks ?? ''),
         ];
         return trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($parts))));
     }
 
+    /** Pretty label for UI like "BATCH #5" */
+    public function getBatchLabelAttribute(): string
+    {
+        return 'BATCH #'.(int)($this->batch_number ?? 0);
+    }
+
     /* ============================ Mutators ============================= */
 
+    /**
+     * Normalize batch_number to a clean numeric string when possible.
+     */
     public function setBatchNumberAttribute($value): void
     {
         if (is_null($value)) {
             $this->attributes['batch_number'] = null;
             return;
         }
-        $norm = preg_replace('/\s+/', ' ', trim((string) $value));
+        $raw = trim((string)$value);
+
+        // Prefer numeric extraction (controller generates pure ints now)
+        if ($raw !== '' && preg_match('/(\d+)/', $raw, $m)) {
+            $this->attributes['batch_number'] = (string)((int)$m[1]);
+            return;
+        }
+
+        // Fallback: sanitized string (legacy)
+        $norm = preg_replace('/\s+/', ' ', $raw);
         $this->attributes['batch_number'] = mb_strtoupper($norm);
     }
 
@@ -309,7 +361,6 @@ class Production extends Model
             return;
         }
         $norm = trim((string)$value);
-        // soft clamp – DB column still enforces the real max
         $this->attributes['remarks'] = mb_substr($norm, 0, 500);
     }
 

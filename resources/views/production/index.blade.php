@@ -152,8 +152,12 @@
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="block text-sm text-gray-600 mb-1" for="batch_number">Batch Number</label>
-          <input type="text" id="batch_number" name="batch_number" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="Auto if empty" autocomplete="off">
+          <label class="block text-sm text-gray-600 mb-1">Batch Number</label>
+
+          {{-- UPDATED: display pretty label, submit raw integer --}}
+          <input type="text" id="batch_number_display" class="w-full rounded-xl bg-gray-50 border border-gray-300 px-3 py-2 font-semibold text-gray-900" value="Select a product…" readonly>
+          <input type="hidden" id="batch_number" name="batch_number" value="">
+          <p class="mt-1 text-[11px] text-gray-500">Shown as label only. Actual number increments per product starting at 1.</p>
         </div>
         <div>
           <label class="block text-sm text-gray-600 mb-1" for="production_date">Production Date</label>
@@ -165,7 +169,7 @@
         </div>
       </div>
 
-      {{-- Forecast only (removed Produced Qty & Unit Cost) --}}
+      {{-- Forecast only --}}
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label class="block text-sm text-gray-600 mb-1" for="forecasted_demand">Forecasted Demand</label>
@@ -173,9 +177,9 @@
         </div>
       </div>
 
-      {{-- Prices per pack/bag + Availability (accented via utilities, no <style>) --}}
+      {{-- Prices per pack/bag + Availability --}}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {{-- Pack (yellow) --}}
+        {{-- Pack --}}
         <div class="rounded-xl p-3 border border-yellow-300/60 shadow-[inset_0_0_0_1px_rgba(234,179,8,0.18)]">
           <div class="flex items-center justify-between mb-2">
             <label class="block text-sm text-gray-700 m-0">Per Pack</label>
@@ -195,7 +199,7 @@
           </div>
         </div>
 
-        {{-- Bag (red) --}}
+        {{-- Bag --}}
         <div class="rounded-xl p-3 border border-red-400/60 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.18)]">
           <div class="flex items-center justify-between mb-2">
             <label class="block text-sm text-gray-700 m-0">Per Bag</label>
@@ -214,6 +218,27 @@
             </div>
           </div>
         </div>
+      </div>
+
+      {{-- Image upload + live preview --}}
+      <div>
+        <label for="image" class="block text-sm text-gray-600 mb-1">Product Image</label>
+
+        <div id="imagePreview" class="hidden rounded-xl border border-gray-200 p-3 mb-2">
+          <img id="imagePreviewImg" src="#" alt="Selected image preview"
+               class="block w-full max-h-56 object-cover rounded-lg border border-gray-100">
+          <div id="imageMeta" class="mt-2 text-xs text-gray-500"></div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <input type="file"
+                 id="image"
+                 name="image"
+                 accept="image/jpeg,image/png,image/webp"
+                 class="block w-full text-sm text-gray-900 rounded-xl border border-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200">
+          <button type="button" id="clearImageBtn" class="btn btn-ghost">Clear</button>
+        </div>
+        <p class="mt-1 text-[11px] text-gray-500">JPG, PNG, or WebP • max 4&nbsp;MB • minimum 300×300 px</p>
       </div>
 
       {{-- Remarks --}}
@@ -251,7 +276,10 @@
     const productName  = document.getElementById('product_name');
     const toggleNewBtn = document.getElementById('toggleNewBtn');
     const shelfRow     = document.getElementById('shelfRow');
-    const batchInput   = document.getElementById('batch_number');
+
+    // UPDATED: batch fields (display + hidden)
+    const batchDisplay = document.getElementById('batch_number_display');
+    const batchHidden  = document.getElementById('batch_number');
 
     // image elements
     const imageInput   = document.getElementById('image');
@@ -273,7 +301,6 @@
 
     window.openAddModal = () => {
         resetModalFields();
-        ensureBatchNumber();
         modal?.classList.remove('hidden');
         modal?.classList.add('flex');
     };
@@ -281,14 +308,6 @@
         modal?.classList.add('hidden');
         modal?.classList.remove('flex');
     };
-
-    function ensureBatchNumber() {
-        if (!batchInput) return;
-        if (batchInput.value && batchInput.value.trim().length > 0) return;
-        const now = new Date();
-        const pad = n => n.toString().padStart(2,'0');
-        batchInput.value = `B-${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    }
 
     function resetModalFields() {
         form.reset();
@@ -298,8 +317,10 @@
         shelfRow.classList.add('hidden');
         toggleNewBtn.textContent = '+ Add new product';
         toggleNewBtn.setAttribute('aria-expanded', 'false');
-        if (batchInput) batchInput.value = '';
-        // init remarks counter after reset
+
+        if (batchDisplay) batchDisplay.value = 'Select a product…';
+        if (batchHidden)  batchHidden.value  = '';
+
         updateRemarksCount();
     }
 
@@ -310,13 +331,49 @@
         const expanded = !productName.classList.contains('hidden');
         toggleNewBtn.textContent = expanded ? 'Use existing product' : '+ Add new product';
         toggleNewBtn.setAttribute('aria-expanded', String(expanded));
+
         if (expanded) {
           productIdSel.value = '';
           productName.focus();
+          if (batchDisplay) batchDisplay.value = 'BATCH #1';
+          if (batchHidden)  batchHidden.value  = '';
         } else {
           productName.value = '';
+          if (batchDisplay) batchDisplay.value = 'Select a product…';
+          if (batchHidden)  batchHidden.value  = '';
         }
     });
+
+    productIdSel.addEventListener('change', async () => {
+      const id = Number(productIdSel.value || 0);
+      if (!id) {
+        if (batchDisplay) batchDisplay.value = 'Select a product…';
+        if (batchHidden)  batchHidden.value  = '';
+        return;
+      }
+      await prefillFromQuickAdd(id);
+    });
+
+    async function prefillFromQuickAdd(productId){
+      try {
+        const res = await fetch(`/production/quick-add/${productId}`, { headers: { 'X-Requested-With':'XMLHttpRequest' }});
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+
+        const pd = document.getElementById('production_date');
+        const ed = document.getElementById('expiration_date');
+        if (pd && d.production_date) pd.value = d.production_date;
+        if (ed && d.expiration_date) ed.value = d.expiration_date;
+
+        const pretty = (d.batch_label || (d.next_batch_number ? `BATCH #${d.next_batch_number}` : null));
+        if (batchDisplay) batchDisplay.value = pretty || 'BATCH #…';
+        if (batchHidden)  batchHidden.value  = (d.next_batch_number ? String(d.next_batch_number) : '');
+      } catch (e) {
+        console.warn('quick-add failed', e);
+        if (batchDisplay) batchDisplay.value = 'BATCH #…';
+        if (batchHidden)  batchHidden.value  = '';
+      }
+    }
 
     function hidePreview(){
       previewWrap?.classList.add('hidden');
@@ -331,13 +388,13 @@
 
       const validTypes = ['image/jpeg','image/png','image/webp'];
       if (!validTypes.includes(f.type)){
-        toast('Only JPG, PNG, or WebP allowed.', 'error');
+        toast('Only JPG, PNG, or WebP allowed.', 'notice');   // neutral
         imageInput.value = '';
         hidePreview();
         return;
       }
       if (f.size > MAX_MB * 1024 * 1024){
-        toast(`Image too large. Max ${MAX_MB}MB.`, 'error');
+        toast(`Image too large. Max ${MAX_MB}MB.`, 'notice');  // neutral
         imageInput.value = '';
         hidePreview();
         return;
@@ -348,7 +405,7 @@
         const w = previewImg.naturalWidth;
         const h = previewImg.naturalHeight;
         if (w < MIN_W || h < MIN_H){
-          toast(`Image too small. Min ${MIN_W}×${MIN_H}.`, 'error');
+          toast(`Image too small. Min ${MIN_W}×${MIN_H}.`, 'notice'); // neutral
           imageInput.value = '';
           hidePreview();
           URL.revokeObjectURL(url);
@@ -384,7 +441,7 @@
         const fd  = new FormData(form);
 
         if (!fd.get('product_id') && !fd.get('product_name')) {
-            toast('Please select a product or enter a new name.', 'error');
+            toast('Please select a product or enter a new name.', 'notice'); // neutral
             submitBtn.disabled = false;
             submitBtn.classList.remove('opacity-70','cursor-not-allowed');
             return;
@@ -401,7 +458,7 @@
                 if (res.status === 422) {
                     const j = await res.json().catch(()=>({}));
                     const msg = j?.errors ? Object.values(j.errors).flat().join('\n') : 'Validation error';
-                    toast(msg, 'error');
+                    toast(msg, 'notice'); // neutral for validation from server
                 } else {
                     const txt = await res.text();
                     const snippet = (txt||'').replace(/<[^>]*>/g,'').slice(0,200);
@@ -412,7 +469,7 @@
                       res.status === 500 ? 'Server error' :
                       res.status === 302 ? 'Redirected (auth?)' :
                       `HTTP ${res.status}`;
-                    toast(`${label}${snippet ? `\n${snippet}` : ''}`, 'error');
+                    toast(`${label}${snippet ? `\n${snippet}` : ''}`, 'error'); // real errors
                 }
                 return;
             }
@@ -459,11 +516,24 @@
         if (totals.recommended) totals.recommended.textContent = `${nf(t.recommendedProduction)} kg`;
     }
 
+    // NEUTRAL toast theme (light, calm)
     function toast(message, type='info') {
         const el = document.createElement('div');
-        el.className = `fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl text-sm shadow z-[9999]
-                        ${type==='success' ? 'bg-green-600 text-white' : type==='error' ? 'bg-red-600 text-white' : 'bg-gray-900 text-white'}`;
+        el.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl text-sm shadow border z-[9999]';
         el.textContent = message;
+
+        // palette
+        const apply = (cls) => el.classList.add(...cls.split(' '));
+        if (type === 'success') {
+          apply('bg-green-50 text-green-700 border-green-200');
+        } else if (type === 'error') {
+          apply('bg-gray-50 text-gray-700 border-gray-300');   // softer than red
+        } else if (type === 'notice') {
+          apply('bg-blue-50 text-blue-700 border-blue-200');   // neutral info
+        } else {
+          apply('bg-slate-50 text-slate-700 border-slate-200'); // default
+        }
+
         document.body.appendChild(el);
         setTimeout(() => { el.remove(); }, 3000);
     }
@@ -477,7 +547,7 @@
             fetch(`{{ route('production.filter') }}?category=${encodeURIComponent(category)}&sort=${encodeURIComponent(sort) }`)
                 .then(res => res.json())
                 .then(data => { document.getElementById('product-container').innerHTML = data.html; })
-                .catch(console.error);
+                .catch(() => toast('Could not apply filter.', 'error'));
         });
     });
     const clear = document.querySelector('.clear-filter');
@@ -486,7 +556,7 @@
         fetch(`{{ route('production.filter') }}?sort=${encodeURIComponent(sort) }`)
             .then(res => res.json())
             .then(data => { document.getElementById('product-container').innerHTML = data.html; })
-            .catch(console.error);
+            .catch(() => toast('Could not clear filter.', 'error'));
     });
 
     /* Quick Add (Sales) */
@@ -503,13 +573,13 @@
       btn.innerHTML = 'Loading…';
 
       try {
-        const res = await fetch(endpointFor(id), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const res = await fetch(endpointFor(id), { headers: { 'X-Requested-With':'XMLHttpRequest' } });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
         const payload = { id: data.id ?? id, name: (data.name || '').toString(), price: Number(data.price ?? 0) };
         if (typeof window.prefillSaleModal === 'function') window.prefillSaleModal(payload);
-        else toast('Sales modal not available on this page.', 'error');
+        else toast('Sales modal not available on this page.', 'notice');
       } catch (err) {
         console.warn('Quick Add error:', err);
         toast('Could not load Quick Add data.', 'error');

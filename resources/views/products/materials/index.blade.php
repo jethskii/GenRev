@@ -44,6 +44,18 @@
   .text-right{ text-align:right }
   .tabular-nums{ font-variant-numeric: tabular-nums }
   .row-actions{ display:flex; gap:.5rem; justify-content:flex-end }
+
+  /* Multi-select styles */
+  .select-col{ width:42px }
+  .row-select{ width:16px; height:16px }
+  #bulkBar{
+    position: sticky; top: 0; z-index: 30;
+    display: none;
+  }
+  #bulkBar.active{ display: block; }
+  @media print{
+    #bulkBar,[onclick],.btn{ display:none !important; }
+  }
 </style>
 @endsection
 
@@ -128,6 +140,20 @@
 
   {{-- Current recipe table --}}
   <div class="card">
+
+    {{-- Bulk bar for current lines --}}
+    <div id="bulkBar" class="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg mb-3">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="text-sm font-medium text-blue-900">
+          <span id="bulkCount">0</span> selected
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" class="btn btn-muted" id="bulkExportPdf">Export Selected PDF</button>
+          <button type="button" class="btn btn-primary" style="background:var(--red)" id="bulkDelete">Delete Selected</button>
+        </div>
+      </div>
+    </div>
+
     <div class="mb-3">
       <h2 class="text-lg font-semibold">Current Lines</h2>
       <p class="text-sm text-gray-600">Costs use the unit price snapshot stored for each line.</p>
@@ -137,6 +163,9 @@
       <table class="text-sm" id="current-table">
         <thead>
           <tr>
+            <th class="select-col p-2 text-center">
+              <input type="checkbox" id="selectAll" class="row-select" aria-label="Select all lines">
+            </th>
             <th class="text-left p-2">Material</th>
             <th class="text-right p-2 w-110">Qty</th>
             <th class="text-left p-2 w-110">Unit</th>
@@ -156,7 +185,10 @@
             $total = $qty * $snap;
             $grand += $total;
           @endphp
-          <tr>
+          <tr data-line-id="{{ $line->id }}">
+            <td class="p-2 text-center">
+              <input type="checkbox" class="row-select" data-line-id="{{ $line->id }}" aria-label="Select line {{ $line->id }}">
+            </td>
             <td class="p-2">{{ $mat->material_name ?? '—' }}</td>
             <td class="p-2 text-right tabular-nums">{{ number_format($qty, 3) }}</td>
             <td class="p-2">{{ $unit }}</td>
@@ -166,7 +198,8 @@
               <div class="row-actions">
                 <form method="POST"
                       action="{{ route('products.materials.destroy', [$product, $line]) }}"
-                      onsubmit="return confirm('Remove this line?')">
+                      onsubmit="return confirm('Remove this line?')"
+                      class="delete-form">
                   @csrf @method('DELETE')
                   <button class="btn btn-primary" style="background:var(--red)">Delete</button>
                 </form>
@@ -175,13 +208,13 @@
           </tr>
         @empty
           <tr>
-            <td colspan="6" class="p-4 text-gray-600">No lines yet. Add one above.</td>
+            <td colspan="7" class="p-4 text-gray-600">No lines yet. Add one above.</td>
           </tr>
         @endforelse
         </tbody>
         <tfoot>
           <tr>
-            <th colspan="4" class="p-2 text-right text-gray-700">Grand Total</th>
+            <th colspan="5" class="p-2 text-right text-gray-700">Grand Total</th>
             <th class="p-2 text-right font-semibold tabular-nums">₱ {{ number_format($grand, 2) }}</th>
             <th></th>
           </tr>
@@ -194,7 +227,7 @@
 
 @section('scripts')
 @php
-  // Build a clean array for JS (no arrow functions for max PHP compatibility)
+  // Build a clean array for JS
   $materialsPayload = $materials->map(function($m){
       return [
           'id'    => $m->id,
@@ -204,6 +237,11 @@
       ];
   })->values();
 @endphp
+
+{{-- PDF libs for Export Selected --}}
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
 <script>
 (() => {
   const materials = @json($materialsPayload);
@@ -363,6 +401,159 @@
       }
     });
   });
+
+  /************ Multi-select for Current Lines ************/
+  const selectAll = document.getElementById('selectAll');
+  const tbodyCurrent = document.querySelector('#current-table tbody');
+  const selected = new Set();
+  const bulkBar = document.getElementById('bulkBar');
+  const bulkCount = document.getElementById('bulkCount');
+  const bulkDelete = document.getElementById('bulkDelete');
+  const bulkExportPdf = document.getElementById('bulkExportPdf');
+
+  function rowCheckboxes(){ return Array.from(tbodyCurrent.querySelectorAll('.row-select')); }
+
+  function updateBulkUI(){
+    const count = selected.size;
+    bulkCount.textContent = count;
+    bulkBar.classList.toggle('active', count > 0);
+    const boxes = rowCheckboxes();
+    const allChecked = boxes.length > 0 && boxes.every(cb => cb.checked);
+    selectAll.checked = allChecked;
+    selectAll.indeterminate = count > 0 && !allChecked;
+  }
+
+  // Header select all
+  selectAll?.addEventListener('change', () => {
+    rowCheckboxes().forEach(cb => {
+      cb.checked = selectAll.checked;
+      const id = cb.dataset.lineId;
+      if (cb.checked) selected.add(id); else selected.delete(id);
+    });
+    updateBulkUI();
+  });
+
+  // Per row check
+  tbodyCurrent?.addEventListener('change', (e) => {
+    if (!e.target.matches('.row-select')) return;
+    const id = e.target.dataset.lineId;
+    if (!id) return;
+    if (e.target.checked) selected.add(id); else selected.delete(id);
+    updateBulkUI();
+  });
+
+  // Bulk delete: reuse existing forms for CSRF and policies
+  bulkDelete?.addEventListener('click', async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`Delete ${selected.size} selected line(s)?`)) return;
+    const ids = Array.from(selected);
+    for (let i = 0; i < ids.length; i++){
+      const id = ids[i];
+      const tr = tbodyCurrent.querySelector(`tr[data-line-id="${id}"]`);
+      const form = tr?.querySelector('form.delete-form');
+      if (form) form.submit();
+      await new Promise(r => setTimeout(r, 120));
+    }
+  });
+
+  // Export Selected to PDF
+  bulkExportPdf?.addEventListener('click', async () => {
+    if (selected.size === 0) return;
+    try{
+      const ids = Array.from(selected);
+      // Build minimal table with chosen lines
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Material</th>
+            <th style="text-align:right;padding:8px;border:1px solid #e5e7eb;">Qty</th>
+            <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;">Unit</th>
+            <th style="text-align:right;padding:8px;border:1px solid #e5e7eb;">Unit Price</th>
+            <th style="text-align:right;padding:8px;border:1px solid #e5e7eb;">Line Total</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+      const tb = table.querySelector('tbody');
+
+      let grand = 0;
+      ids.forEach(id => {
+        const tr = tbodyCurrent.querySelector(`tr[data-line-id="${id}"]`);
+        if (!tr) return;
+        const tds = tr.querySelectorAll('td');
+        const row = document.createElement('tr');
+        const get = (i) => (tds[i]?.textContent || '').trim();
+        const qty = get(2);
+        const unit = get(3);
+        const price = get(4);
+        const total = get(5);
+        // accumulate total by stripping currency and commas
+        const num = parseFloat((total || '0').replace(/[^\d.]/g,''));
+        grand += isNaN(num) ? 0 : num;
+
+        row.innerHTML = `
+          <td style="padding:8px;border:1px solid #e5e7eb;">${get(1)}</td>
+          <td style="padding:8px;text-align:right;border:1px solid #e5e7eb;">${qty}</td>
+          <td style="padding:8px;border:1px solid #e5e7eb;">${unit}</td>
+          <td style="padding:8px;text-align:right;border:1px solid #e5e7eb;">${price}</td>
+          <td style="padding:8px;text-align:right;border:1px solid #e5e7eb;">${total}</td>
+        `;
+        tb.appendChild(row);
+      });
+
+      const wrap = document.createElement('div');
+      wrap.style.padding = '20px';
+      const title = document.createElement('h2');
+      title.textContent = 'Selected Recipe Lines';
+      title.style.margin = '0 0 10px 0';
+      title.style.font = '600 16px/1.25 system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+
+      const grandEl = document.createElement('div');
+      grandEl.textContent = 'Grand Total: ₱ ' + grand.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2});
+      grandEl.style.margin = '10px 0 0 0';
+      grandEl.style.font = '600 14px/1.25 system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+      wrap.appendChild(title);
+      wrap.appendChild(table);
+      wrap.appendChild(grandEl);
+      document.body.appendChild(wrap);
+
+      const canvas = await html2canvas(wrap, { backgroundColor:'#ffffff', scale: Math.min(Math.max(window.devicePixelRatio || 1, 2), 3) });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation:'p', unit:'pt', format:'a4' });
+      const pageWidth  = pdf.internal.pageSize.getWidth();
+      const imgWidth = pageWidth - 40;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      if (imgHeight + 40 <= pdf.internal.pageSize.getHeight()){
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 20, 20, imgWidth, imgHeight, undefined, 'FAST');
+      } else {
+        // slice into pages
+        const pageHeight = pdf.internal.pageSize.getHeight() - 40;
+        const sliceHeightPx = (pageHeight * canvas.width) / imgWidth;
+        let top = 0, page = 0;
+        while (top < canvas.height){
+          const part = document.createElement('canvas');
+          part.width = canvas.width;
+          part.height = Math.min(sliceHeightPx, canvas.height - top);
+          const ctx = part.getContext('2d');
+          ctx.drawImage(canvas, 0, top, part.width, part.height, 0, 0, part.width, part.height);
+          const partData = part.toDataURL('image/jpeg', 0.95);
+          if (page > 0) pdf.addPage();
+          pdf.addImage(partData, 'JPEG', 20, 20, imgWidth, (part.height * imgWidth) / part.width, undefined, 'FAST');
+          top += sliceHeightPx; page++;
+        }
+      }
+      const d = new Date();
+      pdf.save(`Recipe_Selected_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.pdf`);
+      document.body.removeChild(wrap);
+    }catch(e){
+      console.error(e);
+      alert('Export failed. Please try again.');
+    }
+  });
+
 })();
 </script>
 @endsection

@@ -8,8 +8,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Str;
 use Carbon\Carbon;
+use Intervention\Image\Laravel\Facades\Image; // NEW
 use App\Models\Product;
 use App\Models\Production;
 use App\Models\Sale;
@@ -188,7 +191,10 @@ class ProductionController extends Controller
             'expiration_date'   => ['nullable','date','after_or_equal:production_date'],
             'category'          => ['nullable','string','max:120'],
             'remarks'           => ['nullable','string','max:500'],
-            'image'             => ['nullable','image','mimes:jpg,jpeg,png,webp','max:5120'],
+
+            // IMAGE: max 4MB, min 300×300, jpg/png/webp
+            'image'             => ['nullable','image','mimes:jpg,jpeg,png,webp','max:4096','dimensions:min_width=300,min_height=300'],
+
             // legacy accepted
             'current_inventory' => ['nullable','numeric','min:0'],
             'unit_cost'         => ['nullable','numeric','min:0'],
@@ -211,9 +217,14 @@ class ProductionController extends Controller
 
                 $product = Product::firstOrCreate(['product_name' => $name], $attrs);
 
-                if ($request->hasFile('image') && method_exists($product, 'setImageFromUpload')) {
-                    try { $product->setImageFromUpload($request->file('image')); }
-                    catch (\Throwable $e) { Log::warning('Product image upload failed', ['error' => $e->getMessage()]); }
+                // IMAGE: prefer Product::setImageFromUpload if present; else process here
+                if ($request->hasFile('image')) {
+                    if (method_exists($product, 'setImageFromUpload')) {
+                        try { $product->setImageFromUpload($request->file('image')); }
+                        catch (\Throwable $e) { Log::warning('Product image upload failed', ['error' => $e->getMessage()]); }
+                    } else {
+                        $this->applyImageToProduct($product, $request->file('image'));
+                    }
                 }
             } else {
                 $product = Product::findOrFail((int)$validated['product_id']);
@@ -227,9 +238,13 @@ class ProductionController extends Controller
 
                 $product->fill($updates);
 
-                if ($request->hasFile('image') && method_exists($product, 'setImageFromUpload')) {
-                    try { $product->setImageFromUpload($request->file('image')); }
-                    catch (\Throwable $e) { Log::warning('Product image upload failed', ['error' => $e->getMessage()]); }
+                if ($request->hasFile('image')) {
+                    if (method_exists($product, 'setImageFromUpload')) {
+                        try { $product->setImageFromUpload($request->file('image')); }
+                        catch (\Throwable $e) { Log::warning('Product image upload failed', ['error' => $e->getMessage()]); }
+                    } else {
+                        $this->applyImageToProduct($product, $request->file('image'));
+                    }
                 }
 
                 $product->save();
@@ -240,9 +255,16 @@ class ProductionController extends Controller
                 ? Carbon::parse($validated['expiration_date'])
                 : $prodDate->copy()->addDays((int)($product->shelf_life_days ?? 7));
 
-            $batchNumber = !empty($validated['batch_number'])
-                ? $this->uniqueBatchNumber($product, $validated['batch_number'])
-                : $this->uniqueBatchNumber($product);
+            // === Sequential Batch #: honor user numeric if unique, else next ===
+            $providedInt = $this->normalizeBatchInt($validated['batch_number'] ?? null);
+            if ($providedInt !== null) {
+                $candidate = (string)$providedInt;
+                if ($this->batchExists($product->id, $candidate)) {
+                    $providedInt = null;
+                }
+            }
+            $batchInt    = $providedInt ?? $this->nextBatchNumberInt($product);
+            $batchNumber = (string)$batchInt;
 
             // infer qty
             $qty = $this->inferQuantity($validated);
@@ -332,9 +354,16 @@ class ProductionController extends Controller
             ? Carbon::parse($validated['expiration_date'])
             : $prodDate->copy()->addDays((int)($product->shelf_life_days ?? 7));
 
-        $batchNumber = !empty($validated['batch_number'])
-            ? $this->uniqueBatchNumber($product, $validated['batch_number'])
-            : $this->uniqueBatchNumber($product);
+        // === Sequential Batch #: honor user numeric if unique, else next ===
+        $providedInt = $this->normalizeBatchInt($validated['batch_number'] ?? null);
+        if ($providedInt !== null) {
+            $candidate = (string)$providedInt;
+            if ($this->batchExists($product->id, $candidate)) {
+                $providedInt = null;
+            }
+        }
+        $batchInt    = $providedInt ?? $this->nextBatchNumberInt($product);
+        $batchNumber = (string)$batchInt;
 
         $typeLabel    = trim((string)($validated['type_label'] ?? ''));
         $snapshotName = trim((string)($validated['product_name_snapshot'] ?? ''));
@@ -432,7 +461,10 @@ class ProductionController extends Controller
             ->orderByDesc('production_date')->orderByDesc('id')
             ->get();
 
-        $nextBatchNumber  = $this->uniqueBatchNumber($product);
+        $nextBatchInt     = $this->nextBatchNumberInt($product);
+        $nextBatchNumber  = (string)$nextBatchInt;
+        $nextBatchLabel   = $this->formatBatchLabel($nextBatchInt);
+
         $defaultProdDate  = now()->toDateString();
         $defaultExpiry    = Carbon::parse($defaultProdDate)->addDays((int)($product->shelf_life_days ?? 7))->toDateString();
         $defaultUnitPrice = $this->defaultUnitPriceFromSales($product);
@@ -443,7 +475,7 @@ class ProductionController extends Controller
         $hasRecipe        = method_exists($product, 'recipes') ? $product->recipes()->exists() : false;
 
         return view('production.orders', compact(
-            'product','orders','nextBatchNumber','defaultProdDate','defaultExpiry','defaultUnitPrice',
+            'product','orders','nextBatchNumber','nextBatchLabel','defaultProdDate','defaultExpiry','defaultUnitPrice',
             'allProducts','variantProducts','consumeMaterials','hasRecipe'
         ));
     }
@@ -606,7 +638,7 @@ class ProductionController extends Controller
                 $purgeQuery->forceDelete();
             }
         } catch (\Throwable $e) {
-            Log::warning('Production auto-purge failed', ['error' => $e->getMessage()]);
+            Log::warning('Production auto-purge failed', ['error' => $e->getMessage() ]);
         }
 
         // List only records still within the 7-day window
@@ -805,49 +837,17 @@ class ProductionController extends Controller
         }
     }
 
+    /*** UPDATED: sequential-batch compatible unique generator (fallback paths) ***/
     private function uniqueBatchNumber(Product $product, ?string $preferred = null): string
     {
-        $normalize = fn(string $v) => mb_strtoupper(preg_replace('/\s+/', ' ', trim($v)));
-
-        if ($preferred && ($preferred = trim($preferred)) !== '') {
-            $candidate = $normalize($preferred);
+        $providedInt = $this->normalizeBatchInt($preferred);
+        if ($providedInt !== null) {
+            $candidate = (string)$providedInt;
             if (!$this->batchExists($product->id, $candidate)) {
                 return $candidate;
             }
-            $stem = $candidate;
-            $i = 0;
-            do {
-                $i++;
-                $candidate = sprintf('%s-%02d', $stem, $i);
-            } while ($this->batchExists($product->id, $candidate));
-            return $candidate;
         }
-
-        $prefix = $product->product_code
-            ? strtoupper(preg_replace('/[^A-Z0-9]/i', '', (string)$product->product_code))
-            : (strlen((string)$product->product_name)
-                ? strtoupper(substr(preg_replace('/\s+/', '', (string)$product->product_name), 0, 3))
-                : 'B');
-
-        $day  = now()->format('Ymd');
-        $stem = $prefix . '-' . $day;
-
-        $last = Production::where('product_id', $product->id)
-            ->where('batch_number', 'like', $stem.'-%')
-            ->orderByDesc('id')
-            ->value('batch_number');
-
-        $n = 0;
-        if ($last && preg_match('/-(\d+)\s*$/', (string)$last, $m)) {
-            $n = (int)$m[1];
-        }
-
-        do {
-            $n++;
-            $candidate = sprintf('%s-%04d', $stem, $n);
-        } while ($this->batchExists($product->id, $candidate));
-
-        return $candidate;
+        return (string)$this->nextBatchNumberInt($product);
     }
 
     private function batchExists(int $productId, string $batch): bool
@@ -1001,12 +1001,16 @@ class ProductionController extends Controller
 
     private function attachCardMedia($p): void
     {
-        $orig = $p->image_url ?? asset('images/default-product.png');
-        $p->card_image_url     = $orig;
-        $p->image_thumb_url    = null;
+        // Prefer processed fields (set by image upload). Fallback to legacy image_url or default.
+        $primary = $p->card_image_url
+            ?? $p->image_url
+            ?? asset('images/default-product.png');
+
+        $p->card_image_url     = $primary;
+        $p->card_image_srcset  = $p->card_image_srcset ?? null;
+        $p->image_thumb_url    = null;          // unused in current cards, kept for API compatibility
         $p->image_medium_url   = null;
-        $p->image_original_url = $orig;
-        $p->card_image_srcset  = null;
+        $p->image_original_url = $p->image_url ?? $primary;
     }
 
     private function productHasRecipe(Product $product): bool
@@ -1072,13 +1076,18 @@ class ProductionController extends Controller
                 : null
             );
 
+        // Provide next raw number and pretty label for the modal
+        $nextInt = $this->nextBatchNumberInt($product);
+
         return response()->json([
-            'id'               => $product->id,
-            'name'             => $product->product_name,
-            'price'            => $price,
-            'production_id'    => $latestBatch?->id,
-            'production_date'  => $productionDate,
-            'expiration_date'  => $expirationDate,
+            'id'                 => $product->id,
+            'name'               => $product->product_name,
+            'price'              => $price,
+            'production_id'      => $latestBatch?->id,
+            'production_date'    => $productionDate,
+            'expiration_date'    => $expirationDate,
+            'next_batch_number'  => $nextInt,                     // submit as hidden input
+            'batch_label'        => $this->formatBatchLabel($nextInt), // display-only: "BATCH #N"
         ]);
     }
 
@@ -1098,5 +1107,89 @@ class ProductionController extends Controller
         $packs = (int)($data['available_pack'] ?? 0);
         $bags  = (int)($data['available_bag']  ?? 0);
         return max(0, $packs + $bags);
+    }
+
+    /* =============================== BATCH HELPERS (NEW) =============================== */
+
+    /** Next sequential batch number (int) per product, starting at 1. */
+    private function nextBatchNumberInt(Product $product): int
+    {
+        $nums = Production::where('product_id', $product->id)
+            ->pluck('batch_number')
+            ->map(function ($v) {
+                if ($v === null) return 0;
+                $v = (string)$v;
+                if (ctype_digit($v)) return (int)$v;                 // already numeric
+                if (preg_match('/(\d+)\s*$/', $v, $m)) return (int)$m[1]; // extract trailing number from legacy formats
+                return 0;
+            });
+
+        $max = $nums->max() ?? 0;
+        return max(0, (int)$max) + 1;
+    }
+
+    /** Extract an integer from a user-provided batch number; null if invalid/empty. */
+    private function normalizeBatchInt(?string $raw): ?int
+    {
+        if ($raw === null) return null;
+        $raw = trim($raw);
+        if ($raw === '') return null;
+        if (ctype_digit($raw)) return (int)$raw;
+        if (preg_match('/(\d+)/', $raw, $m)) return (int)$m[1]; // “BATCH #12”, “B-2025-0001”, etc.
+        return null;
+    }
+
+    /** UI label like "BATCH #5". */
+    private function formatBatchLabel(int $n): string
+    {
+        return 'BATCH #'.$n;
+    }
+
+    /* =============================== IMAGE PROCESSOR (NEW) =============================== */
+
+    /**
+     * Process upload to 1200/800/400 WebP, auto-orient, scale down, and
+     * persist URLs on the product for immediate card rendering.
+     */
+    private function applyImageToProduct(Product $product, \Illuminate\Http\UploadedFile $file): void
+    {
+        try {
+            $uuid = (string) Str::uuid();
+            $base = "products/{$product->id}/{$uuid}";
+
+            // read + auto-orient
+            $img = Image::read($file->getRealPath())->orientate();
+
+            // cap master to 1600 for performance
+            $master = (clone $img)->scaleDown(1600, 1600);
+
+            $w1200 = (clone $master)->scaleDown(1200, 1200);
+            $w800  = (clone $master)->scaleDown(800, 800);
+            $w400  = (clone $master)->scaleDown(400, 400);
+
+            $path1200 = "{$base}-1200.webp";
+            $path800  = "{$base}-800.webp";
+            $path400  = "{$base}-400.webp";
+
+            Storage::disk('public')->put($path1200, (string) $w1200->toWebp(80), 'public');
+            Storage::disk('public')->put($path800,  (string) $w800->toWebp(80),  'public');
+            Storage::disk('public')->put($path400,  (string) $w400->toWebp(80),  'public');
+
+            $url1200 = Storage::disk('public')->url($path1200);
+            $url800  = Storage::disk('public')->url($path800);
+            $url400  = Storage::disk('public')->url($path400);
+
+            $srcset  = "{$url400} 400w, {$url800} 800w, {$url1200} 1200w";
+
+            $product->card_image_url    = $url800;   // good default for cards
+            $product->card_image_srcset = $srcset;
+            $product->image_url         = $url1200;  // keep a larger reference
+            $product->save();
+        } catch (\Throwable $e) {
+            Log::warning('applyImageToProduct failed', [
+                'product_id' => $product->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

@@ -159,10 +159,6 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production'])->group(
         Route::get('/filter',         'filter')->name('filter'); // AJAX cards refresh
         Route::get('/info/{name}',    'getProductInfo')->name('info');
 
-        // APIs used by Sales modal and dashboards
-        Route::get('/api/by-product/{product}', 'apiByProduct')->whereNumber('product')->name('api.byProduct');
-        Route::get('/{product}/batches',        'apiByProduct')->whereNumber('product')->name('batches.byProduct');
-
         // Lightweight types endpoints for chips & modals
         Route::get('/sales-types', 'salesTypes')->name('sales.types');              // ?product_id=123
         Route::get('/{parent}/types', 'suggestTypes')->whereNumber('parent')->name('types');
@@ -237,6 +233,22 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Sales'])->group(funct
     // Handy aliases
     Route::redirect('/sales-archived', '/sales/archived')->name('sales.archived.alias');
     Route::redirect('/sales-alias',    '/sales')->name('sales');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Shared Production API for Admin + Production + Sales
+| (used by Sales Add-Sale modal & dashboards)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production,Sales'])->group(function () {
+    Route::get('/production/api/by-product/{product}', [ProductionController::class, 'apiByProduct'])
+        ->whereNumber('product')
+        ->name('production.api.byProduct');
+
+    Route::get('/production/{product}/batches', [ProductionController::class, 'apiByProduct'])
+        ->whereNumber('product')
+        ->name('production.batches.byProduct');
 });
 
 /*

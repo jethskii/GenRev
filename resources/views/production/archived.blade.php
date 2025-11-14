@@ -153,7 +153,7 @@
 
       <div class="flex flex-wrap items-center gap-2">
         <span class="pill pill-gray">Archived</span>
-        <span class="pill pill-amber">Purge in 7 days</span>
+        <span class="pill pill-amber">Purge in 30 days</span>
         <span class="pill pill-green">Restorable</span>
         <span class="pill pill-red">Delete Forever</span>
       </div>
