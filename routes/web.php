@@ -16,8 +16,10 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProductRecipeController;
 use App\Http\Controllers\FallbackController;
 use App\Http\Controllers\UserManagementController;
+use App\Http\Controllers\LoginActivityController;
 
 use App\Http\Middleware\RoleMiddleware;
+use App\Http\Middleware\EnsureUserIsActive;
 
 /*
 |--------------------------------------------------------------------------
@@ -42,11 +44,21 @@ Route::redirect('/', '/dashboard')->name('home');
 |--------------------------------------------------------------------------
 */
 Route::middleware('guest')->group(function () {
-    Route::get('/login',     [AuthController::class, 'showLoginForm'])->name('login');
-    Route::post('/login',    [AuthController::class, 'login'])->middleware('throttle:20,1')->name('login.submit');
+    Route::get('/login',  [AuthController::class, 'showLoginForm'])->name('login');
 
-    Route::get('/register',  [AuthController::class, 'showRegisterForm'])->name('register');
-    Route::post('/register', [AuthController::class, 'register'])->name('register.submit');
+    Route::post('/login', [AuthController::class, 'login'])
+        ->middleware('throttle:20,1')
+        ->name('login.submit');
+
+    Route::get('/register', [AuthController::class, 'showRegisterForm'])->name('register');
+
+    // Register + OTP (request, verify, resend) all handled in one controller method.
+    Route::post('/register', [AuthController::class, 'register'])
+        ->middleware('throttle:10,1') // avoid OTP abuse
+        ->name('register.submit');
+    Route::post('/register/otp', [AuthController::class, 'requestOtp'])
+    ->name('register.otp');
+
 
     // legacy alias
     Route::redirect('/settings/notifications', '/notifications')->name('settings.notifications');
@@ -57,7 +69,7 @@ Route::middleware('guest')->group(function () {
 | Authenticated (all signed-in users)
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', EnsureUserIsActive::class])->group(function () {
 
     // Dashboard
     Route::get('/dashboard',      [DashboardController::class, 'index'])->name('dashboard');
@@ -88,7 +100,11 @@ Route::middleware('auth')->group(function () {
 | Admin-only
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', RoleMiddleware::class . ':Admin'])->group(function () {
+Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin'])->group(function () {
+
+    // ----- Login Activity (Log Book) -----
+    Route::get('/settings/login-activity', [LoginActivityController::class, 'index'])
+        ->name('settings.login-activity');
 
     // ----- User Management -----
     Route::prefix('users')->name('users.')->controller(UserManagementController::class)->group(function () {
@@ -109,13 +125,13 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin'])->group(function ()
 
     // ----- Employees -----
     Route::prefix('employees')->name('employees.')->controller(EmployeeController::class)->group(function () {
-        Route::get('/',                   'index')->name('index');
-        Route::post('/',                  'store')->name('store');
-        Route::get('/{id}/edit',          'edit')->whereNumber('id')->name('edit');
-        Route::put('/{id}',               'update')->whereNumber('id')->name('update');
-        Route::delete('/{id}',            'destroy')->whereNumber('id')->name('destroy');
-        Route::patch('/{id}/toggle-block','toggleBlock')->whereNumber('id')->name('toggle-block');
-        Route::get('/{id}',               'show')->whereNumber('id')->name('show'); // keep last
+        Route::get('/',                    'index')->name('index');
+        Route::post('/',                   'store')->name('store');
+        Route::get('/{id}/edit',           'edit')->whereNumber('id')->name('edit');
+        Route::put('/{id}',                'update')->whereNumber('id')->name('update');
+        Route::delete('/{id}',             'destroy')->whereNumber('id')->name('destroy');
+        Route::patch('/{id}/toggle-block', 'toggleBlock')->whereNumber('id')->name('toggle-block');
+        Route::get('/{id}',                'show')->whereNumber('id')->name('show'); // keep last
     });
 
     // Legacy employee aliases
@@ -129,7 +145,7 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin'])->group(function ()
 | Admin + Production Manager
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production'])->group(function () {
+Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Production'])->group(function () {
 
     // ===== Products (catalog + BOM management) =====
     Route::resource('products', ProductController::class);
@@ -145,7 +161,7 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production'])->group(
         Route::get('/materials/defaults',    [ProductRecipeController::class, 'defaults'])->name('products.materials.defaults');
         Route::post('/materials',            [ProductRecipeController::class, 'store'])->name('products.materials.store');
         Route::delete('/materials/{line}',   [ProductRecipeController::class, 'destroy'])
-            ->whereNumber('line')->name('products.materials.destroy'); // FIXED: correct controller
+            ->whereNumber('line')->name('products.materials.destroy'); // correct controller
 
         // Legacy aliases (optional, keep if referenced)
         Route::post('/recipe',               [ProductController::class, 'recipeStore'])->name('products.recipe.store');
@@ -204,7 +220,7 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production'])->group(
 | Admin + Sales
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', RoleMiddleware::class . ':Admin,Sales'])->group(function () {
+Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Sales'])->group(function () {
 
     // Sales resource
     Route::resource('sales', SalesController::class)->except(['create', 'show']);
@@ -241,7 +257,7 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Sales'])->group(funct
 | (used by Sales Add-Sale modal & dashboards)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production,Sales'])->group(function () {
+Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Production,Sales'])->group(function () {
     Route::get('/production/api/by-product/{product}', [ProductionController::class, 'apiByProduct'])
         ->whereNumber('product')
         ->name('production.api.byProduct');
@@ -256,7 +272,7 @@ Route::middleware(['auth', RoleMiddleware::class . ':Admin,Production,Sales'])->
 | Admin + Inventory
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', RoleMiddleware::class . ':Admin,Inventory'])->group(function () {
+Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Inventory'])->group(function () {
 
     // ===== Materials =====
     Route::prefix('materials')->name('materials.')->group(function () {

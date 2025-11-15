@@ -5,49 +5,39 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * Reserves a quantity from a Batch for a specific Sale (per-line later if you add SaleItems).
- *
- * @property int            $id
- * @property int            $batch_id
- * @property int            $sale_id
- * @property int            $allocated_qty
- * @property bool           $locked_by_admin
- * @property string|null    $override_reason
- * @property int|null       $approved_by
- * @property \Carbon\Carbon $approved_at
- * @property-read \App\Models\Batch $batch
- * @property-read \App\Models\Sale  $sale
- */
 class BatchAllocation extends Model
 {
     use SoftDeletes;
 
     protected $table = 'batch_allocations';
 
+    /**
+     * Mass assignable fields – must match your table.
+     */
     protected $fillable = [
-        'batch_id',
-        'sale_id',          // if you later move to SaleItems, change to order_item_id
-        'allocated_qty',
-        'locked_by_admin',
-        'override_reason',
-        'approved_by',
-        'approved_at',
+        'sale_id',
+        'order_item_id',   // optional, for future line-item use
+        'production_id',
+        'mode',            // 'kg' | 'pack' | 'bag'
+        'quantity_value',  // numeric qty reserved from that batch
     ];
 
     protected $casts = [
-        'allocated_qty'   => 'integer',
-        'locked_by_admin' => 'boolean',
-        'approved_at'     => 'datetime',
+        'sale_id'        => 'integer',
+        'order_item_id'  => 'integer',
+        'production_id'  => 'integer',
+        'quantity_value' => 'float',   // or 'decimal:3' if you prefer
     ];
 
-    public function batch()
-    {
-        return $this->belongsTo(Batch::class);
-    }
+    /* ---------------- Relationships ---------------- */
 
     public function sale()
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    public function production()
+    {
+        return $this->belongsTo(Production::class, 'production_id');
     }
 }

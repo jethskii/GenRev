@@ -1,4 +1,4 @@
-{{-- resources/views/sales/index.blade.php (LIGHT THEME + PACK/BAG PRICES + FIXED CHART INIT + PDF EXPORT + MULTI-SELECT) --}}
+{{-- resources/views/sales/index.blade.php (LIGHT THEME + PACK/BAG PRICES + FIXED CHART INIT + PDF EXPORT + MULTI-SELECT + FLASH POPUP) --}}
 @php
     /** @var \Illuminate\Support\Collection|\App\Models\Sale[] $sales */
     $statusColors = [
@@ -99,6 +99,15 @@
     display: none;
   }
   #bulkBar.active{ display: block; }
+
+  /* Flash popup (center bubble) */
+  #flashModal{
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  #flashModal.hidden-soft{
+    opacity:0; pointer-events:none; transform:translateY(-10px) scale(.98);
+  }
+
   @media print{
     body{ background:#ffffff !important; }
     .btn, .input-light, #exportPdfBtn, #bulkBar, [onclick]{ display:none !important; }
@@ -116,6 +125,30 @@
     <h1 class="text-2xl font-bold">Sales Overview</h1>
     <p class="text-sm text-gray-500">Trends and product breakdown at a glance.</p>
   </div>
+
+  {{-- INLINE ALERTS (top of page) --}}
+  @if (session('error'))
+    <div class="mb-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3 text-sm">
+      {{ session('error') }}
+    </div>
+  @endif
+
+  @if (session('info'))
+    <div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
+      {{ session('info') }}
+    </div>
+  @endif
+
+  @if ($errors->any())
+    <div class="mb-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3 text-sm">
+      <div class="font-semibold mb-1">There were problems saving this sale:</div>
+      <ul class="list-disc list-inside space-y-0.5">
+        @foreach ($errors->all() as $error)
+          <li>{{ $error }}</li>
+        @endforeach
+      </ul>
+    </div>
+  @endif
 
   {{-- KPIs --}}
   <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -309,13 +342,40 @@
 
       <div class="flex items-center justify-between text-sm text-gray-600 mt-4">
         <div>
-          <span class="mr-2">INV-</span>{{ now('Asia/Manila')->format('Ymd') }}<span class="mx-2">—</span>{{ $nextInvoice ?? '' }}
+          <span class="mr-2">Next invoice:</span>{{ $nextInvoice ?? '' }}
         </div>
         <div></div>
       </div>
     </div>
   </div>
 </div>
+
+{{-- Center flash popup (success / error) --}}
+@if (session('success') || session('error'))
+  <div id="flashModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+    <div class="max-w-sm w-full mx-4 rounded-2xl shadow-2xl bg-white px-6 py-5 text-center">
+      @if (session('success'))
+        <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-green-600">
+          ✓
+        </div>
+        <h3 class="text-base font-semibold text-gray-900 mb-1">Success</h3>
+        <p class="text-sm text-gray-700">{{ session('success') }}</p>
+      @else
+        <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+          !
+        </div>
+        <h3 class="text-base font-semibold text-gray-900 mb-1">Something went wrong</h3>
+        <p class="text-sm text-gray-700">{{ session('error') }}</p>
+      @endif
+
+      <button type="button"
+              data-close-flash="1"
+              class="mt-4 inline-flex items-center justify-center rounded-full bg-gray-900 text-white text-xs px-4 py-1.5">
+        Close
+      </button>
+    </div>
+  </div>
+@endif
 
 {{-- Add Sale Modal --}}
 @include('sales.partials.add-sale-modal', [
@@ -366,7 +426,10 @@ document.addEventListener('DOMContentLoaded', function(){
     if (open) {
       const form = el.querySelector('form');
       if (form) {
-        form.reset();
+        // keep old input when coming from validation error
+        if (!form.dataset.hasOld) {
+          form.reset();
+        }
         const btn = form.querySelector('button[type="submit"]');
         if (btn) { btn.disabled = false; btn.classList.remove('opacity-70','cursor-not-allowed'); }
       }
@@ -600,7 +663,6 @@ document.addEventListener('DOMContentLoaded', function(){
       const tr = document.querySelector(`tr[data-row-id="${id}"]`);
       const form = tr?.querySelector('form.delete-form');
       if (form) form.submit();
-      // Slight delay to allow redirect/processing when using non-AJAX forms
       await new Promise(r => setTimeout(r, 150));
     }
   });
@@ -704,5 +766,32 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 
 });
+
+/* ---------- FLASH POPUP AUTO-CLOSE ---------- */
+const flashModal = document.getElementById('flashModal');
+if (flashModal){
+  const hideFlash = () => {
+    flashModal.classList.add('hidden-soft');
+    setTimeout(()=>{ flashModal.style.display='none'; }, 260);
+  };
+  setTimeout(hideFlash, 2600);
+  flashModal.addEventListener('click', (e) => {
+    if (e.target.id === 'flashModal' || e.target.closest('[data-close-flash]')) {
+      hideFlash();
+    }
+  });
+}
+
+/* ---------- AUTO-OPEN ADD-SALE MODAL ON VALIDATION ERROR ---------- */
+@if ($errors->any())
+window.addEventListener('load', function () {
+  if (window.toggleAddSaleModal) {
+    const modal = document.getElementById('addSaleModal');
+    const form = modal ? modal.querySelector('form') : null;
+    if (form) { form.dataset.hasOld = '1'; }
+    window.toggleAddSaleModal(true);
+  }
+});
+@endif
 </script>
 @endpush

@@ -114,12 +114,19 @@
 
   {{-- Toolbar --}}
   <div class="soft-card p-4">
+    @php
+      $sortVal   = $sort   ?? 'deleted_at';
+      $qVal      = $q      ?? '';
+      $sourceVal = $source ?? '';
+    @endphp
+
     <form method="GET" action="{{ route('production.archived') }}" class="flex flex-col lg:flex-row gap-3 lg:items-end lg:justify-between">
-      <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
+      <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
+        {{-- Search --}}
+        <div class="md:col-span-2">
           <label class="block text-xs text-gray-500 mb-1">Search</label>
           <div class="relative">
-            <input type="text" name="q" value="{{ $q ?? '' }}" placeholder="Search batch, product, type…"
+            <input type="text" name="q" value="{{ $qVal }}" placeholder="Search batch, product, type…"
                    class="w-full rounded-lg border px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                    style="border-color:var(--line)">
             <span class="absolute right-2 top-2.5 text-gray-400">
@@ -131,9 +138,9 @@
           <p class="text-[11px] text-gray-500 mt-1">Tip: press <span class="kbd">Enter</span> to search</p>
         </div>
 
+        {{-- Sort --}}
         <div>
           <label class="block text-xs text-gray-500 mb-1">Sort by</label>
-          @php $sortVal = $sort ?? 'deleted_at'; @endphp
           <select name="sort"
                   class="w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
                   style="border-color:var(--line)">
@@ -145,13 +152,27 @@
           </select>
         </div>
 
+        {{-- Source filter --}}
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Archive Source</label>
+          <select name="source"
+                  class="w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                  style="border-color:var(--line)">
+            <option value=""          {{ $sourceVal===''?'selected':'' }}>All sources</option>
+            <option value="sales"     {{ $sourceVal==='sales'?'selected':'' }}>From Sales</option>
+            <option value="production"{{ $sourceVal==='production'?'selected':'' }}>From Production</option>
+            <option value="other"     {{ $sourceVal==='other'?'selected':'' }}>Other / Manual</option>
+          </select>
+        </div>
+
+        {{-- Buttons --}}
         <div class="flex items-end gap-2">
           <button type="submit" class="btn btn-secondary-green">Apply</button>
           <a href="{{ route('production.archived') }}" class="btn btn-ghost">Clear</a>
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 mt-3 lg:mt-0">
         <span class="pill pill-gray">Archived</span>
         <span class="pill pill-amber">Purge in 30 days</span>
         <span class="pill pill-green">Restorable</span>
@@ -186,6 +207,7 @@
           <th class="px-4 py-3">Batch</th>
           <th class="px-4 py-3">Product</th>
           <th class="px-4 py-3">Type</th>
+          <th class="px-4 py-3">Source</th>
           <th class="px-4 py-3 text-right">Qty</th>
           <th class="px-4 py-3">Prod Date</th>
           <th class="px-4 py-3">Expiry</th>
@@ -196,6 +218,22 @@
       </thead>
       <tbody>
         @forelse($items as $p)
+          @php
+            $reason = strtolower((string)($p->archived_reason ?? ''));
+            if (str_contains($reason,'sale')) {
+                $sourceLabel = 'From Sales';
+                $sourceClass = 'pill-blue';
+            } elseif (str_contains($reason,'production')) {
+                $sourceLabel = 'From Production';
+                $sourceClass = 'pill-green';
+            } elseif ($reason !== '') {
+                $sourceLabel = ucfirst($p->archived_reason);
+                $sourceClass = 'pill-gray';
+            } else {
+                $sourceLabel = 'Unknown';
+                $sourceClass = 'pill-gray';
+            }
+          @endphp
           <tr>
             <td class="px-4 py-3 align-top">
               <input type="checkbox" class="rowCheck h-4 w-4" value="{{ $p->id }}">
@@ -214,6 +252,9 @@
               <span class="chip">
                 {{ $p->product_name_snapshot ?? 'Base' }}
               </span>
+            </td>
+            <td class="px-4 py-3 align-top">
+              <span class="pill {{ $sourceClass }}">{{ $sourceLabel }}</span>
             </td>
             <td class="px-4 py-3 align-top text-right">
               {{ number_format((float)($p->quantity ?? 0), 2) }}
@@ -247,7 +288,7 @@
           </tr>
         @empty
           <tr>
-            <td colspan="10" class="px-4 py-10 text-center text-gray-500">
+            <td colspan="11" class="px-4 py-10 text-center text-gray-500">
               No archived items found. 🎉
             </td>
           </tr>

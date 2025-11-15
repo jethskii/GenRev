@@ -8,6 +8,7 @@ use App\Models\Production;
 use App\Models\Sale;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Services\DemandForecastService;
 
 class DashboardController extends Controller
 {
@@ -35,20 +36,53 @@ class DashboardController extends Controller
     }
 
     /**
+     * Try to resolve the variant / type label of a batch.
+     * This is where you plug in the actual column you use
+     * in your `productions` table for product variant.
+     */
+    private function resolveBatchVariantLabel(Production $b): ?string
+    {
+        if (!empty($b->type))              return $b->type;
+        if (!empty($b->variant))           return $b->variant;
+        if (!empty($b->packaging_type))    return $b->packaging_type;
+        if (!empty($b->size_label))        return $b->size_label;
+        if (!empty($b->packaging_size))    return $b->packaging_size;
+
+        // Fallback: try product-level label if you have one
+        if ($b->relationLoaded('product') && !empty($b->product->variant_label)) {
+            return $b->product->variant_label;
+        }
+
+        return null;
+    }
+
+    /**
+     * Simple helper to choose the recommended operational move
+     * for a batch that is close to expiry.
+     *
+     * We treat quantity as packs/bags, not kg.
+     */
+    private function recommendedExpiryAction(int $daysLeft, float $unitsAtRisk): string
+    {
+        if ($daysLeft <= 0) {
+            return 'Stop selling, check quality and adjust stock.';
+        }
+
+        if ($daysLeft <= 2) {
+            return 'Move as priority dispatch and brief sales to push this first.';
+        }
+
+        if ($daysLeft <= 5) {
+            return 'Suggest bundle or light promo and make sure store puts this in front.';
+        }
+
+        // 6 days and above inside our near window
+        return 'Monitor and rotate stock so near expiry goes out first.';
+    }
+
+    /**
      * Build simple global + per-product forecast series from historical sales
      * and current inventory.
-     *
-     * Returns:
-     *  - labels              => array of "M d" strings (forecast horizon)
-     *  - demandSeries        => array of floats (kg/day) global demand
-     *  - inventorySeries     => array of floats (kg) global inventory
-     *  - summary             => [
-     *        horizon_days,
-     *        global_stockout_date (Y-m-d|null),
-     *        total_recommended_production (float|null),
-     *    ]
-     *  - topProducts         => Collection of arrays:
-     *        [name, daily_demand, days_to_stockout, recommended_production]
      */
     private function buildForecast(int $lookbackDays = 60, int $horizonDays = 30): array
     {
@@ -121,7 +155,7 @@ class DashboardController extends Controller
         $productNames = Product::pluck('product_name', 'id');
 
         // ---------- 3) Average daily demand + risk metrics ----------
-        $avgDailyPerProduct   = []; // product_id => avg daily demand
+        $avgDailyPerProduct   = [];
         $riskProductsRaw      = [];
         $safetyHorizonDays    = 7;
 
@@ -169,7 +203,6 @@ class DashboardController extends Controller
             for ($i = 0; $i < $horizonDays; $i++) {
                 $day = $today->copy()->addDays($i);
 
-                // If inventory already depleted, mark stockout
                 if ($inv <= 0 && $stockoutDate === null) {
                     $stockoutDate = $day->toDateString();
                 }
@@ -212,16 +245,16 @@ class DashboardController extends Controller
 
     /** ---------------------------- Pages ----------------------------- */
 
-    /**
-     * Dashboard view with inline data for charts (Mon..Sun of current week)
-     * + 12-week production trend + predictive analytics.
-     */
-    public function index()
+    public function index(DemandForecastService $demandForecastService)
     {
-        $start = Carbon::now()->startOfWeek(); // Mon 00:00
-        $end   = Carbon::now()->endOfWeek();   // Sun 23:59
+        $start = Carbon::now()->startOfWeek();
+        $end   = Carbon::now()->endOfWeek();
+        $today = Carbon::today();
 
-        // ==== SAFE SQL pieces that match your table ====
+        // Rolling 7 day window for expiry (today + next 6 days)
+        $expiryStart = $today->copy();
+        $expiryEnd   = $today->copy()->addDays(6);
+
         $QTY   = 'COALESCE(sales.quantity_kg, sales.quantity, 0)';
         $UNIT  = 'COALESCE(sales.unit_price, sales.price, 0)';
         $REVEX = "$QTY * $UNIT";
@@ -229,7 +262,7 @@ class DashboardController extends Controller
 
         /* ======================== KPI cards ======================== */
         $totalProducts        = (int) Product::count();
-        $totalMaterialsWeight = (float) (Material::sum('quantity_kg') ?? 0); // on-hand stock
+        $totalMaterialsWeight = (float) (Material::sum('quantity_kg') ?? 0);
         $totalRevenue         = (float) (Sale::selectRaw("SUM($REVEX) as rev")->value('rev') ?? 0);
         $totalSales           = (int) Sale::count();
 
@@ -246,11 +279,11 @@ class DashboardController extends Controller
                 DB::raw("DATE(sales.date) as date"),
             ]);
 
-        /* ===================== Labels Mon..Sun ======================= */
+        /* ===================== Labels Mon..Sun (weekly charts) ======================= */
         $labels = [];
         $p = $start->copy();
         while ($p->lte($end)) {
-            $labels[] = $p->format('D'); // Mon, Tue, ...
+            $labels[] = $p->format('D');
             $p->addDay();
         }
 
@@ -285,7 +318,6 @@ class DashboardController extends Controller
             $cursor->addDay();
         }
 
-        // Biggest day by revenue (for potential use in Sales Report widget)
         $biggestSalesDay = null;
         if ($salesDaily->isNotEmpty()) {
             $maxRow = $salesDaily->sortByDesc('rev')->first();
@@ -316,27 +348,36 @@ class DashboardController extends Controller
             'cost' => (float) ($materialsUsage->sum('cost_used') ?? 0),
         ];
 
-        // Recent materials (created this week)
         $recentMaterials = Material::whereBetween('created_at', [$start, $end])
             ->orderByDesc('created_at')
             ->take(8)
             ->get();
 
-        /* =================== Expiration Trend (current week) =================== */
+        /* =================== Expiration Trend (rolling 7 days, per pack/bag + type) =================== */
+
         $expiryBuckets = [];
-        $cursor = $start->copy();
-        while ($cursor->lte($end)) {
+        $expiryLabels  = [];
+        $cursor = $expiryStart->copy();
+        while ($cursor->lte($expiryEnd)) {
             $expiryBuckets[$cursor->toDateString()] = 0.0;
+            $expiryLabels[] = $cursor->format('D'); // Mon, Tue etc, starting today
             $cursor->addDay();
         }
 
-        // Consider batches that could expire on/before end of this week
-        $batches = Production::with('product:id,shelf_life_days')
-            ->whereDate('production_date', '<=', $end->toDateString())
+        $expiryStats = [
+            'total_expiring' => 0.0,
+            'critical'       => 0.0,
+            'high'           => 0.0,
+            'medium'         => 0.0,
+        ];
+
+        $expiryPriorityRows = [];
+
+        $batches = Production::with('product:id,product_name,shelf_life_days')
+            ->whereDate('production_date', '<=', $expiryEnd->toDateString())
             ->get();
 
         foreach ($batches as $b) {
-            // Determine expiration date robustly
             $expDate = $b->expiration_date;
             if (empty($expDate) && $b->product && !empty($b->product->shelf_life_days)) {
                 $expDate = Carbon::parse($b->production_date)
@@ -347,19 +388,68 @@ class DashboardController extends Controller
                 continue;
             }
 
-            $expDate = Carbon::parse($expDate)->toDateString();
-            if (isset($expiryBuckets[$expDate])) {
-                $remaining = (float) ($b->current_inventory ?? $b->quantity ?? 0);
-                $expiryBuckets[$expDate] += max(0.0, $remaining);
+            $expCarbon = Carbon::parse($expDate);
+            $expYmd    = $expCarbon->toDateString();
+
+            // units (packs/bags)
+            $unitsRemaining = (float) (
+                $b->remaining_units
+                ?? $b->current_inventory_units
+                ?? $b->current_inventory
+                ?? $b->quantity_units
+                ?? $b->quantity
+                ?? 0
+            );
+
+            if ($unitsRemaining <= 0) {
+                continue;
+            }
+
+            $variantLabel = $this->resolveBatchVariantLabel($b);
+
+            // add to bucket if expiry between today and today+6
+            if ($expCarbon->betweenIncluded($expiryStart, $expiryEnd) && isset($expiryBuckets[$expYmd])) {
+                $expiryBuckets[$expYmd] += max(0.0, $unitsRemaining);
+            }
+
+            $daysDiff = $today->diffInDays($expCarbon, false);
+
+            // rolling 7 day window: today (0) to +6 days
+            if ($daysDiff >= 0 && $daysDiff <= 6) {
+                $daysLeft = max(0, $daysDiff);
+
+                $expiryStats['total_expiring'] += $unitsRemaining;
+
+                if ($daysLeft <= 2) {
+                    $expiryStats['critical'] += $unitsRemaining;
+                } elseif ($daysLeft <= 5) {
+                    $expiryStats['high'] += $unitsRemaining;
+                } elseif ($daysLeft <= 6) {
+                    $expiryStats['medium'] += $unitsRemaining;
+                }
+
+                $expiryPriorityRows[] = [
+                    'product_name'       => $b->product->product_name ?? 'Product',
+                    'batch_code'         => $b->batch_code ?? $b->batch_no ?? $b->id,
+                    'variant_label'      => $variantLabel,
+                    'days_left'          => $daysLeft,
+                    'units_at_risk'      => $unitsRemaining,
+                    'recommended_action' => $this->recommendedExpiryAction($daysLeft, $unitsRemaining),
+                ];
             }
         }
 
         $weeklyExpirySeries = [];
-        $cursor = $start->copy();
-        while ($cursor->lte($end)) {
+        $cursor = $expiryStart->copy();
+        while ($cursor->lte($expiryEnd)) {
             $weeklyExpirySeries[] = (float) ($expiryBuckets[$cursor->toDateString()] ?? 0);
             $cursor->addDay();
         }
+
+        $expiryPriority = collect($expiryPriorityRows)
+            ->sortBy('days_left')
+            ->values()
+            ->take(10);
 
         /* ============== Most Sold Products & Types (this week) ============== */
         $weekRevenue = (float) (Sale::whereBetween(DB::raw('DATE(sales.date)'), [$start->toDateString(), $end->toDateString()])
@@ -388,7 +478,7 @@ class DashboardController extends Controller
 
         /* =================== 12-week Production Trend =================== */
         $trendEnd    = Carbon::now();
-        $weekBuckets = $this->makeWeekBuckets($trendEnd, 12); // Monday keys
+        $weekBuckets = $this->makeWeekBuckets($trendEnd, 12);
         $windowStart = Carbon::parse(array_key_first($weekBuckets));
 
         $dailyProd = Production::whereBetween('production_date', [
@@ -415,17 +505,15 @@ class DashboardController extends Controller
         }
 
         /* =================== Predictive Analytics =================== */
-        // Positional args for max compatibility
         $forecast = $this->buildForecast(60, 30);
+        $productForecast = $demandForecastService->perProductForecast(7, 60);
 
         return view('dashboard', [
-            // Cards
             'totalProducts'            => $totalProducts,
             'totalMaterialsWeight'     => $totalMaterialsWeight,
             'totalRevenue'             => $totalRevenue,
             'totalSales'               => $totalSales,
 
-            // Tables/widgets
             'recentSales'              => $recentSales,
             'recentMaterials'          => $recentMaterials,
             'materialsUsage'           => $materialsUsage,
@@ -433,40 +521,44 @@ class DashboardController extends Controller
             'topProducts'              => $topProducts,
             'biggestSalesDay'          => $biggestSalesDay,
 
-            // Charts (current week)
             'labels'                   => $labels,
             'weeklyProductionSeries'   => $weeklyProductionSeries,
             'weeklySalesQtySeries'     => $weeklySalesQtySeries,
             'weeklySalesRevenueSeries' => $weeklySalesRevenueSeries,
-            'weeklyExpirySeries'       => $weeklyExpirySeries,
 
-            // Charts (12-week trend)
+            'expiryLabels'             => $expiryLabels,
+            'weeklyExpirySeries'       => $weeklyExpirySeries,
+            'expiryStats'              => $expiryStats,
+            'expiryPriority'           => $expiryPriority,
+
             'productionTrendLabels'    => $productionTrendLabels,
             'productionTrendSeries'    => $productionTrendSeries,
 
-            // Predictive Analytics
             'forecastLabels'           => $forecast['labels'],
             'forecastDemandSeries'     => $forecast['demandSeries'],
             'forecastInventorySeries'  => $forecast['inventorySeries'],
             'forecastSummary'          => $forecast['summary'],
             'forecastTopProducts'      => $forecast['topProducts'],
+
+            'productForecast'          => $productForecast,
         ]);
     }
 
-    /**
-     * Optional JSON endpoint: /dashboard/data
-     * Returns the same series so you can fetch via AJAX if you want later.
-     */
     public function data()
     {
         $start = Carbon::now()->startOfWeek();
         $end   = Carbon::now()->endOfWeek();
+        $today = Carbon::today();
+
+        // Rolling 7 day window for expiry (today + next 6 days)
+        $expiryStart = $today->copy();
+        $expiryEnd   = $today->copy()->addDays(6);
 
         $QTY   = 'COALESCE(sales.quantity_kg, sales.quantity, 0)';
         $UNIT  = 'COALESCE(sales.unit_price, sales.price, 0)';
         $REVEX = "$QTY * $UNIT";
 
-        // Labels
+        // Labels for weekly charts
         $labels = [];
         $p = $start->copy();
         while ($p->lte($end)) {
@@ -505,16 +597,27 @@ class DashboardController extends Controller
             $cursor->addDay();
         }
 
-        // Expiry (current week)
+        /* Expiry predictive + type for AJAX (rolling 7 days) */
         $expiryBuckets = [];
-        $cursor = $start->copy();
-        while ($cursor->lte($end)) {
+        $expiryLabels  = [];
+        $cursor = $expiryStart->copy();
+        while ($cursor->lte($expiryEnd)) {
             $expiryBuckets[$cursor->toDateString()] = 0.0;
+            $expiryLabels[] = $cursor->format('D');
             $cursor->addDay();
         }
 
-        $batches = Production::with('product:id,shelf_life_days')
-            ->whereDate('production_date', '<=', $end->toDateString())
+        $expiryStats = [
+            'total_expiring' => 0.0,
+            'critical'       => 0.0,
+            'high'           => 0.0,
+            'medium'         => 0.0,
+        ];
+
+        $expiryPriorityRows = [];
+
+        $batches = Production::with('product:id,product_name,shelf_life_days')
+            ->whereDate('production_date', '<=', $expiryEnd->toDateString())
             ->get();
 
         foreach ($batches as $b) {
@@ -528,19 +631,65 @@ class DashboardController extends Controller
                 continue;
             }
 
-            $expDate = Carbon::parse($expDate)->toDateString();
-            if (isset($expiryBuckets[$expDate])) {
-                $remaining = (float) ($b->current_inventory ?? $b->quantity ?? 0);
-                $expiryBuckets[$expDate] += max(0.0, $remaining);
+            $expCarbon = Carbon::parse($expDate);
+            $expYmd    = $expCarbon->toDateString();
+
+            $unitsRemaining = (float) (
+                $b->remaining_units
+                ?? $b->current_inventory_units
+                ?? $b->current_inventory
+                ?? $b->quantity_units
+                ?? $b->quantity
+                ?? 0
+            );
+
+            if ($unitsRemaining <= 0) {
+                continue;
+            }
+
+            $variantLabel = $this->resolveBatchVariantLabel($b);
+
+            if ($expCarbon->betweenIncluded($expiryStart, $expiryEnd) && isset($expiryBuckets[$expYmd])) {
+                $expiryBuckets[$expYmd] += max(0.0, $unitsRemaining);
+            }
+
+            $daysDiff = $today->diffInDays($expCarbon, false);
+
+            if ($daysDiff >= 0 && $daysDiff <= 6) {
+                $daysLeft = max(0, $daysDiff);
+
+                $expiryStats['total_expiring'] += $unitsRemaining;
+
+                if ($daysLeft <= 2) {
+                    $expiryStats['critical'] += $unitsRemaining;
+                } elseif ($daysLeft <= 5) {
+                    $expiryStats['high'] += $unitsRemaining;
+                } elseif ($daysLeft <= 6) {
+                    $expiryStats['medium'] += $unitsRemaining;
+                }
+
+                $expiryPriorityRows[] = [
+                    'product_name'       => $b->product->product_name ?? 'Product',
+                    'batch_code'         => $b->batch_code ?? $b->batch_no ?? $b->id,
+                    'variant_label'      => $variantLabel,
+                    'days_left'          => $daysLeft,
+                    'units_at_risk'      => $unitsRemaining,
+                    'recommended_action' => $this->recommendedExpiryAction($daysLeft, $unitsRemaining),
+                ];
             }
         }
 
         $weeklyExpirySeries = [];
-        $cursor = $start->copy();
-        while ($cursor->lte($end)) {
+        $cursor = $expiryStart->copy();
+        while ($cursor->lte($expiryEnd)) {
             $weeklyExpirySeries[] = (float) ($expiryBuckets[$cursor->toDateString()] ?? 0);
             $cursor->addDay();
         }
+
+        $expiryPriority = collect($expiryPriorityRows)
+            ->sortBy('days_left')
+            ->values()
+            ->take(10);
 
         /* 12-week production trend */
         $trendEnd    = Carbon::now();
@@ -570,7 +719,6 @@ class DashboardController extends Controller
             $productionTrendSeries[] = (float) $sumQty;
         }
 
-        // Predictive Analytics (for AJAX usage)
         $forecast = $this->buildForecast(60, 30);
 
         return response()->json([
@@ -578,7 +726,12 @@ class DashboardController extends Controller
             'weeklyProductionSeries'   => $weeklyProductionSeries,
             'weeklySalesQtySeries'     => $weeklySalesQtySeries,
             'weeklySalesRevenueSeries' => $weeklySalesRevenueSeries,
+
+            'expiryLabels'             => $expiryLabels,
             'weeklyExpirySeries'       => $weeklyExpirySeries,
+            'expiryStats'              => $expiryStats,
+            'expiryPriority'           => $expiryPriority,
+
             'productionTrendLabels'    => $productionTrendLabels,
             'productionTrendSeries'    => $productionTrendSeries,
 

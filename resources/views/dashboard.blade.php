@@ -42,9 +42,38 @@
     .sidebar{ background:#ffffff; border-right:1px solid var(--line); }
     .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; box-shadow:var(--shadow); }
 
+    /* Glassmorphism for Predictive Analytics card */
+    .glass-card{
+      position: relative;
+      background: radial-gradient(circle at top left, rgba(255,255,255,.22), rgba(255,255,255,.04));
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.3);
+      box-shadow:
+        0 18px 45px rgba(15,23,42,.18),
+        0 0 0 1px rgba(148,163,184,.18);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      overflow: hidden;
+    }
+    .glass-card::before{
+      content:''; position:absolute; inset:-40%;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(255,231,26,.22), transparent 55%),
+        radial-gradient(circle at 100% 0%, rgba(59,130,246,.22), transparent 55%);
+      opacity:.85; mix-blend-mode:screen; pointer-events:none;
+    }
+    .glass-card > *{ position: relative; z-index: 1; }
+    .glass-chart-wrap{ position:relative; height:14rem; }
+    @media (min-width:1280px){
+      .glass-chart-wrap{height:20rem;}
+    }
+
     .side-link{ display:block; padding:.75rem 1.25rem; border-radius:999px 0 0 999px; transition:.16s; color:var(--ink); }
     .side-link:hover{ background:var(--hover); }
-    .side-link--active{ background:linear-gradient(90deg, var(--brand-yellow-20) 0%, rgba(255,231,26,.12) 100%); border-left:3px solid var(--brand-red); font-weight:700; }
+    .side-link--active{
+      background:linear-gradient(90deg, var(--brand-yellow-20) 0%, rgba(255,231,26,.12) 100%);
+      border-left:3px solid var(--brand-red); font-weight:700;
+    }
 
     .btn{ display:inline-flex; align-items:center; justify-content:center; gap:.5rem; padding:.65rem 1rem; border-radius:12px; border:1px solid transparent; font-weight:700; }
     .btn-primary{ background:var(--brand-red); color:#fff; border-color:var(--brand-red); }
@@ -71,7 +100,10 @@
     .brand-title{ font-family:'Kalam',cursive; letter-spacing:.02em; color:var(--ink); }
     .muted{ color:var(--muted); }
 
-    @media (max-width:1024px){ #sidebar{ transform:translateX(-100%); transition:transform .3s ease; } #sidebar.open{ transform:translateX(0); } }
+    @media (max-width:1024px){
+      #sidebar{ transform:translateX(-100%); transition:transform .3s ease; }
+      #sidebar.open{ transform:translateX(0); }
+    }
     :where(a,button,[role="menuitem"],.side-link,.btn):focus{ outline:2px solid var(--brand-yellow); outline-offset:2px; }
 
     /* Neon status dot */
@@ -85,11 +117,9 @@
     /* Ensure Chart.js gets real pixels to draw into */
     .card .chart-wrap{position:relative; height:14rem;}
     .card .chart-wrap > canvas{display:block !important; width:100% !important; height:100% !important;}
-    /* optional: taller charts on xl screens */
     @media (min-width:1280px){
       .card .chart-wrap{height:22rem;}
     }
-    /* A11y utility */
     .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,1px,1px); white-space:nowrap; border:0; }
   </style>
 </head>
@@ -215,7 +245,7 @@
             @php
               $metrics = [
                 ['label' => 'Total Products',        'value' => $totalProducts,                          'note' => 'Based on weekly production', 'icon' => '📦'],
-                ['label' => 'Total Materials (kg)',  'value' => number_format($totalMaterialsWeight, 2), 'note' => 'Weekly materials',           'icon' => '⚖️'],
+                ['label' => 'Total Materials (kg)',  'value' => number_format($totalMaterialsWeight, 2), 'note' => 'Weekly materials on hand',   'icon' => '⚖️'],
                 ['label' => 'Total Revenue',         'value' => '₱' . number_format($totalRevenue, 2),   'note' => 'Weekly product sales',      'icon' => '💰'],
                 ['label' => 'Sales Transactions',    'value' => $totalSales,                             'note' => 'Weekly transactions',       'icon' => '📈'],
               ];
@@ -239,7 +269,7 @@
             <div class="flex items-center justify-between mb-4">
               <div>
                 <h2 class="text-lg font-semibold mb-1">📈 Sales Report</h2>
-                <p class="text-xs muted">Real-time sales analytics</p>
+                <p class="text-xs muted">Real time sales analytics</p>
               </div>
               <select id="salesRange" class="input w-40 py-1" aria-label="Sales range">
                 <option value="today">Today</option>
@@ -275,12 +305,12 @@
             </div>
           </div>
 
-          <!-- Most Sold Products & Types -->
+          <!-- Most Sold Products and Types -->
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-4">
               <div>
-                <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products & Types</h2>
-                <p class="text-xs muted">Top 5 product–type combos by revenue</p>
+                <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products and Types</h2>
+                <p class="text-xs muted">Top 5 product type combinations by revenue</p>
               </div>
               @if(\Illuminate\Support\Facades\Route::has('sales'))
                 <a href="{{ route('sales') }}" class="btn btn-green text-xs">View all</a>
@@ -291,7 +321,7 @@
               <div class="text-center py-8">
                 <div class="text-4xl mb-2" aria-hidden="true">📊</div>
                 <div class="text-sm muted">No sales data available</div>
-                <div class="text-xs muted mt-1">Start recording sales to see top product–type combos</div>
+                <div class="text-xs muted mt-1">Start recording sales to see top product type combinations</div>
               </div>
             @else
               <div class="space-y-3">
@@ -304,7 +334,7 @@
                         <div class="text-sm font-semibold" style="color:var(--brand-red)">₱{{ number_format($product->revenue ?? 0, 2) }}</div>
                       </div>
                       <div class="mb-1">
-                        <span class="chip">{{ $product->sale_type ?? '—' }}</span>
+                        <span class="chip">{{ $product->sale_type ?? 'N/A' }}</span>
                       </div>
                       <div class="flex items-center justify-between text-xs muted">
                         <span>{{ number_format($product->quantity ?? 0, 2) }} sold</span>
@@ -346,7 +376,7 @@
                 @forelse ($recentSales as $sale)
                   <tr class="border-t">
                     <td class="py-2 px-3">{{ $sale->product_name }}</td>
-                    <td class="py-2 px-3"><span class="chip">{{ $sale->sale_type ?? '—' }}</span></td>
+                    <td class="py-2 px-3"><span class="chip">{{ $sale->sale_type ?? 'N/A' }}</span></td>
                     <td class="py-2 px-3 text-right">{{ number_format($sale->quantity, 3) }}</td>
                     <td class="py-2 px-3 text-right">₱{{ number_format($sale->unit_price, 2) }}</td>
                     <td class="py-2 px-3">{{ \Carbon\Carbon::parse($sale->date)->timezone('Asia/Manila')->format('M d, Y') }}</td>
@@ -389,19 +419,141 @@
             @endif
           </div>
 
-          <!-- Expiration Trend -->
+          @php
+            // Expiry quick stats (packs or bags)
+            $expiryStats      = $expiryStats ?? [];
+            $totalExpiring    = $expiryStats['total_expiring'] ?? 0;
+            $criticalExpiring = $expiryStats['critical'] ?? 0;
+            $highExpiring     = $expiryStats['high'] ?? 0;
+            $mediumExpiring   = $expiryStats['medium'] ?? 0;
+
+            // Priority list for actions
+            $expiryPriority   = $expiryPriority ?? collect();
+          @endphp
+
+          <!-- Expiration Trend · Predictive and Action Oriented -->
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
-              <h2 class="text-base font-semibold">Expiration Trend</h2>
-              <label class="text-xs flex items-center gap-2">
-                <input id="toggleExpiry" type="checkbox" checked class="sr-only">
-                <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D</span>
-              </label>
+              <div>
+                <h2 class="text-base font-semibold">Expiration Risk and Actions</h2>
+                <p class="text-[11px] muted">
+                  Shows packs and bags that are closest to expiry and what to prioritize.
+                </p>
+              </div>
+              <div class="flex flex-col items-end gap-1 text-[11px]">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-100 text-[10px] font-semibold">
+                    Total at risk
+                  </span>
+                  <span class="font-semibold tabular-nums">{{ number_format($totalExpiring, 0) }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(248,113,113,.9)]"></span>
+                  <span class="muted">Critical (0 to 2 days):</span>
+                  <span class="font-semibold text-red-600 tabular-nums">{{ number_format($criticalExpiring, 0) }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,.9)]"></span>
+                  <span class="muted">High (3 to 5 days):</span>
+                  <span class="font-semibold text-amber-600 tabular-nums">{{ number_format($highExpiring, 0) }}</span>
+                </div>
+              </div>
             </div>
             <div class="h-56 relative">
-              <p id="expiryDesc" class="sr-only">Bar chart of items expiring this week.</p>
+              <p id="expiryDesc" class="sr-only">
+                3D bar chart of packs and bags expiring this week by day, with color coded urgency.
+              </p>
               <canvas id="expiryChart" aria-label="Expiry chart" aria-describedby="expiryDesc"></canvas>
-              <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No expiries this week</div>
+              <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted text-center px-4">
+                No expiries this week. You are safe from spoilage based on current data.
+              </div>
+            </div>
+
+            <p class="text-[11px] muted mt-2">
+              Bars represent expiring packs and bags per day. The higher the bar, the more aggressive you should be with promos, dispatch or slowing new production for that item.
+            </p>
+
+            <div class="border-t border-[var(--line)] mt-3 pt-3">
+              <div class="flex items-center justify-between mb-2">
+                <p class="text-xs font-semibold uppercase muted">Priority to sell or move first</p>
+                <p class="text-[11px] muted hidden sm:block">
+                  Auto suggestions based on days left before expiry.
+                </p>
+              </div>
+
+              @if($expiryPriority instanceof \Illuminate\Support\Collection && $expiryPriority->isNotEmpty())
+                <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
+                  @foreach($expiryPriority as $row)
+                    @php
+                      $pName   = $row->product_name ?? $row['product_name'] ?? 'Product';
+                      $batch   = $row->batch_code ?? $row['batch_code'] ?? null;
+                      $variant = $row->variant_label ?? $row['variant_label'] ?? null;
+                      $days    = $row->days_left ?? $row['days_left'] ?? null;
+                      $units   = $row->units_at_risk ?? $row['units_at_risk'] ?? 0; // packs or bags
+                      $action  = $row->recommended_action ?? $row['recommended_action'] ?? null;
+
+                      $badgeLabel = 'Monitor';
+                      $badgeClass = 'text-emerald-700 bg-emerald-50 border border-emerald-100';
+                      if (!is_null($days)) {
+                        $d = (int) $days;
+                        if ($d <= 0) {
+                          $badgeLabel = 'Very urgent';
+                          $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+                        } elseif ($d <= 2) {
+                          $badgeLabel = 'Sell today';
+                          $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+                        } elseif ($d <= 5) {
+                          $badgeLabel = 'Push this';
+                          $badgeClass = 'text-amber-700 bg-amber-50 border border-amber-100';
+                        }
+                      }
+                    @endphp
+                    <div class="flex items-start justify-between gap-3 text-xs">
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-0.5">
+                          <span class="font-medium truncate">{{ $pName }}</span>
+                          @if($variant)
+                            <span class="chip text-[10px]">{{ $variant }}</span>
+                          @endif
+                          @if($batch)
+                            <span class="chip text-[10px]">Batch {{ $batch }}</span>
+                          @endif
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $badgeClass }}">
+                            {{ $badgeLabel }}
+                          </span>
+                        </div>
+                        <div class="muted text-[11px]">
+                          {{ number_format($units, 0) }} pack(s) or bag(s) at risk
+                          @if(!is_null($days))
+                            •
+                            @if($days <= 0)
+                              expiry reached
+                            @elseif($days === 1)
+                              1 day before expiry
+                            @else
+                              {{ $days }} days before expiry
+                            @endif
+                          @endif
+                        </div>
+                      </div>
+                      @if($action)
+                        <div class="text-right text-[11px]">
+                          <div class="muted">Suggested move:</div>
+                          <div class="font-semibold">
+                            {{ $action }}
+                          </div>
+                        </div>
+                      @endif
+                    </div>
+                  @endforeach
+                </div>
+              @else
+                <p class="text-xs muted">
+                  Once expiry risk is detected, this section will list which batches to push first,
+                  how many packs or bags are at risk, and what operational move makes sense
+                  such as promo, priority dispatch, stock rotation or pausing production.
+                </p>
+              @endif
             </div>
           </div>
 
@@ -425,19 +577,33 @@
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Weekly Sales</h2>
-              <label class="text-xs flex items-center gap-2">
-                <input id="toggleSales" type="checkbox" checked class="sr-only">
-                <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D (Qty)</span>
-              </label>
+              <div class="flex items-center gap-3">
+                <select id="weeklySalesMode" class="input w-40 py-1 text-xs" aria-label="Weekly sales view mode">
+                  <option value="quantity" selected>Qty + Revenue</option>
+                  <option value="profit">Revenue + Profit</option>
+                  <option value="next">Next Production</option>
+                </select>
+                <label class="text-xs flex items-center gap-2">
+                  <input id="toggleSales" type="checkbox" checked class="sr-only">
+                  <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D (Qty)</span>
+                </label>
+              </div>
             </div>
             <div class="h-56 relative">
-              <p id="salesDesc" class="sr-only">Combo chart showing quantity sold and revenue.</p>
+              <p id="salesDesc" class="sr-only">Combo chart showing quantity sold, revenue and estimated profit.</p>
               <canvas id="salesChart" aria-label="Sales chart" aria-describedby="salesDesc"></canvas>
               <div id="salesEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
+            <p id="weeklySalesInsight" class="text-[11px] muted mt-2">
+              This week you recorded ₱{{ number_format($weekRevenue ?? 0, 2) }} in revenue.
+              Estimated profit is ₱{{ number_format($estimatedWeekProfit ?? 0, 2) }}
+              @if(!is_null($estimatedGrossMarginPct ?? null))
+                with about {{ $estimatedGrossMarginPct }}% gross margin.
+              @endif
+            </p>
           </div>
 
-          <!-- Predictive Analytics · Demand vs Inventory Forecast -->
+          <!-- Predictive Analytics · Production Planning Assistant -->
           @php
             $forecastSummary       = $forecastSummary ?? [];
             $forecastHorizonDays   = $forecastSummary['horizon_days'] ?? 30;
@@ -447,64 +613,141 @@
                 : 'No projected stockout';
             $globalRecommendedProd = $forecastSummary['total_recommended_production'] ?? null;
             $forecastTopProducts   = $forecastTopProducts ?? collect();
+
+            $atRiskCount = ($forecastTopProducts instanceof \Illuminate\Support\Collection)
+                ? $forecastTopProducts->count()
+                : 0;
+
+            $soonestDaysToStockout = null;
+            if ($forecastTopProducts instanceof \Illuminate\Support\Collection) {
+                foreach ($forecastTopProducts as $row) {
+                    $d = $row->days_to_stockout ?? $row['days_to_stockout'] ?? null;
+                    if (!is_null($d)) {
+                        $d = (int) $d;
+                        if (is_null($soonestDaysToStockout) || $d < $soonestDaysToStockout) {
+                            $soonestDaysToStockout = $d;
+                        }
+                    }
+                }
+            }
           @endphp
 
-          <div class="card p-5 rounded-2xl">
+          <div class="card glass-card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-3">
               <div>
-                <h2 class="text-base font-semibold">🔮 Predictive Analytics</h2>
-                <p class="text-xs muted">Projected demand vs inventory (next {{ $forecastHorizonDays }} days)</p>
+                <h2 class="text-base font-semibold">🔮 Production Planning Assistant</h2>
+                <p class="text-xs muted">What to produce next in the next {{ $forecastHorizonDays }} days</p>
               </div>
-              <div class="text-right text-xs">
+              <div class="text-right text-xs space-y-1">
                 <div class="muted">Global stockout:</div>
                 <div class="font-semibold">{{ $globalStockoutLabel }}</div>
+
                 @if(!is_null($globalRecommendedProd))
-                  <div class="mt-1 text-[10px] muted">Recommended production: <span class="font-semibold">{{ number_format($globalRecommendedProd, 2) }} kg</span></div>
+                  <div class="text-[10px] muted">
+                    Suggested total production:<br>
+                    <span class="font-semibold">{{ number_format($globalRecommendedProd, 2) }} kg</span>
+                  </div>
+                @endif
+
+                @if($atRiskCount > 0)
+                  <div class="text-[10px] muted">
+                    Items at risk: <span class="font-semibold">{{ $atRiskCount }}</span>
+                  </div>
+                @endif
+
+                @if(!is_null($soonestDaysToStockout))
+                  @php
+                    $urgencyClass = $soonestDaysToStockout <= 3 ? 'text-red-600' : ($soonestDaysToStockout <= 7 ? 'text-amber-600' : 'text-green-600');
+                    $soonestLabel = $soonestDaysToStockout <= 0 ? 'Already out of stock' : $soonestDaysToStockout . ' days';
+                  @endphp
+                  <div class="text-[10px] {{ $urgencyClass }}">
+                    Earliest stockout: <span class="font-semibold">{{ $soonestLabel }}</span>
+                  </div>
                 @endif
               </div>
             </div>
 
-            <div class="h-56 relative mb-3">
-              <p id="forecastDesc" class="sr-only">Forecasted daily demand and inventory for the upcoming days.</p>
+            <div class="glass-chart-wrap mb-2 relative">
+              <p id="forecastDesc" class="sr-only">
+                Bar chart of expected daily orders and remaining stock for the upcoming days.
+              </p>
               <canvas id="forecastChart" aria-label="Forecast chart" aria-describedby="forecastDesc"></canvas>
               <div id="forecastEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted text-center px-4">
-                Not enough historical data yet to generate a forecast. Keep recording production and sales to unlock predictive analytics.
+                Not enough historical data yet to generate a forecast. Keep recording production and sales to unlock production planning suggestions.
               </div>
             </div>
 
+            <p class="text-[11px] muted mb-3">
+              Bars show expected daily orders and estimated remaining stock if you do not add new production.
+            </p>
+
             <div class="border-t border-[var(--line)] pt-3 mt-1">
               <div class="flex items-center justify-between mb-2">
-                <p class="text-xs font-semibold uppercase muted">Products to watch</p>
+                <p class="text-xs font-semibold uppercase muted">What to produce next</p>
               </div>
               @if($forecastTopProducts instanceof \Illuminate\Support\Collection && $forecastTopProducts->isNotEmpty())
-                <div class="space-y-2">
+                <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
                   @foreach($forecastTopProducts as $row)
-                    <div class="flex items-center justify-between text-xs">
+                    @php
+                      $name      = $row->name ?? $row['name'] ?? 'Product';
+                      $daily     = $row->daily_demand ?? $row['daily_demand'] ?? 0;
+                      $daysLeft  = $row->days_to_stockout ?? $row['days_to_stockout'] ?? null;
+                      $rec       = $row->recommended_production ?? $row['recommended_production'] ?? null;
+
+                      $badgeLabel = 'Planned';
+                      $badgeClass = 'text-green-700 bg-emerald-50 border border-emerald-100';
+                      if (!is_null($daysLeft)) {
+                          $d = (int) $daysLeft;
+                          if ($d <= 0) {
+                              $badgeLabel = 'Out of stock';
+                              $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+                          } elseif ($d <= 3) {
+                              $badgeLabel = 'Urgent';
+                              $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+                          } elseif ($d <= 7) {
+                              $badgeLabel = 'Produce this week';
+                              $badgeClass = 'text-amber-700 bg-amber-50 border border-amber-100';
+                          }
+                      }
+                      $targetWindow = (!is_null($daysLeft) && (int)$daysLeft > 0) ? (int)$daysLeft : 1;
+                    @endphp
+
+                    <div class="flex items-center justify-between text-xs gap-3">
                       <div class="flex-1 min-w-0">
-                        <div class="font-medium truncate">{{ $row->name ?? $row['name'] ?? 'Product' }}</div>
+                        <div class="flex items-center gap-2 mb-0.5">
+                          <div class="font-medium truncate">{{ $name }}</div>
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $badgeClass }}">
+                            {{ $badgeLabel }}
+                          </span>
+                        </div>
                         <div class="muted text-[11px]">
-                          Daily demand ~ {{ number_format($row->daily_demand ?? $row['daily_demand'] ?? 0, 2) }} kg
+                          Daily demand about {{ number_format($daily, 2) }} kg
                         </div>
                       </div>
                       <div class="text-right ml-3">
-                        @php
-                          $daysLeft = $row->days_to_stockout ?? $row['days_to_stockout'] ?? null;
-                          $rec      = $row->recommended_production ?? $row['recommended_production'] ?? null;
-                        @endphp
                         @if(!is_null($daysLeft))
                           <div class="text-[11px] {{ $daysLeft <= 3 ? 'text-red-600' : ($daysLeft <= 7 ? 'text-amber-500' : 'text-green-600') }}">
-                            {{ $daysLeft <= 0 ? 'Out of stock' : $daysLeft . ' days left' }}
+                            {{ $daysLeft <= 0 ? 'No days left' : $daysLeft . ' days left' }}
                           </div>
                         @endif
-                        @if(!is_null($rec))
-                          <div class="text-[11px] muted">Produce: <span class="font-semibold">{{ number_format($rec, 1) }} kg</span></div>
+                        @if(!is_null($rec) && $rec > 0)
+                          <div class="text-[11px] muted">
+                            Produce
+                            <span class="font-semibold">{{ number_format($rec, 1) }} kg</span>
+                            in the next
+                            <span class="font-semibold">{{ $targetWindow }}</span>
+                            {{ $targetWindow === 1 ? 'day' : 'days' }}
+                          </div>
                         @endif
                       </div>
                     </div>
                   @endforeach
                 </div>
               @else
-                <p class="text-xs muted">Once enough sales history exists, this section will highlight which products are closest to running out.</p>
+                <p class="text-xs muted">
+                  Once enough sales history exists, this section will list which products you should produce next,
+                  how much, and how urgent they are.
+                </p>
               @endif
             </div>
           </div>
@@ -519,7 +762,7 @@
     <div class="flex items-center justify-between mb-2">
       <div>
         <h2 class="text-base font-semibold">Materials Used (This Week)</h2>
-        <p class="text-xs muted">Based on production × recipe</p>
+        <p class="text-xs muted">Based on production times recipe</p>
       </div>
       <div class="text-right text-xs muted">
         <div>Total Qty: {{ number_format($materialsUsageTotals['qty'] ?? 0, 3) }}</div>
@@ -624,7 +867,6 @@ const Bar3DPlugin = {
 
   <script>
 document.addEventListener('DOMContentLoaded', () => {
-  // 1) Ensure Chart.js loaded
   if (typeof Chart === 'undefined') {
     console.error('Chart.js not loaded.');
     return;
@@ -636,9 +878,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const prod   = (@json($weeklyProductionSeries ?? []) || []).map(v=>Number(v)||0);
   const qty    = (@json($weeklySalesQtySeries ?? []) || []).map(v=>Number(v)||0);
   const rev    = (@json($weeklySalesRevenueSeries ?? []) || []).map(v=>Number(v)||0);
+  const profit = (@json($weeklySalesProfitSeries ?? []) || []).map(v=>Number(v)||0);
   const exp    = (@json($weeklyExpirySeries ?? []) || []).map(v=>Number(v)||0);
 
-  // NEW: forecast data (next N days)
+  // weekly summaries for insights
+  const weekRevenueJS         = Number(@json($weekRevenue ?? 0));
+  const estimatedWeekProfitJS = Number(@json($estimatedWeekProfit ?? 0));
+  const estimatedMarginJS     = Number(@json($estimatedGrossMarginPct ?? 0));
+  const forecastTopProductsJS = @json($forecastTopProducts ?? []);
+
+  // Forecast data (next N days)
   const forecastLabelsRaw   = @json($forecastLabels ?? []);
   const forecastDemandRaw   = @json($forecastDemandSeries ?? []);
   const forecastInventoryRaw= @json($forecastInventorySeries ?? []);
@@ -649,7 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 3) Colors
   const C_RED='rgba(239,68,68,1)',     C_RED_30='rgba(239,68,68,.3)';
   const C_GREEN='rgba(16,185,129,1)',  C_GREEN_30='rgba(16,185,129,.3)';
-  const C_BLUE='rgba(37,99,235,1)',    C_BLUE_30='rgba(37,99,235,.3)';
+  const C_BLUE='rgba(37,99,235,1)',    C_BLUE_30='rgba(37,99,235,1,.3)';
   const C_YELLOW='rgba(245,158,11,1)', C_YELLOW_30='rgba(245,158,11,.3)';
   const gridColor='rgba(107,114,128,.25)', tickColor='#0f172a', barRadius=6;
 
@@ -671,6 +920,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return c ? new Chart(c.getContext('2d'), config) : null;
   };
 
+  // Production chart (3D bar)
   setEmptyBanner(prod, 'prodEmpty');
   const productionChart = mk('productionChart', {
     type: 'bar',
@@ -686,6 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Weekly sales (Qty + Revenue + Profit)
   setEmptyBanner([...qty, ...rev], 'salesEmpty');
   const salesChart = mk('salesChart', {
     data: {
@@ -695,7 +946,9 @@ document.addEventListener('DOMContentLoaded', () => {
           backgroundColor:C_BLUE_30, borderColor:C_BLUE, borderWidth:2, borderRadius:barRadius,
           topFaceColor:'rgba(37,99,235,.5)', sideFaceColor:'rgba(37,99,235,.3)' },
         { type:'line', label:'Revenue', data: rev, yAxisID:'y1',
-          borderColor:C_RED, backgroundColor:C_RED, borderWidth:3, tension:.35, pointRadius:3, fill:false }
+          borderColor:C_RED, backgroundColor:C_RED, borderWidth:3, tension:.35, pointRadius:3, fill:false },
+        { type:'line', label:'Estimated Profit', data: profit, yAxisID:'y1',
+          borderColor:C_GREEN, backgroundColor:C_GREEN, borderWidth:2, tension:.35, pointRadius:2.5, fill:false, hidden:true }
       ]
     },
     options: {
@@ -703,9 +956,22 @@ document.addEventListener('DOMContentLoaded', () => {
       plugins:{
         legend:{ labels:{ color: tickColor } },
         title:{ display:true, text:'Weekly Sales', color:'#0f172a' },
-        tooltip:{ callbacks:{ label:(ctx)=> ctx.dataset.type==='line'
-          ? `Revenue: ₱${Number(ctx.parsed.y).toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`
-          : `Qty: ${ctx.parsed.y}` } },
+        tooltip:{
+          callbacks:{
+            label:(ctx)=>{
+              const dsType = ctx.dataset.type;
+              const label  = ctx.dataset.label || '';
+              const val    = Number(ctx.parsed.y);
+              if (dsType === 'line' && label.includes('Revenue')) {
+                return `Revenue: ₱${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+              }
+              if (dsType === 'line' && label.includes('Profit')) {
+                return `Estimated profit: ₱${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+              }
+              return `Qty: ${val}`;
+            }
+          }
+        },
         bar3d:{ enabled:true, depth:10, lift:-6 }
       },
       scales:{
@@ -716,53 +982,142 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Sparkline (simple animated line)
   const spark = mk('salesTrendsChart', {
     type:'line',
-    data:{ labels, datasets:[{ label:'Revenue', data: rev, borderColor:C_RED, backgroundColor:C_RED, borderWidth:2, tension:.35, pointRadius:0, fill:false }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x:{ display:false }, y:{ display:false, beginAtZero:true } } }
+    data:{ labels, datasets:[{
+      label:'Revenue',
+      data: rev,
+      borderColor:C_RED,
+      backgroundColor:C_RED,
+      borderWidth:2,
+      tension:.35,
+      pointRadius:0,
+      fill:false
+    }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ x:{ display:false }, y:{ display:false, beginAtZero:true } },
+      animation:{ duration:700, easing:'easeOutCubic' }
+    }
   });
 
+  // Expiry chart (3D bar, neon gradient, bouncy)
   setEmptyBanner(exp, 'expEmpty');
   const expiryChart = mk('expiryChart', {
     type:'bar',
     data:{ labels, datasets:[{
-      label:'Expiring Items', data: exp,
-      backgroundColor:C_YELLOW_30, borderColor:C_YELLOW, borderWidth:2, borderRadius: barRadius,
-      topFaceColor:'rgba(245,158,11,.45)', sideFaceColor:'rgba(245,158,11,.28)'
+      label:'Packs or bags expiring', data: exp,
+      backgroundColor:(ctx) => {
+        const chart = ctx.chart;
+        const {ctx: c, chartArea} = chart;
+        if (!chartArea) return C_YELLOW_30;
+        const g = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+        g.addColorStop(0, 'rgba(250,204,21,.12)');
+        g.addColorStop(0.5,'rgba(245,158,11,.5)');
+        g.addColorStop(1, 'rgba(255,251,235,.95)');
+        return g;
+      },
+      borderColor:C_YELLOW,
+      borderWidth:2,
+      borderRadius: barRadius,
+      topFaceColor:'rgba(245,158,11,.55)',
+      sideFaceColor:'rgba(202,138,4,.35)'
     }]},
     options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color: tickColor } }, title:{ display:true, text:'Expirations This Week', color:'#0f172a' }, tooltip:{ callbacks:{ label:(ctx)=> `Expiring: ${Number(ctx.parsed.y).toLocaleString()}` } }, bar3d:{ enabled:true, depth:10, lift:-6 } },
-      scales:{ x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } }, y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } } }
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{
+        legend:{ labels:{ color: tickColor } },
+        title:{ display:true, text:'Packs and bags at risk this week', color:'#0f172a' },
+        tooltip:{
+          callbacks:{
+            label:(ctx)=>{
+              const v = Number(ctx.parsed.y);
+              return `Expiring packs or bags: ${v.toLocaleString()}`;
+            }
+          }
+        },
+        bar3d:{ enabled:true, depth:10, lift:-6 }
+      },
+      animation:{
+        duration:900,
+        easing:'easeOutCubic'
+      },
+      datasets:{
+        bar:{
+          animations:{
+            y:{
+              duration:1100,
+              easing:'easeOutElastic',
+              from:(ctx)=>{
+                const chart = ctx.chart;
+                const yAxis = chart.scales.y;
+                return yAxis ? yAxis.getPixelForValue(0) : chart.chartArea.bottom;
+              }
+            }
+          }
+        }
+      },
+      scales:{
+        x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
+        y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } }
+      }
     }
   });
 
-  // Predictive Analytics chart
+  // Predictive Analytics chart as glassy neon 3D bar graph
   setEmptyBanner([...forecastDemand, ...forecastInventory], 'forecastEmpty');
+
   const forecastChart = mk('forecastChart', {
-    type: 'line',
+    type: 'bar',
     data: {
       labels: forecastLabels,
       datasets: [
         {
-          label: 'Projected Demand',
+          type: 'bar',
+          label: 'Expected Daily Orders',
           data: forecastDemand,
-          borderColor: C_RED,
-          backgroundColor: C_RED_30,
+          yAxisID: 'y',
+          borderColor: 'rgba(239,68,68,1)',
+          backgroundColor: (ctx) => {
+            const chart = ctx.chart;
+            const {ctx: c, chartArea} = chart;
+            if (!chartArea) return C_RED_30;
+            const gradient = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+            gradient.addColorStop(0, 'rgba(248,113,113,.18)');
+            gradient.addColorStop(0.5, 'rgba(239,68,68,.45)');
+            gradient.addColorStop(1, 'rgba(248,250,252,.9)');
+            return gradient;
+          },
           borderWidth: 2,
-          tension: .35,
-          pointRadius: 2,
-          fill: false
+          borderRadius: 10,
+          topFaceColor: 'rgba(248,113,113,.55)',
+          sideFaceColor:'rgba(127,29,29,.35)',
+          hoverBorderWidth: 3
         },
         {
-          label: 'Projected Inventory',
+          type: 'bar',
+          label: 'Estimated Remaining Stock',
           data: forecastInventory,
-          borderColor: C_GREEN,
-          backgroundColor: C_GREEN_30,
+          yAxisID: 'y',
+          borderColor: 'rgba(34,197,94,1)',
+          backgroundColor: (ctx) => {
+            const chart = ctx.chart;
+            const {ctx: c, chartArea} = chart;
+            if (!chartArea) return C_GREEN_30;
+            const gradient = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+            gradient.addColorStop(0, 'rgba(22,163,74,.16)');
+            gradient.addColorStop(0.5, 'rgba(34,197,94,.45)');
+            gradient.addColorStop(1, 'rgba(240,253,250,.9)');
+            return gradient;
+          },
           borderWidth: 2,
-          tension: .35,
-          pointRadius: 2,
-          fill: false
+          borderRadius: 10,
+          topFaceColor: 'rgba(74,222,128,.55)',
+          sideFaceColor:'rgba(22,101,52,.35)',
+          hoverBorderWidth: 3
         }
       ]
     },
@@ -771,8 +1126,13 @@ document.addEventListener('DOMContentLoaded', () => {
       maintainAspectRatio: false,
       plugins: {
         legend: { labels: { color: tickColor } },
-        title:  { display: false },
+        title: { display: false },
         tooltip: {
+          backgroundColor: 'rgba(15,23,42,.9)',
+          borderColor: 'rgba(148,163,184,.6)',
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 10,
           callbacks: {
             label: (ctx) => {
               const val = Number(ctx.parsed.y);
@@ -780,15 +1140,28 @@ document.addEventListener('DOMContentLoaded', () => {
               return `${ds}: ${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })} kg`;
             }
           }
+        },
+        bar3d: { enabled: true, depth: 12, lift: -8 }
+      },
+      animation: { duration: 900, easing: 'easeOutCubic' },
+      datasets: {
+        bar: {
+          animations: {
+            y: {
+              duration: 1100,
+              easing: 'easeOutElastic',
+              from: (ctx) => {
+                const chart = ctx.chart;
+                const yAxis = chart.scales.y;
+                return yAxis ? yAxis.getPixelForValue(0) : chart.chartArea.bottom;
+              }
+            }
+          }
         }
       },
       scales: {
-        x: { ticks:{ color: tickColor }, grid:{ color: gridColor } },
-        y: {
-          beginAtZero: true,
-          ticks: { color: tickColor },
-          grid: { color: gridColor }
-        }
+        x: { ticks: { color: tickColor }, grid: { color: 'rgba(148,163,184,.12)', drawBorder: false } },
+        y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: 'rgba(148,163,184,.22)', drawBorder: false } }
       }
     }
   });
@@ -823,16 +1196,80 @@ document.addEventListener('DOMContentLoaded', () => {
     if (liftVal)  liftVal.textContent  = lift;
     if (dot3d) dot3d.style.background = (toggle3D?.checked ? 'var(--green)' : 'var(--red)');
 
-    set3D(productionChart, toggleProduction?.checked, depth, lift);
-    set3D(salesChart,      toggleSales?.checked,      depth, lift);
-    set3D(expiryChart,     toggleExpiry?.checked,     depth, lift);
-    // forecastChart is line-only (no 3D)
+    set3D(productionChart, toggleProduction ? toggleProduction.checked : true, depth, lift);
+    set3D(salesChart,      toggleSales ? toggleSales.checked : true,      depth, lift);
+    set3D(expiryChart,     toggleExpiry ? toggleExpiry.checked : true,   depth, lift);
+    set3D(forecastChart,   true,                                          depth, lift);
   };
 
   [toggle3D, toggleProduction, toggleSales, toggleExpiry, depthRange, liftRange]
     .forEach(el => el?.addEventListener('input', debounce(apply3D)));
 
   apply3D();
+
+  // Weekly Sales mode logic
+  const weeklySalesMode    = document.getElementById('weeklySalesMode');
+  const weeklySalesInsight = document.getElementById('weeklySalesInsight');
+
+  function updateWeeklySalesMode() {
+    if (!salesChart || !weeklySalesMode) return;
+    const mode     = weeklySalesMode.value;
+    const dsQty    = salesChart.data.datasets[0];
+    const dsRev    = salesChart.data.datasets[1];
+    const dsProfit = salesChart.data.datasets[2];
+
+    if (mode === 'quantity') {
+      dsQty.hidden    = false;
+      dsRev.hidden    = false;
+      dsProfit.hidden = true;
+      salesChart.options.plugins.title.text = 'Weekly Sales: Quantity and Revenue';
+
+      if (weeklySalesInsight) {
+        weeklySalesInsight.textContent =
+          `This week you recorded ₱${weekRevenueJS.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})} in revenue. ` +
+          `Estimated profit is ₱${estimatedWeekProfitJS.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}` +
+          (estimatedMarginJS ? ` with about ${estimatedMarginJS}% gross margin.` : '.');
+      }
+    } else if (mode === 'profit') {
+      dsQty.hidden    = true;
+      dsRev.hidden    = false;
+      dsProfit.hidden = false;
+      salesChart.options.plugins.title.text = 'Weekly Sales: Revenue and Estimated Profit';
+
+      if (weeklySalesInsight) {
+        weeklySalesInsight.textContent =
+          'Each point shows how much of your revenue is likely turning into profit this week based on materials cost. Use spikes to time promos and production pushes.';
+      }
+    } else if (mode === 'next') {
+      dsQty.hidden    = false;
+      dsRev.hidden    = true;
+      dsProfit.hidden = true;
+      salesChart.options.plugins.title.text = 'Weekly Sales: Next Production Focus';
+
+      if (weeklySalesInsight) {
+        if (Array.isArray(forecastTopProductsJS) && forecastTopProductsJS.length) {
+          const names = forecastTopProductsJS.slice(0, 3)
+            .map(p => p.name || p['name'] || 'Product');
+          const urgent     = forecastTopProductsJS[0] || {};
+          const urgentName = urgent.name || urgent['name'] || names[0] || 'Product';
+          const urgentDays = urgent.days_to_stockout ?? urgent['days_to_stockout'];
+
+          weeklySalesInsight.textContent =
+            `Based on recent demand, focus production on ${names.join(', ')}. ` +
+            `${urgentName} is closest to stockout` +
+            (urgentDays != null ? ` in about ${urgentDays} day(s).` : '.');
+        } else {
+          weeklySalesInsight.textContent =
+            'Keep logging sales and production to unlock product-level suggestions for what to produce next.';
+        }
+      }
+    }
+
+    salesChart.update();
+  }
+
+  weeklySalesMode?.addEventListener('change', updateWeeklySalesMode);
+  updateWeeklySalesMode();
 
   // For quick debugging
   window.GenRevDashboard = { productionChart, salesChart, expiryChart, spark, forecastChart, apply3D };

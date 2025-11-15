@@ -44,6 +44,7 @@ class Production extends Model
         'image_medium_path',
         'image_thumb_path',
         'remarks',
+        'archived_reason',
         // 'archived_reason',
     ];
 
@@ -65,6 +66,7 @@ class Production extends Model
         'deleted_at'        => 'datetime',
         'created_at'        => 'datetime',
         'updated_at'        => 'datetime',
+        'archived_reason'  => 'string',
         // 'archived_reason'  => 'string',
     ];
 
@@ -233,10 +235,18 @@ class Production extends Model
                     ->addDays(max(1, $ttl))
                     ->toDateTimeString();
     }
+ /* Archived Reason label for UI */
+public function getArchivedReasonLabelAttrubute(): string
+{
+    return match ($this->archived_reason) {
+        'from_sale' => 'From Sales',
+        'manual'    => 'Manual',
+        'expired'   => 'Expired',
+        default     => 'Unknown',
+    };
+}
 
-    /**
-     * Prefer product’s processed card image; then batch image; else default.
-     */
+    /* * Prefer product’s processed card image; then batch image; else default.*/
     public function getImageUrlAttribute(): string
     {
         // Prefer product-derived fields created by the controller’s image pipeline.
@@ -431,11 +441,13 @@ class Production extends Model
 
         $recompute = function (self $m) {
             if ($m->product_id) {
+                $productId = (int) $m->product_id;
+
                 if (App::bound(\App\Services\InventoryService::class)) {
                     App::make(\App\Services\InventoryService::class)
-                        ->recomputeProductBalance((int) $m->product_id);
+                        ->recomputeProductBalance($productId);
                 } else {
-                    $m->recomputeProductBalanceInternal((int) $m->product_id);
+                    $m->recomputeProductBalanceInternal($productId);
                 }
             }
         };
@@ -447,23 +459,40 @@ class Production extends Model
 
     /**
      * Local fallback recompute if no service is bound.
+     * Connected to Production + Sale, ignoring archived rows.
      */
     protected function recomputeProductBalanceInternal(int $productId): void
     {
-        $produced = (float) static::where('product_id', $productId)->sum('quantity');
+        // only count non-archived (not soft-deleted) batches
+        $produced = (float) static::query()
+            ->where('product_id', $productId)
+            ->whereNull('deleted_at')
+            ->sum('quantity');
 
-        $sold = (float) Sale::where('product_id', $productId)
+        $sold = (float) Sale::query()
+            ->where('product_id', $productId)
+            ->whereNull('deleted_at')
             ->selectRaw('COALESCE(SUM(quantity_kg),0) + COALESCE(SUM(quantity),0) as s')
             ->value('s');
 
         $balance  = max(0.0, $produced - $sold);
-        $latestProdDate = static::where('product_id', $productId)->max('production_date');
 
-        Product::whereKey($productId)->update([
-            'quantity'        => $balance,
-            'stock_status'    => $balance > 0 ? 'in_stock' : 'out_of_stock',
-            'production_date' => $latestProdDate,
-        ]);
+        $latestProdDate = static::query()
+            ->where('product_id', $productId)
+            ->whereNull('deleted_at')
+            ->max('production_date');
+
+        $data = [
+            'quantity'     => $balance,
+            'stock_status' => $balance > 0 ? 'in_stock' : 'out_of_stock',
+        ];
+
+        // don't push NULL into production_date if DB column is NOT NULL
+        if (!is_null($latestProdDate)) {
+            $data['production_date'] = $latestProdDate;
+        }
+
+        Product::whereKey($productId)->update($data);
     }
 
     /* ============================ Convenience ============================ */

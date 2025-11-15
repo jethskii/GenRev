@@ -556,23 +556,31 @@ class SalesController extends Controller
      */
     public function destroy(Sale $sale)
     {
-        $productId     = (int) $sale->product_id;
-        $productionId  = (int) ($sale->production_id ?? 0);
+    $productId     = (int) $sale->product_id;
+    $productionId  = (int) ($sale->production_id ?? 0);
 
-        DB::transaction(function () use ($sale, $productionId) {
-            $sale->delete();
+    DB::transaction(function () use ($sale, $productionId) {
+        // soft delete sale
+        $sale->delete();
 
-            if ($productionId > 0) {
-                $batch = Production::withTrashed()->find($productionId);
-                if ($batch && is_null($batch->deleted_at)) {
-                    $batch->delete();
-                }
+        // also send its batch to Production archive (if not already archived)
+        if ($productionId > 0) {
+            $batch = Production::withTrashed()->find($productionId);
+            if ($batch && is_null($batch->deleted_at)) {
+                // ✅ Mark that this batch was archived because of a sale delete
+                $batch->archived_reason = 'from_sale';
+                $batch->save();
+
+                $batch->delete();  // soft delete → archived
             }
-        });
+        }
+    });
 
-        $this->recomputeProductBalance($productId);
+    $this->recomputeProductBalance($productId);
 
-        return redirect()->route('production.archived')->with('success', 'Sale archived and related batch moved to Production archive.');
+    return redirect()
+        ->route('production.archived')
+        ->with('success', 'Sale archived and related batch moved to Production archive.');
     }
 
     /* ============================== Sales Archive (Trash) ============================== */
@@ -975,15 +983,25 @@ class SalesController extends Controller
         return back()->withErrors($errors)->withInput();
     }
 
-    protected function recomputeProductBalance($productId)
+    /**
+     * Recompute product stock using Production + Sale,
+     * ignoring archived rows and never forcing production_date = NULL.
+     */
+    protected function recomputeProductBalance(int $productId): void
     {
-        $produced = (float) Production::where('product_id', $productId)->sum('quantity');
+        // only count non-archived (not soft-deleted) batches
+        $produced = (float) Production::query()
+            ->where('product_id', $productId)
+            ->whereNull('deleted_at')
+            ->sum('quantity');
 
         $qtyCol = Schema::hasColumn('sales','quantity_kg') ? 'quantity_kg'
                : (Schema::hasColumn('sales','quantity') ? 'quantity' : null);
 
         if ($qtyCol) {
-            $sold = (float) Sale::where('product_id', $productId)
+            $sold = (float) Sale::query()
+                ->where('product_id', $productId)
+                ->whereNull('deleted_at')
                 ->selectRaw("SUM(COALESCE($qtyCol,0)) as total_sold")
                 ->value('total_sold');
         } else {
@@ -991,13 +1009,23 @@ class SalesController extends Controller
         }
 
         $balance  = max(0.0, $produced - $sold);
-        $latestProdDate = Production::where('product_id', $productId)->max('production_date');
 
-        Product::where('id', $productId)->update([
-            'quantity'        => $balance,
-            'stock_status'    => $balance > 0 ? 'in_stock' : 'out_of_stock',
-            'production_date' => $latestProdDate,
-        ]);
+        $latestProdDate = Production::query()
+            ->where('product_id', $productId)
+            ->whereNull('deleted_at')
+            ->max('production_date');
+
+        $data = [
+            'quantity'     => $balance,
+            'stock_status' => $balance > 0 ? 'in_stock' : 'out_of_stock',
+        ];
+
+        // Only update production_date when we have a real value
+        if (!is_null($latestProdDate)) {
+            $data['production_date'] = $latestProdDate;
+        }
+
+        Product::where('id', $productId)->update($data);
     }
 
     protected function buildProductCardHtml($productId)

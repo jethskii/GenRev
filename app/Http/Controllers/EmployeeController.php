@@ -100,7 +100,7 @@ class EmployeeController extends Controller
         // optional: create/link user
         if ($provision['create_login']) {
             $plainPassword = $provision['login_password'] ?: $this->generatePassword();
-            $role = $provision['role'] ?? 'staff';
+            $role          = $provision['role'] ?? 'staff';
 
             // ensure lowercase role consistency
             $role = Str::lower($role);
@@ -108,9 +108,10 @@ class EmployeeController extends Controller
             $user = User::updateOrCreate(
                 ['email' => $employee->email],
                 [
-                    'name'     => trim($employee->first_name.' '.$employee->last_name),
-                    'password' => Hash::make($plainPassword),
-                    'role'     => $role,
+                    'name'      => trim($employee->first_name.' '.$employee->last_name),
+                    'password'  => Hash::make($plainPassword),
+                    'role'      => $role,
+                    'is_active' => $employee->status === 'active',
                 ]
             );
 
@@ -146,12 +147,22 @@ class EmployeeController extends Controller
             $data['avatar_path'] = $request->file('avatar')->store('avatars', 'public');
         }
 
+        // Apply employee updates
         $employee->update($data);
+
+        // Keep linked user's is_active in sync with employee status
+        if ($employee->user_id) {
+            $linkedUser = User::find($employee->user_id);
+            if ($linkedUser) {
+                $linkedUser->is_active = $employee->status === 'active';
+                $linkedUser->save();
+            }
+        }
 
         // optional: provision/link on update
         if ($provision['create_login']) {
             $plainPassword = $provision['login_password']; // may be null; if null keep current user password
-            $role = $provision['role'] ? Str::lower($provision['role']) : null;
+            $role          = $provision['role'] ? Str::lower($provision['role']) : null;
 
             $user = $employee->user_id
                 ? User::find($employee->user_id)
@@ -174,6 +185,9 @@ class EmployeeController extends Controller
             if ($role) {
                 $user->role = $role;
             }
+
+            // Ensure is_active matches employee status
+            $user->is_active = $employee->status === 'active';
 
             $user->save();
             $employee->update(['user_id' => $user->id]);
@@ -200,8 +214,18 @@ class EmployeeController extends Controller
     public function toggleBlock(int $id)
     {
         $employee = Employee::findOrFail($id);
+
         $employee->status = $employee->status === 'active' ? 'inactive' : 'active';
         $employee->save();
+
+        // Sync linked user is_active flag (if exists)
+        if ($employee->user_id) {
+            $user = User::find($employee->user_id);
+            if ($user) {
+                $user->is_active = $employee->status === 'active';
+                $user->save();
+            }
+        }
 
         return back()->with('ok', "Employee is now {$employee->status}.");
     }

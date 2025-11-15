@@ -665,32 +665,35 @@ class ProductionController extends Controller
         return view('production.archived', compact('items', 'q', 'sort', 'purgedCount'));
     }
 
-    public function archive($id, Request $request)
-    {
-        $p = Production::findOrFail((int)$id);
+    public function archived(Request $request)
+{
+    $source = $request->string('source')->toString();   // 'sale', 'manual', 'expired', or null
 
-        if (Sale::where('production_id', $p->id)->exists()) {
-            return $this->archiveJsonOrBack($request, false, 'Cannot archive. This batch has linked sales.');
-        }
+    $query = Production::onlyTrashed()
+        ->with(['product','parentProduct'])
+        ->sortArchived($request->get('sort', 'deleted_at'));
 
-        $meta = [];
-        if (Schema::hasColumn('productions', 'archived_at')) {
-            $meta['archived_at'] = now();
-        }
-        if (Schema::hasColumn('productions', 'archived_reason')) {
-            $meta['archived_reason'] = trim((string)$request->get('reason', ''));
-        }
-        if (!empty($meta)) {
-            $p->fill($meta);
-        }
-
-        $p->delete(); // soft delete
-
-        $this->recomputeProductBalance((int)$p->product_id);
-
-        return $this->archiveJsonOrBack($request, true, 'Moved to Archive for 7 days.');
+    if ($source === 'sale') {
+        $query->where('archived_reason', 'from_sale');
+    } elseif ($source === 'manual') {
+        $query->where('archived_reason', 'manual');
+    } elseif ($source === 'expired') {
+        $query->where('archived_reason', 'expired');
     }
 
+    $productions = $query->paginate(30)->withQueryString();
+
+    return view('production.archived', [
+        'productions'   => $productions,
+        'source'        => $source,
+        'sourceOptions' => [
+            ''         => 'All sources',
+            'sale'     => 'From Sales',
+            'manual'   => 'Manual Archive',
+            'expired'  => 'Expired Auto-Archive',
+        ],
+    ]);
+}
     public function restore($id, Request $request)
     {
         $p = Production::withTrashed()->findOrFail((int)$id);

@@ -11,13 +11,21 @@
   }
 
   .glass-card {
-    background: linear-gradient(180deg, rgba(255, 255, 255, .95), rgba(245, 245, 245, .9));
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(0, 0, 0, .1);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .92), rgba(245, 245, 245, .88));
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, .75);
+    box-shadow:
+      0 18px 45px rgba(15, 23, 42, .08),
+      0 0 0 1px rgba(148, 163, 184, .18);
     color: #111; /* readable text */
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
   }
   .glass-card:hover {
-    box-shadow: 0 10px 30px rgba(18, 18, 18, .12);
+    transform: translateY(-2px);
+    box-shadow:
+      0 22px 55px rgba(15, 23, 42, .12),
+      0 0 0 1px rgba(148, 163, 184, .3);
+    border-color: rgba(148, 163, 184, .6);
   }
 
   /* Text improvements */
@@ -41,45 +49,122 @@
     color: #222;
   }
   .tab-active {
-    background: #ffffff;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, .05);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 2px 10px rgba(15, 23, 42, .06);
     font-weight: 600;
     color: #111;
   }
 
+  .field {
+    border: 1px solid rgba(148, 163, 184, .7);
+    border-radius: .75rem;
+    padding: .5rem .75rem;
+    background: rgba(255, 255, 255, .9);
+    color: #111;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, .03);
+  }
+  .field:focus-visible,
+  .field:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, .9);
+    box-shadow:
+      0 0 0 1px rgba(59, 130, 246, .5),
+      0 10px 25px rgba(59, 130, 246, .18);
+  }
+
+  /* Glass buttons */
   .btn {
     display: inline-flex;
     align-items: center;
     gap: .5rem;
-    border: 1px solid rgba(0, 0, 0, .15);
-    border-radius: .75rem;
-    padding: .5rem .75rem;
-    background: #f9f9f9;
-    color: #111;
+    border-radius: .9rem;
+    padding: .5rem .9rem;
     font-weight: 500;
-  }
-  .btn:hover { background: #f1f1f1; }
+    font-size: .875rem;
+    line-height: 1.2;
+    cursor: pointer;
 
+    background: radial-gradient(circle at 0% 0%,
+                rgba(255, 255, 255, .95),
+                rgba(248, 250, 252, .8));
+    border: 1px solid rgba(148, 163, 184, .65);
+    color: #0f172a;
+
+    backdrop-filter: blur(16px);
+    box-shadow:
+      0 10px 25px rgba(15, 23, 42, .08),
+      0 0 0 1px rgba(255, 255, 255, .7) inset;
+    transition:
+      background .18s ease,
+      box-shadow .18s ease,
+      transform .18s ease,
+      border-color .18s ease;
+  }
+  .btn svg {
+    flex-shrink: 0;
+  }
+  .btn:hover {
+    background: radial-gradient(circle at 0% 0%,
+                rgba(255, 255, 255, 1),
+                rgba(241, 245, 249, .96));
+    box-shadow:
+      0 14px 35px rgba(15, 23, 42, .16),
+      0 0 0 1px rgba(148, 163, 184, .9) inset;
+    transform: translateY(-1px);
+    border-color: rgba(148, 163, 184, .9);
+  }
+  .btn:active {
+    transform: translateY(0);
+    box-shadow:
+      0 8px 18px rgba(15, 23, 42, .18),
+      0 0 0 1px rgba(148, 163, 184, .9) inset;
+  }
+
+  /* Primary glass accent button (replaces black) */
   .btn-dark {
-    background: #111;
-    color: #fff;
-    border-color: #111;
+    background:
+      linear-gradient(135deg,
+        rgba(59, 130, 246, .16),
+        rgba(236, 72, 153, .16)),
+      radial-gradient(circle at 10% 0%,
+        rgba(248, 250, 252, .9),
+        rgba(241, 245, 249, .82));
+    border: 1px solid rgba(59, 130, 246, .5);
+    color: #020617;
+    box-shadow:
+      0 16px 40px rgba(37, 99, 235, .35),
+      0 0 0 1px rgba(255, 255, 255, .8) inset;
   }
-  .btn-dark:hover { opacity: .9; }
-
-  .field {
-    border: 1px solid rgba(0, 0, 0, .15);
-    border-radius: .75rem;
-    padding: .5rem .75rem;
-    background: #fff;
-    color: #111;
+  .btn-dark:hover {
+    background:
+      linear-gradient(135deg,
+        rgba(59, 130, 246, .22),
+        rgba(236, 72, 153, .22)),
+      radial-gradient(circle at 0% 0%,
+        rgba(255, 255, 255, .98),
+        rgba(241, 245, 249, .96));
+    border-color: rgba(37, 99, 235, .85);
+    box-shadow:
+      0 20px 50px rgba(37, 99, 235, .45),
+      0 0 0 1px rgba(255, 255, 255, .9) inset;
+    transform: translateY(-1px);
+  }
+  .btn-dark:active {
+    transform: translateY(0);
+    box-shadow:
+      0 10px 28px rgba(37, 99, 235, .4),
+      0 0 0 1px rgba(255, 255, 255, .9) inset;
   }
 
   /* Modal backdrop */
   .modal-backdrop {
     position: fixed; inset: 0;
-    background: rgba(0, 0, 0, .5);
+    background: radial-gradient(circle at 10% 0%,
+                 rgba(15, 23, 42, .55),
+                 rgba(15, 23, 42, .82));
     display: none;
+    backdrop-filter: blur(4px);
   }
   .modal {
     position: fixed; inset: 0;
@@ -116,20 +201,6 @@
         </svg>
         Add Employee
       </button>
-
-      <form method="GET" action="{{ route('employees.index') }}">
-        <input type="hidden" name="status" value="{{ request('status','all') }}">
-        <input type="hidden" name="search" value="{{ request('search') }}">
-        <input type="hidden" name="sort" value="{{ request('sort','first_asc') }}">
-        <input type="hidden" name="per_page" value="{{ request('per_page',12) }}">
-        <input type="hidden" name="export" value="csv">
-        <button class="btn" type="submit">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path stroke="currentColor" stroke-width="1.6" d="M12 3v12m0 0-4-4m4 4 4-4M4 17h16"/>
-          </svg>
-          Export CSV
-        </button>
-      </form>
     </div>
   </div>
 
@@ -177,6 +248,11 @@
   {{-- Employee cards --}}
   <div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
     @forelse ($employees as $emp)
+      @php
+        // Prefer explicit position; fall back to linked user's role if position is empty
+        $roleLabel = $emp->position ?: ($emp->user->role ?? null);
+      @endphp
+
       <div class="glass-card rounded-2xl p-4 transition">
         <div class="flex items-start gap-4">
           <div class="h-12 w-12 shrink-0 overflow-hidden rounded-full ring-1 ring-black/10 bg-gray-100">
@@ -196,7 +272,12 @@
                 {{ ucfirst($emp->status) }}
               </span>
             </div>
-            <p class="text-xs text-gray-600 leading-5">{{ $emp->position ?: '—' }}</p>
+
+            {{-- Position / Role --}}
+            <p class="text-xs text-gray-600 leading-5">
+              {{ $roleLabel ? ucwords($roleLabel) : '—' }}
+            </p>
+
             <p class="mt-1 text-xs text-gray-600">
               Email: <span class="break-all">{{ $emp->email ?? $emp->username }}</span>
             </p>
@@ -206,7 +287,9 @@
         <div class="mt-4 flex items-center justify-between">
           <form method="POST" action="{{ route('employees.toggle-block', $emp->id) }}">
             @csrf @method('PATCH')
-            <button type="submit" class="btn"> {{ $emp->status === 'active' ? 'Block' : 'Unblock' }} </button>
+            <button type="submit" class="btn">
+              {{ $emp->status === 'active' ? 'Block' : 'Unblock' }}
+            </button>
           </form>
 
           <a href="{{ route('employees.show', $emp->id) }}" class="btn-dark rounded-lg px-3 py-1 text-sm">

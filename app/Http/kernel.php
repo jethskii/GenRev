@@ -1,11 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http;
 
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
 class Kernel extends HttpKernel
 {
+    /**
+     * Global HTTP middleware stack.
+     */
     protected $middleware = [
         \App\Http\Middleware\TrustProxies::class,
         \App\Http\Middleware\TrustHosts::class,
@@ -16,6 +21,9 @@ class Kernel extends HttpKernel
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
     ];
 
+    /**
+     * Route middleware groups.
+     */
     protected $middlewareGroups = [
         'web' => [
             \App\Http\Middleware\EncryptCookies::class,
@@ -25,6 +33,7 @@ class Kernel extends HttpKernel
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
+
         'api' => [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'throttle:api',
@@ -32,7 +41,9 @@ class Kernel extends HttpKernel
         ],
     ];
 
-    // Laravel 11/12 uses this
+    /**
+     * Middleware aliases (Laravel 11+ prefers this).
+     */
     protected $middlewareAliases = [
         'auth'             => \App\Http\Middleware\Authenticate::class,
         'auth.basic'       => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
@@ -44,11 +55,17 @@ class Kernel extends HttpKernel
         'signed'           => \Illuminate\Routing\Middleware\ValidateSignature::class,
         'throttle'         => \Illuminate\Routing\Middleware\ThrottleRequests::class,
 
-        // ✅ your RBAC
+        // Role-based access control
         'role'             => \App\Http\Middleware\RoleMiddleware::class,
+
+        // Blocked / inactive users check
+        'active'           => \App\Http\Middleware\EnsureUserIsActive::class,
     ];
 
-    // Kept for backward compatibility (<= Laravel 10)
+    /**
+     * Backwards-compatible route middleware (<= Laravel 10 style).
+     * Safe to keep while you transition.
+     */
     protected $routeMiddleware = [
         'auth'             => \App\Http\Middleware\Authenticate::class,
         'auth.basic'       => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
@@ -60,14 +77,22 @@ class Kernel extends HttpKernel
         'signed'           => \Illuminate\Routing\Middleware\ValidateSignature::class,
         'throttle'         => \Illuminate\Routing\Middleware\ThrottleRequests::class,
 
-        // ✅ your RBAC
+        // Role-based access control
         'role'             => \App\Http\Middleware\RoleMiddleware::class,
+
+        // Blocked / inactive users check
+        'active'           => \App\Http\Middleware\EnsureUserIsActive::class,
     ];
 
+    /**
+     * Priority for non-global middleware.
+     */
     protected $middlewarePriority = [
         \Illuminate\Session\Middleware\StartSession::class,
         \Illuminate\View\Middleware\ShareErrorsFromSession::class,
         \App\Http\Middleware\Authenticate::class,
+        // Run active-check right after we know the user
+        \App\Http\Middleware\EnsureUserIsActive::class,
         \Illuminate\Routing\Middleware\ThrottleRequests::class,
         \Illuminate\Auth\Middleware\Authorize::class,
     ];

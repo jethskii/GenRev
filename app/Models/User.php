@@ -130,6 +130,11 @@ class User extends Authenticatable
         return $this->hasMany(BatchAllocation::class, 'approved_by');
     }
 
+    public function loginActivities(): HasMany
+    {
+        return $this->hasMany(LoginActivity::class, 'user_id');
+    }
+
     /* =========================================================================
      |  Mutators / Accessors (Normalizers)
      |  ========================================================================= */
@@ -333,6 +338,32 @@ class User extends Authenticatable
     public function getAvatarUrlAttribute(): ?string
     {
         return $this->photo ? (string) $this->photo : null;
+    }
+
+    /* =========================================================================
+     |  Login Helper
+     |  ========================================================================= */
+
+    /**
+     * Central rule: can this user actually log in?
+     * - must be active
+     * - if linked to an employee, that employee must also be allowed
+     */
+    public function canLogin(): bool
+    {
+        // Base rule: user record itself must be active
+        if (!$this->is_active) {
+            return false;
+        }
+
+        // If there is a linked employee, respect their login rule too
+        $emp = $this->relationLoaded('employee') ? $this->employee : $this->employee()->first();
+
+        if ($emp && method_exists($emp, 'canLogin') && !$emp->canLogin()) {
+            return false;
+        }
+
+        return true;
     }
 
     /* =========================================================================

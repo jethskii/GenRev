@@ -17,6 +17,27 @@
     font-size: .85rem;
     font-weight: 600;
   }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:.4rem;
+    border:1px solid rgba(0,0,0,.15);
+    border-radius:.75rem;
+    padding:.45rem .85rem;
+    background:#f9f9f9;
+    color:#111;
+    font-weight:500;
+    font-size:.875rem;
+  }
+  .btn:hover{background:#f1f1f1}
+  .btn-primary{
+    background:linear-gradient(135deg,#4f46e5,#2563eb);
+    color:#fff;
+    border-color:transparent;
+  }
+  .btn-primary:hover{
+    filter:brightness(.97);
+  }
 </style>
 @endsection
 
@@ -54,7 +75,7 @@
 
     <div class="mt-6 flex justify-between">
       <a href="{{ route('employees.index') }}" class="btn">← Back</a>
-      <a href="{{ route('employees.edit', $employee->id) }}" class="btn-dark">Edit</a>
+      <a href="{{ route('employees.edit', $employee->id) }}" class="btn btn-primary">Edit</a>
     </div>
   </div>
 </div>

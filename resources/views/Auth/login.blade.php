@@ -45,7 +45,7 @@
     filter:brightness(.78);  /* keep text readable */
   }
 
-  /* Your login card (kept exactly, just glassy) */
+  /* Your login card */
   .card{
     position:relative; z-index:2;
     width:100%; max-width:560px;
@@ -55,6 +55,7 @@
     box-shadow:0 1px 2px rgba(0,0,0,.04),0 12px 28px rgba(0,0,0,.1);
     padding:1.85rem;
     backdrop-filter:blur(10px);
+    transition:transform .18s ease, box-shadow .18s ease;
   }
 
   .brand-title{font-family:'Kalam',cursive;font-size:1.75rem;margin:0 0 .25rem;text-align:center}
@@ -78,12 +79,66 @@
   .toggle-eye{position:absolute;right:.75rem;top:50%;transform:translateY(-50%);width:20px;height:20px;color:#64748b;cursor:pointer;opacity:.7}
   .toggle-eye:hover{opacity:1}
 
-  .btn{display:inline-flex;justify-content:center;align-items:center;gap:.5rem;font-weight:700;border-radius:.8rem;padding:.7rem 1rem;transition:filter .15s ease}
+  .btn{
+    display:inline-flex;justify-content:center;align-items:center;gap:.5rem;
+    font-weight:700;border-radius:.8rem;padding:.7rem 1rem;transition:filter .15s ease, transform .1s ease;
+  }
   .btn-primary{background:var(--red);color:#fff;border:none;width:100%}
-  .btn-primary:hover{filter:brightness(.95)}
-  .btn-link{color:var(--blue);font-weight:600;text-decoration:none}.btn-link:hover{text-decoration:underline}
+  .btn-primary:hover{filter:brightness(.95);transform:translateY(-1px)}
+  .btn-primary:disabled{opacity:.7;cursor:not-allowed;transform:none}
+
+  .btn-link{color:var(--blue);font-weight:600;text-decoration:none}
+  .btn-link:hover{text-decoration:underline}
 
   .text-center{text-align:center}
+
+  /* ===== Alert styling (glassy) ===== */
+  .alert{
+    position:relative;
+    border-radius:.9rem;
+    padding:.65rem .9rem;
+    font-size:.85rem;
+    display:flex;
+    align-items:flex-start;
+    gap:.5rem;
+    border:1px solid rgba(0,0,0,.04);
+    backdrop-filter:blur(8px);
+  }
+  .alert-error{
+    background:linear-gradient(135deg,rgba(248,113,113,.14),rgba(248,250,252,.85));
+    border-color:rgba(239,68,68,.7);
+    color:#7f1d1d;
+  }
+  .alert-success{
+    background:linear-gradient(135deg,rgba(34,197,94,.14),rgba(248,250,252,.9));
+    border-color:rgba(22,163,74,.7);
+    color:#14532d;
+  }
+  .alert .close{
+    margin-left:auto;
+    border:none;
+    background:transparent;
+    font-size:1rem;
+    cursor:pointer;
+    color:inherit;
+    padding:0 .1rem;
+    line-height:1;
+    opacity:.7;
+  }
+  .alert .close:hover{opacity:1}
+
+  /* Shake animation when there is an error */
+  .shake-once{
+    animation:shake .4s ease;
+  }
+  @keyframes shake{
+    0%{transform:translateX(0);}
+    20%{transform:translateX(-4px);}
+    40%{transform:translateX(4px);}
+    60%{transform:translateX(-3px);}
+    80%{transform:translateX(3px);}
+    100%{transform:translateX(0);}
+  }
 
   @media (max-width:480px){ .card{max-width:400px;padding:1.25rem} }
 </style>
@@ -99,7 +154,7 @@
   </div>
 
   <!-- Login Card -->
-  <div class="card">
+  <div class="card" id="loginCard">
     <header class="mb-6 text-center">
       <h2 class="brand-title"><span class="brand-underline">GenRev Login</span></h2>
       <p class="muted text-sm">Welcome back. Please sign in to continue.</p>
@@ -112,15 +167,32 @@
         <button type="button" class="close" onclick="this.closest('.alert').remove()" aria-label="Dismiss">&times;</button>
       </div>
     @endif
+
     @if(session('success'))
       <div class="alert alert-success mb-4" role="alert" aria-live="polite">
         <span>{{ session('success') }}</span>
         <button type="button" class="close" onclick="this.closest('.alert').remove()" aria-label="Dismiss">&times;</button>
       </div>
     @endif
+
     @if(session('status'))
       <div class="alert alert-success mb-4" role="alert" aria-live="polite">
         <span>{{ session('status') }}</span>
+        <button type="button" class="close" onclick="this.closest('.alert').remove()" aria-label="Dismiss">&times;</button>
+      </div>
+    @endif
+
+    {{-- Validation errors, including "Your account has been blocked / deactivated" --}}
+    @if($errors->any())
+      @php $firstError = $errors->first() ?? ''; @endphp
+      <div class="alert alert-error mb-4" role="alert" aria-live="assertive">
+        <span>
+          {{ $firstError }}
+          @if(\Illuminate\Support\Str::contains(strtolower($firstError), 'blocked')
+              || \Illuminate\Support\Str::contains(strtolower($firstError), 'deactivated'))
+            &nbsp;Please contact your administrator if you believe this is a mistake.
+          @endif
+        </span>
         <button type="button" class="close" onclick="this.closest('.alert').remove()" aria-label="Dismiss">&times;</button>
       </div>
     @endif
@@ -172,6 +244,7 @@
   </div>
 </div>
 @endsection
+
 @section('auth_page', true)
 
 @section('background')
@@ -189,6 +262,7 @@
     const toggle = document.getElementById('togglePassword');
     const form = document.getElementById('loginForm');
     const btn = document.getElementById('submitBtn');
+    const card = document.getElementById('loginCard');
 
     if (toggle && pwd) {
       const path = toggle.querySelector('path');
@@ -210,6 +284,13 @@
         btn.setAttribute('disabled', 'disabled');
         btn.textContent = 'Signing in...';
       });
+    }
+
+    // Shake the card when there is an error
+    const hasErrorAlert = document.querySelector('.alert-error');
+    if (card && hasErrorAlert) {
+      card.classList.add('shake-once');
+      setTimeout(() => card.classList.remove('shake-once'), 500);
     }
 
     // Respect reduced motion
