@@ -308,7 +308,7 @@ class DashboardController extends Controller
             ->get()
             ->keyBy('d');
 
-        $weeklySalesQtySeries = [];
+        $weeklySalesQtySeries     = [];
         $weeklySalesRevenueSeries = [];
         $cursor = $start->copy();
         while ($cursor->lte($end)) {
@@ -317,6 +317,9 @@ class DashboardController extends Controller
             $weeklySalesRevenueSeries[] = (float) ($salesDaily[$key]->rev ?? 0);
             $cursor->addDay();
         }
+
+        // Total revenue for this week (used in multiple places)
+        $weekRevenue = array_sum($weeklySalesRevenueSeries);
 
         $biggestSalesDay = null;
         if ($salesDaily->isNotEmpty()) {
@@ -347,6 +350,29 @@ class DashboardController extends Controller
             'qty'  => (float) ($materialsUsage->sum('qty_used') ?? 0),
             'cost' => (float) ($materialsUsage->sum('cost_used') ?? 0),
         ];
+
+        // ---------- Estimated weekly profit & daily profit series ----------
+        $estimatedWeekProfit      = 0.0;
+        $estimatedGrossMarginPct  = null;
+        $weeklySalesProfitSeries  = [];
+
+        $estimatedWeekCost = (float) ($materialsUsageTotals['cost'] ?? 0.0);
+
+        if ($weekRevenue > 0 && $estimatedWeekCost > 0) {
+            $estimatedWeekProfit     = max(0.0, $weekRevenue - $estimatedWeekCost);
+            $estimatedGrossMarginPct = round(($estimatedWeekProfit / $weekRevenue) * 100, 1);
+
+            $profitFactor = $estimatedWeekProfit / $weekRevenue;
+
+            foreach ($weeklySalesRevenueSeries as $revDay) {
+                $weeklySalesProfitSeries[] = (float) $revDay * $profitFactor;
+            }
+        } else {
+            // no meaningful cost data, keep zeros
+            foreach ($weeklySalesRevenueSeries as $revDay) {
+                $weeklySalesProfitSeries[] = 0.0;
+            }
+        }
 
         $recentMaterials = Material::whereBetween('created_at', [$start, $end])
             ->orderByDesc('created_at')
@@ -452,9 +478,7 @@ class DashboardController extends Controller
             ->take(10);
 
         /* ============== Most Sold Products & Types (this week) ============== */
-        $weekRevenue = (float) (Sale::whereBetween(DB::raw('DATE(sales.date)'), [$start->toDateString(), $end->toDateString()])
-            ->selectRaw("SUM($REVEX) as rev")
-            ->value('rev') ?? 0);
+        // $weekRevenue already computed from daily series above
 
         $topProducts = Sale::join('products as p', 'p.id', '=', 'sales.product_id')
             ->whereBetween(DB::raw('DATE(sales.date)'), [$start->toDateString(), $end->toDateString()])
@@ -505,8 +529,36 @@ class DashboardController extends Controller
         }
 
         /* =================== Predictive Analytics =================== */
-        $forecast = $this->buildForecast(60, 30);
+        $forecast        = $this->buildForecast(60, 30);
         $productForecast = $demandForecastService->perProductForecast(7, 60);
+
+        // ---------- AI-style Weekly Sales forecast (next 7 days) ----------
+        $globalDemandSeries = $forecast['demandSeries'] ?? [];
+
+        // average unit price based on all-time totals
+        $avgUnitPriceGlobal = $totalSales > 0
+            ? ($totalRevenue / max($totalSales, 1))
+            : 0.0;
+
+        $marginRatio = ($weekRevenue > 0 && $estimatedWeekProfit > 0)
+            ? ($estimatedWeekProfit / $weekRevenue)
+            : 0.0;
+
+        $weeklySalesForecastQtySeries       = [];
+        $weeklySalesForecastRevenueSeries   = [];
+        $weeklySalesForecastProfitSeries    = [];
+
+        for ($i = 0; $i < 7; $i++) {
+            $demand = (float) ($globalDemandSeries[$i] ?? 0.0); // overall kg/units demand
+            $weeklySalesForecastQtySeries[] = $demand;
+
+            $forecastRev = $demand * $avgUnitPriceGlobal;
+            $weeklySalesForecastRevenueSeries[] = $forecastRev;
+
+            $weeklySalesForecastProfitSeries[] = $marginRatio > 0
+                ? $forecastRev * $marginRatio
+                : 0.0;
+        }
 
         return view('dashboard', [
             'totalProducts'            => $totalProducts,
@@ -525,6 +577,15 @@ class DashboardController extends Controller
             'weeklyProductionSeries'   => $weeklyProductionSeries,
             'weeklySalesQtySeries'     => $weeklySalesQtySeries,
             'weeklySalesRevenueSeries' => $weeklySalesRevenueSeries,
+            'weeklySalesProfitSeries'  => $weeklySalesProfitSeries,
+
+            'weekRevenue'              => $weekRevenue,
+            'estimatedWeekProfit'      => $estimatedWeekProfit,
+            'estimatedGrossMarginPct'  => $estimatedGrossMarginPct,
+
+            'weeklySalesForecastQtySeries'       => $weeklySalesForecastQtySeries,
+            'weeklySalesForecastRevenueSeries'   => $weeklySalesForecastRevenueSeries,
+            'weeklySalesForecastProfitSeries'    => $weeklySalesForecastProfitSeries,
 
             'expiryLabels'             => $expiryLabels,
             'weeklyExpirySeries'       => $weeklyExpirySeries,
@@ -587,7 +648,7 @@ class DashboardController extends Controller
             ->get()
             ->keyBy('d');
 
-        $weeklySalesQtySeries = [];
+        $weeklySalesQtySeries     = [];
         $weeklySalesRevenueSeries = [];
         $cursor = $start->copy();
         while ($cursor->lte($end)) {
@@ -595,6 +656,17 @@ class DashboardController extends Controller
             $weeklySalesQtySeries[]     = (float) ($salesDaily[$key]->qty ?? 0);
             $weeklySalesRevenueSeries[] = (float) ($salesDaily[$key]->rev ?? 0);
             $cursor->addDay();
+        }
+
+        $weekRevenue = array_sum($weeklySalesRevenueSeries);
+
+        // For the JSON endpoint, keep profit simple with a fixed margin (e.g., 30%),
+        // so we don't repeat the heavy materials join.
+        $marginRatio = 0.30;
+
+        $weeklySalesProfitSeries = [];
+        foreach ($weeklySalesRevenueSeries as $revDay) {
+            $weeklySalesProfitSeries[] = (float) $revDay * $marginRatio;
         }
 
         /* Expiry predictive + type for AJAX (rolling 7 days) */
@@ -721,11 +793,37 @@ class DashboardController extends Controller
 
         $forecast = $this->buildForecast(60, 30);
 
+        // Simple AI-style weekly forecast for JSON (using avg price + fixed margin)
+        $globalDemandSeries = $forecast['demandSeries'] ?? [];
+
+        $totalRevenue = (float) (Sale::selectRaw("SUM($REVEX) as rev")->value('rev') ?? 0);
+        $totalSales   = (int) Sale::count();
+        $avgUnitPrice = $totalSales > 0
+            ? ($totalRevenue / max($totalSales, 1))
+            : 0.0;
+
+        $weeklySalesForecastQtySeries       = [];
+        $weeklySalesForecastRevenueSeries   = [];
+        $weeklySalesForecastProfitSeries    = [];
+
+        for ($i = 0; $i < 7; $i++) {
+            $demand = (float) ($globalDemandSeries[$i] ?? 0.0);
+            $weeklySalesForecastQtySeries[]     = $demand;
+            $forecastRev                        = $demand * $avgUnitPrice;
+            $weeklySalesForecastRevenueSeries[] = $forecastRev;
+            $weeklySalesForecastProfitSeries[]  = $forecastRev * $marginRatio;
+        }
+
         return response()->json([
             'labels'                   => $labels,
             'weeklyProductionSeries'   => $weeklyProductionSeries,
             'weeklySalesQtySeries'     => $weeklySalesQtySeries,
             'weeklySalesRevenueSeries' => $weeklySalesRevenueSeries,
+            'weeklySalesProfitSeries'  => $weeklySalesProfitSeries,
+
+            'weeklySalesForecastQtySeries'       => $weeklySalesForecastQtySeries,
+            'weeklySalesForecastRevenueSeries'   => $weeklySalesForecastRevenueSeries,
+            'weeklySalesForecastProfitSeries'    => $weeklySalesForecastProfitSeries,
 
             'expiryLabels'             => $expiryLabels,
             'weeklyExpirySeries'       => $weeklyExpirySeries,

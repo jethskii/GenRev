@@ -12,6 +12,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
+use Intervention\Image\Laravel\Facades\Image;
 
 class ProductController extends Controller
 {
@@ -114,16 +117,12 @@ class ProductController extends Controller
         $product = Product::create($data);
 
         if ($request->hasFile('image')) {
-            try {
-                $product->setImageFromUpload($request->file('image'));
-                $product->save();
-            } catch (\Throwable $e) {
-                Log::warning('Product image upload failed', ['product_id' => $product->id, 'error' => $e->getMessage()]);
-            }
+            $file = $request->file('image');
+            $this->syncProductImage($product, $file);
         }
 
         if ($request->ajax() || $request->wantsJson()) {
-            return response()->json(['ok' => true, 'product' => $product], 201);
+            return response()->json(['ok' => true, 'product' => $product->fresh()], 201);
         }
 
         return redirect()->route('products.show', $product)->with('success', 'Product created.');
@@ -151,12 +150,8 @@ class ProductController extends Controller
         $product->update($data);
 
         if ($request->hasFile('image')) {
-            try {
-                $product->setImageFromUpload($request->file('image'));
-                $product->save();
-            } catch (\Throwable $e) {
-                Log::warning('Product image upload failed (update)', ['product_id' => $product->id, 'error' => $e->getMessage()]);
-            }
+            $file = $request->file('image');
+            $this->syncProductImage($product, $file);
         }
 
         if ($request->ajax() || $request->wantsJson()) {
@@ -191,7 +186,7 @@ class ProductController extends Controller
                         $p->recipes()->delete();
                     }
 
-                    // Delete main image if present (double-safety)
+                    // Delete main image if present (double-safety; supports old image_path or direct URLs)
                     try {
                         if (!empty($p->image_path) && Storage::disk('public')->exists($p->image_path)) {
                             Storage::disk('public')->delete($p->image_path);
@@ -423,11 +418,13 @@ class ProductController extends Controller
 
     public function updateImage(Request $request, Product $product)
     {
-        $request->validate(['image' => ['required', 'image', 'max:4096']]);
+        $request->validate([
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:min_width=300,min_height=300'],
+        ]);
 
         try {
-            $product->setImageFromUpload($request->file('image'));
-            $product->save();
+            $file = $request->file('image');
+            $this->syncProductImage($product, $file);
         } catch (\Throwable $e) {
             Log::warning('Product image upload failed (updateImage)', ['product_id' => $product->id, 'error' => $e->getMessage()]);
             return back()->with('error', 'Image upload failed.');
@@ -440,9 +437,8 @@ class ProductController extends Controller
 
     protected function validateProduct(Request $request, ?int $productId = null): array
     {
-        return $request->validate([
+        $rules = [
             'parent_id'           => ['nullable','integer', Rule::exists('products','id')->whereNull('deleted_at')],
-            'product_code'        => ['nullable', 'string', 'max:100', Rule::unique('products', 'product_code')->ignore($productId)],
             'product_name'        => ['required', 'string', 'max:255', Rule::unique('products', 'product_name')->ignore($productId)],
             'category'            => ['nullable', 'string', 'max:100'],
             'unit'                => ['nullable', Rule::in(['kg','pcs','lt'])],
@@ -459,8 +455,20 @@ class ProductController extends Controller
             'last_cost_date'      => ['nullable', 'date'],
             'temp_requirements'   => ['nullable', 'string', 'max:2000'],
             'line_constraints'    => ['nullable'],
-            'image'               => ['nullable', 'image', 'max:4096'],
-        ]);
+            'image'               => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:min_width=300,min_height=300'],
+        ];
+
+        // Only validate product_code if the column actually exists (avoids SQL error)
+        if (Schema::hasColumn('products', 'product_code')) {
+            $rules['product_code'] = [
+                'nullable',
+                'string',
+                'max:100',
+                Rule::unique('products', 'product_code')->ignore($productId),
+            ];
+        }
+
+        return $request->validate($rules);
     }
 
     /* ============================== HELPERS ============================== */
@@ -506,5 +514,100 @@ class ProductController extends Controller
         if (is_null($v) || $v === '') return 0.00;
         $num = is_numeric($v) ? (float) $v : 0.00;
         return round(min(max($num, 0.00), 100.00), 2);
+    }
+
+    /**
+     * Central image handler:
+     * - Tries Product::setImageFromUpload (if present).
+     * - If it fails or does not populate card fields, runs Intervention pipeline.
+     * - If Intervention fails, falls back to simple store().
+     */
+    private function syncProductImage(Product $product, \Illuminate\Http\UploadedFile $file): void
+    {
+        $usedCustom = false;
+
+        // 1) Try model's own helper if present
+        if (method_exists($product, 'setImageFromUpload')) {
+            try {
+                $product->setImageFromUpload($file);
+                $usedCustom = true;
+            } catch (\Throwable $e) {
+                Log::warning('setImageFromUpload failed, using controller pipeline instead', [
+                    'product_id' => $product->id,
+                    'error'      => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // If custom helper filled card_image_url, we’re done
+        if ($usedCustom && (!empty($product->card_image_url) || !empty($product->card_image_srcset))) {
+            $product->save();
+            return;
+        }
+
+        // 2) Run our own pipeline (same style as ProductionController)
+        $this->applyImageToProduct($product, $file);
+    }
+
+    /**
+     * Intervention-based pipeline with safe fallback store() – keeps card_image_url in sync.
+     */
+    private function applyImageToProduct(Product $product, \Illuminate\Http\UploadedFile $file): void
+    {
+        try {
+            if (!class_exists(Image::class)) {
+                throw new \RuntimeException('Intervention Image not installed/configured');
+            }
+
+            $uuid = (string) Str::uuid();
+            $base = "products/{$product->id}/{$uuid}";
+
+            $img = Image::read($file->getRealPath())->orientate();
+            $master = (clone $img)->scaleDown(1600, 1600);
+
+            $w1200 = (clone $master)->scaleDown(1200, 1200);
+            $w800  = (clone $master)->scaleDown(800, 800);
+            $w400  = (clone $master)->scaleDown(400, 400);
+
+            $path1200 = "{$base}-1200.webp";
+            $path800  = "{$base}-800.webp";
+            $path400  = "{$base}-400.webp";
+
+            Storage::disk('public')->put($path1200, (string) $w1200->toWebp(80), 'public');
+            Storage::disk('public')->put($path800,  (string) $w800->toWebp(80),  'public');
+            Storage::disk('public')->put($path400,  (string) $w400->toWebp(80),  'public');
+
+            $url1200 = Storage::disk('public')->url($path1200);
+            $url800  = Storage::disk('public')->url($path800);
+            $url400  = Storage::disk('public')->url($path400);
+
+            $srcset  = "{$url400} 400w, {$url800} 800w, {$url1200} 1200w";
+
+            $product->image_url         = $url1200;
+            $product->card_image_url    = $url800;
+            $product->card_image_srcset = $srcset;
+            $product->save();
+        } catch (\Throwable $e) {
+            Log::warning('applyImageToProduct failed, using simple store()', [
+                'product_id' => $product->id,
+                'error'      => $e->getMessage(),
+            ]);
+
+            // Fallback: simple store of original file
+            try {
+                $path = $file->store('products', 'public');
+                $url  = Storage::disk('public')->url($path);
+
+                $product->image_url         = $url;
+                $product->card_image_url    = $url;
+                $product->card_image_srcset = null;
+                $product->save();
+            } catch (\Throwable $e2) {
+                Log::error('Fallback store() for product image failed', [
+                    'product_id' => $product->id,
+                    'error'      => $e2->getMessage(),
+                ]);
+            }
+        }
     }
 }

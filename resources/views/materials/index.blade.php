@@ -19,7 +19,10 @@
     'updated_desc'=>'Updated ↓','updated_asc'=>'Updated ↑',
   ];
 
-  $unitOptions = ['kg'=>'Kilograms','g'=>'Grams','lbs'=>'Pounds','pcs'=>'Pieces','pkg'=>'Package','box'=>'Box','bag'=>'Bag','roll'=>'Roll','tray'=>'Tray','lt'=>'Liters','ml'=>'Milliliters','m3'=>'Cubic Meter'];
+  $unitOptions = [
+    'kg'=>'Kilograms','g'=>'Grams','lbs'=>'Pounds','pcs'=>'Pieces','pkg'=>'Package',
+    'box'=>'Box','bag'=>'Bag','roll'=>'Roll','tray'=>'Tray','lt'=>'Liters','ml'=>'Milliliters','m3'=>'Cubic Meter'
+  ];
 
   $categoryCatalog = [
     'Primary Raw Materials','Meat Cuts & Trimmings','Fats / Skins','Salt','Curing Agents (Nitrite/Nitrate)',
@@ -66,80 +69,453 @@
 @endphp
 
 <style>
-  .page-wrap { background:#f7f8fb; }
-  .light-card{ background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 8px 18px rgba(17,24,39,.04); }
-  .input-light{
-    width:100%; padding:.7rem .9rem; border-radius:12px;
-    background:#fff; border:1px solid #e5e7eb; color:#111827;
-    transition: box-shadow .16s, border-color .16s, transform .12s; outline:none;
+  :root{
+    --bg-body:#f5f5f6;
+    --panel-bg:#fdfdfc;
+    --border-strong:#111827;
+    --shadow-main:0 4px 0 #111827;
+    --accent-red:#b91c1c;
+    --accent-red-soft:#fecaca;
+    --accent-green:#16a34a;
+    --accent-amber:#fbbf24;
+    --text-main:#111827;
+    --text-muted:#6b7280;
+    --text-soft:#9ca3af;
+    --table-row-odd:#fef2f2;
+    --table-row-even:#fff7ed;
+    --kpi-bg:#f9fafb;
   }
-  .input-light::placeholder{ color:#9ca3af; }
-  .input-light:hover{ border-color:#e2e8f0; }
-  .input-light:focus{ box-shadow:0 0 0 2px rgba(59,130,246,.2); border-color:#93c5fd; transform:translateY(-1px); }
 
-  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:.5rem; padding:.72rem 1.05rem; border-radius:12px; font-weight:700; border:1px solid transparent; }
-  .btn-primary{ background:#ef4444; color:#fff; border-color:#ef4444; }
-  .btn-primary:hover{ filter:brightness(.96); }
-  .btn-ghost{ background:#fff; border:1px solid #e5e7eb; color:#111827; }
-  .btn-ghost:hover{ background:#f3f4f6; }
-  .btn-green{ background:#10b981; color:#fff; border-color:#10b981; }
-  .btn-green:hover{ filter:brightness(.96); }
+  html{
+    scroll-behavior:smooth;
+  }
 
-  .chip{ display:inline-block; padding:.42rem .75rem; border-radius:999px; font-weight:700; font-size:.72rem; border:1px solid #e5e7eb; background:#fff; color:#111827; }
-  .badge{ padding:.28rem .65rem; font-size:.72rem; border-radius:999px; border:1px solid #e5e7eb; display:inline-block; background:#fff; color:#111827; }
-  .b-green{ background:#ecfdf5; border-color:#a7f3d0; color:#065f46; }
-  .b-amber{ background:#fffbeb; border-color:#fde68a; color:#92400e; }
-  .b-blue{ background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }
-  .b-gray{ background:#f9fafb; border-color:#e5e7eb; color:#374151; }
+  body{
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
+  }
 
-  .kpi { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem; box-shadow:0 4px 12px rgba(17,24,39,.04); }
+  /* === PAGE / PANEL === */
+  .page-wrap{
+    padding:1.5rem;
+    background:var(--bg-body);
+  }
 
-  table{ border-collapse:separate; border-spacing:0; }
-  thead th{ background:#f9fafb; color:#374151; font-weight:800; }
-  tbody td{ color:#111827; }
-  tbody tr:nth-child(even){ background:#fafafa; }
-  tbody tr:hover{ background:#f3f4f6; }
-  th, td{ border-color:#e5e7eb !important; }
+  .pixel-panel{
+    max-width:1200px;
+    margin:0 auto;
+    background:var(--panel-bg);
+    border:1px solid rgba(15,23,42,0.18);
+    box-shadow:0 14px 30px rgba(15,23,42,0.08);
+    padding:1.5rem 1.6rem 1.6rem;
+    border-radius:14px;
+    font-size:12px;
+    color:var(--text-main);
+    transition:box-shadow .18s ease,transform .18s ease;
+  }
+  .pixel-panel:hover{
+    box-shadow:0 18px 40px rgba(15,23,42,0.12);
+    transform:translateY(-2px);
+  }
 
-  dialog.modal{ border:0; padding:0; background:transparent; z-index:60; }
-  dialog::backdrop{ background:rgba(0,0,0,.55); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+  /* === HEADER / TAGS === */
+  .pixel-title{
+    font-size:18px;
+    font-weight:700;
+    line-height:1.4;
+  }
+  .pixel-title span{
+    display:inline-block;
+    padding:2px 8px;
+    background:#fee2e2;
+    border-radius:999px;
+    color:var(--accent-red);
+    font-size:11px;
+    margin-left:4px;
+  }
+  .pixel-subtitle{
+    margin-top:4px;
+    color:var(--text-muted);
+    font-size:12px;
+  }
+
+  .pixel-tag{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:4px 10px;
+    background:#fef2f2;
+    border-radius:999px;
+    border:1px solid rgba(185,28,28,.18);
+    color:var(--accent-red);
+    font-size:11px;
+    font-weight:600;
+  }
+  .pixel-tag-dot{
+    width:9px;
+    height:9px;
+    border-radius:999px;
+    background:var(--accent-green);
+    box-shadow:0 0 0 2px rgba(34,197,94,0.35);
+  }
+
+  .pixel-breadcrumb{
+    margin-top:6px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px;
+    color:var(--text-soft);
+    font-size:11px;
+  }
+  .pixel-link{
+    color:#1d4ed8;
+    text-decoration:none;
+  }
+  .pixel-link:hover{
+    text-decoration:underline;
+  }
+
+  .pixel-footnote{
+    margin-top:.7rem;
+    font-size:11px;
+    color:var(--text-soft);
+  }
+
+  /* === BUTTONS === */
+  .btn{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:.35rem;
+    padding:7px 14px;
+    border-radius:999px;
+    border:1px solid rgba(15,23,42,0.45);
+    background:#f9fafb;
+    cursor:pointer;
+    text-transform:none;
+    font-size:11px;
+    font-weight:600;
+    transition:background .12s ease,transform .12s ease,box-shadow .12s ease;
+  }
+  .btn svg{
+    width:14px;
+    height:14px;
+  }
+  .btn:hover{
+    background:#e5e7eb;
+    transform:translateY(-1px);
+    box-shadow:0 4px 10px rgba(15,23,42,0.12);
+  }
+  .btn:active{
+    transform:translateY(0);
+    box-shadow:none;
+  }
+  .btn-primary{
+    background:var(--accent-red);
+    color:#fef2f2;
+    border-color:var(--accent-red);
+  }
+  .btn-primary:hover{
+    background:#991b1b;
+  }
+  .btn-green{
+    background:var(--accent-green);
+    color:#ecfdf3;
+    border-color:var(--accent-green);
+  }
+  .btn-green:hover{
+    background:#15803d;
+  }
+  .btn-ghost{
+    background:#ffffff;
+    color:var(--text-main);
+  }
+
+  /* === KPI CARDS === */
+  .pixel-kpi-wrap{
+    display:grid;
+    grid-template-columns:repeat(1,minmax(0,1fr));
+    gap:0.9rem;
+  }
+  @media (min-width:640px){
+    .pixel-kpi-wrap{
+      grid-template-columns:repeat(3,minmax(0,1fr));
+    }
+  }
+  .pixel-kpi{
+    border-radius:12px;
+    border:1px solid rgba(15,23,42,0.08);
+    background:var(--kpi-bg);
+    padding:.8rem .9rem;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  .pixel-kpi-label{
+    font-size:11px;
+    color:var(--text-soft);
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .pixel-kpi-value{
+    font-size:20px;
+    font-weight:700;
+    color:var(--accent-red);
+  }
+
+  /* === INPUTS / SELECT === */
+  .input-light{
+    width:100%;
+    padding:6px 8px;
+    border-radius:8px;
+    border:1px solid rgba(15,23,42,0.18);
+    background:#ffffff;
+    font:inherit;
+    font-size:12px;
+    transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;
+  }
+  .input-light::placeholder{
+    color:var(--text-soft);
+  }
+  .input-light:focus{
+    outline:none;
+    border-color:var(--accent-red);
+    box-shadow:0 0 0 1px rgba(185,28,28,0.4);
+    background:#fef2f2;
+  }
+
+  label{
+    font-size:11px;
+    color:var(--text-muted);
+  }
+
+  /* === CHIPS / BADGES === */
+  .chip,
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    padding:4px 10px;
+    font-size:11px;
+    border-radius:999px;
+    border:1px solid rgba(15,23,42,0.12);
+    background:#f9fafb;
+    color:var(--text-main);
+    text-decoration:none;
+    transition:background .12s ease,box-shadow .12s ease,transform .12s ease;
+  }
+  .chip:hover,
+  .badge:hover{
+    background:#f3f4f6;
+    transform:translateY(-1px);
+    box-shadow:0 2px 6px rgba(15,23,42,0.12);
+  }
+  .b-green{
+    background:#ecfdf3;
+    border-color:rgba(22,163,74,0.25);
+    color:#14532d;
+  }
+  .b-amber{
+    background:#fffbeb;
+    border-color:rgba(245,158,11,0.25);
+    color:#92400e;
+  }
+  .b-blue{
+    background:#eff6ff;
+    border-color:rgba(37,99,235,0.25);
+    color:#1d4ed8;
+  }
+  .b-gray{
+    background:#f3f4f6;
+    color:#111827;
+  }
+
+  /* === TABLE === */
+  .pixel-table-wrap{
+    border-radius:14px;
+    border:1px solid rgba(15,23,42,0.14);
+    box-shadow:0 10px 26px rgba(15,23,42,0.08);
+    background:#ffffff;
+    overflow:hidden;
+  }
+  table.pixel-table{
+    border-collapse:separate;
+    border-spacing:0;
+    width:100%;
+    font-size:12px;
+  }
+  .pixel-table thead th{
+    padding:8px 10px;
+    background:#f9fafb;
+    border-bottom:1px solid rgba(15,23,42,0.14);
+    text-transform:uppercase;
+    font-size:11px;
+    color:var(--text-soft);
+    font-weight:600;
+  }
+  .pixel-table tbody td{
+    padding:7px 10px;
+    border-bottom:1px solid #f3f4f6;
+  }
+  .pixel-table tbody tr:nth-child(odd){
+    background:var(--table-row-odd);
+  }
+  .pixel-table tbody tr:nth-child(even){
+    background:var(--table-row-even);
+  }
+  .pixel-table tbody tr:hover{
+    background:#fee2e2;
+  }
+  .pixel-table tfoot td{
+    padding:9px 10px;
+    border-top:1px solid rgba(15,23,42,0.16);
+    background:#f9fafb;
+    font-weight:600;
+    color:var(--accent-red);
+  }
+
+  .status-dot{
+    width:9px;
+    height:9px;
+    border-radius:999px;
+    flex-shrink:0;
+  }
+
+  .table-actions{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-wrap:wrap;
+    gap:.4rem;
+  }
+
+  /* === MODALS === */
+  dialog.modal{
+    border:0;
+    padding:0;
+    background:transparent;
+    z-index:60;
+  }
+  dialog::backdrop{
+    background:rgba(15,23,42,0.45);
+    -webkit-backdrop-filter:blur(3px);
+    backdrop-filter:blur(3px);
+  }
   dialog[open]{ display:block; }
-  .modal-box{ transform:translateY(8px) scale(.985); opacity:0; transition:.18s ease;
-              background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 20px 48px rgba(0,0,0,.12); padding:1.25rem; }
-  dialog[open] .modal-box{ transform:translateY(0) scale(1); opacity:1; }
+  .modal-box{
+    background:#ffffff;
+    border-radius:14px;
+    border:1px solid rgba(15,23,42,0.15);
+    box-shadow:0 18px 50px rgba(15,23,42,0.3);
+    padding:1.1rem 1.25rem 1.25rem;
+    max-height:80vh;
+    overflow-y:auto;
+  }
+  .modal-title{
+    font-size:14px;
+    font-weight:700;
+    color:var(--accent-red);
+    margin-bottom:.9rem;
+  }
 
-  .table-actions{ display:flex; align-items:center; justify-content:center; gap:.5rem; flex-wrap:wrap; }
+  /* === TOAST === */
+  .toast-pixel{
+    position:fixed;
+    bottom:1.5rem;
+    right:1.5rem;
+    z-index:80;
+    padding:8px 12px;
+    border-radius:10px;
+    border:1px solid rgba(15,23,42,0.3);
+    background:#ecfdf3;
+    box-shadow:0 10px 30px rgba(15,23,42,0.28);
+    font-size:11px;
+    font-weight:600;
+    color:#14532d;
+    opacity:0;
+    pointer-events:none;
+  }
+  .toast-error{
+    background:#fef2f2;
+    color:#7f1d1d;
+  }
+  .toast-show{
+    animation:toastPop .2s ease-out forwards;
+  }
+  .toast-hide{
+    animation:toastHide .18s ease-in forwards;
+  }
+  @keyframes toastPop{
+    from{ opacity:0; transform:translateY(8px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
+  @keyframes toastHide{
+    from{ opacity:1; transform:translateY(0); }
+    to{ opacity:0; transform:translateY(4px); }
+  }
+
+  @media (max-width:768px){
+    .pixel-panel{
+      padding:1.1rem;
+    }
+    .toast-pixel{
+      left:50%;
+      right:auto;
+      transform:translateX(-50%);
+    }
+  }
 </style>
 
-<div class="page-wrap rounded-2xl p-6 text-gray-900">
-  <div class="light-card p-6">
+<div class="page-wrap">
+  <div class="pixel-panel">
 
     {{-- Header & CTA --}}
-    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-5">
       <div>
-        <h2 class="text-2xl font-bold">Raw Materials</h2>
-        <p class="text-sm text-gray-600">Unit price is recorded correctly and used in valuation.</p>
+        <div class="pixel-tag">
+          <span class="pixel-tag-dot"></span>
+          <span>Raw Materials · GenRev Meat Products</span>
+        </div>
+
+        <h2 class="pixel-title">
+          Raw Materials Inventory
+          <span>Production Ready</span>
+        </h2>
+        <div class="pixel-breadcrumb">
+          <span class="pixel-link">Dashboard</span>
+          <span>/</span>
+          <span>Inventory</span>
+          <span>/</span>
+          <span>Raw Materials</span>
+        </div>
+        <p class="pixel-subtitle">Live overview of meat and ingredient stocks used for production, costing, and planning.</p>
       </div>
 
-      <button type="button" class="btn btn-primary" data-open="modalCreate" aria-haspopup="dialog" aria-controls="modalCreate" title="Add a new material">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/></svg>
+      <button type="button"
+              class="btn btn-primary"
+              data-open="modalCreate"
+              aria-haspopup="dialog"
+              aria-controls="modalCreate"
+              title="Add a new material">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M11 11V5h2v6h6v2h-6v6h-2v-6H5v-2z"/>
+        </svg>
         Add Material
       </button>
     </div>
 
     {{-- KPIs --}}
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-      <div class="kpi">
-        <div class="text-xs text-gray-600">Total Items</div>
-        <div class="text-2xl font-semibold">{{ number_format($stats['count']) }}</div>
+    <div class="pixel-kpi-wrap mb-6">
+      <div class="pixel-kpi">
+        <div class="pixel-kpi-label">Total Items</div>
+        <div class="pixel-kpi-value">{{ number_format($stats['count']) }}</div>
       </div>
-      <div class="kpi">
-        <div class="text-xs text-gray-600">Inventory Valuation</div>
-        <div class="text-2xl font-semibold">₱ {{ number_format($stats['valuation'], 2) }}</div>
+      <div class="pixel-kpi">
+        <div class="pixel-kpi-label">Inventory Valuation</div>
+        <div class="pixel-kpi-value">₱ {{ number_format($stats['valuation'], 2) }}</div>
       </div>
-      <div class="kpi">
-        <div class="text-xs text-gray-600">Low Stock</div>
-        <div class="text-2xl font-semibold">{{ number_format($stats['low']) }}</div>
+      <div class="pixel-kpi">
+        <div class="pixel-kpi-label">Low Stock Materials</div>
+        <div class="pixel-kpi-value">{{ number_format($stats['low']) }}</div>
       </div>
     </div>
 
@@ -147,15 +523,15 @@
     <form id="filterForm" action="{{ route('materials.index') }}" method="GET" class="mb-4" role="search">
       <div class="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
         <div class="md:col-span-2">
-          <label class="text-xs text-gray-600 mb-1 block" for="searchBox">Search</label>
+          <label class="mb-1 block" for="searchBox">Search</label>
           <div class="flex gap-2">
-            <input id="searchBox" type="text" name="search" value="{{ $search }}" placeholder="Search name or SKU…" class="input-light" />
+            <input id="searchBox" type="text" name="search" value="{{ $search }}" placeholder="Search by material name or SKU" class="input-light" />
             <button type="submit" class="btn btn-ghost">Go</button>
             <a href="{{ route('materials.index') }}" class="btn btn-ghost">Reset</a>
           </div>
         </div>
         <div>
-          <label class="text-xs text-gray-600 mb-1 block">Category</label>
+          <label class="mb-1 block">Category</label>
           <select name="category" class="input-light" onchange="this.form.submit()">
             <option value="">All</option>
             @foreach($categoryCatalog as $_c)
@@ -164,7 +540,7 @@
           </select>
         </div>
         <div>
-          <label class="text-xs text-gray-600 mb-1 block">Sort</label>
+          <label class="mb-1 block">Sort</label>
           <select name="sort" class="input-light" onchange="this.form.submit()">
             @foreach($sortOptions as $k => $label)
               <option value="{{ $k }}" @selected($sort === $k)>{{ $label }}</option>
@@ -172,7 +548,7 @@
           </select>
         </div>
         <div>
-          <label class="text-xs text-gray-600 mb-1 block">Rows</label>
+          <label class="mb-1 block">Rows</label>
           <select name="per_page" class="input-light" onchange="this.form.submit()">
             @foreach([25,50,100,200,'all'] as $_pp)
               <option value="{{ $_pp }}" @selected((string)$perPage === (string)$_pp)>{{ is_numeric($_pp) ? $_pp : 'All' }}</option>
@@ -181,15 +557,14 @@
         </div>
         <div class="flex items-center gap-2">
           <input id="low_stock" type="checkbox" name="low_stock" value="1" {{ $lowOnly ? 'checked' : '' }} onchange="this.form.submit()"/>
-          <label for="low_stock" class="text-sm text-gray-700">Low Stock Only</label>
+          <label for="low_stock" class="text-[11px] text-gray-700">Show low stock only</label>
         </div>
       </div>
 
       {{-- quick chips --}}
       <div class="mt-3 flex flex-wrap gap-2">
-        @php $chipBase = 'chip'; @endphp
         <a href="{{ route('materials.index', array_filter(array_merge($currentQuery, ['category'=>null]))) }}"
-           class="{{ $chipBase }} {{ $cat ? '' : 'b-blue' }}">All</a>
+           class="chip {{ $cat ? '' : 'b-blue' }}">All</a>
         @foreach($categoryCatalog as $_c)
           @php $active = $cat === $_c ? 'b-green' : 'b-gray'; @endphp
           <a href="{{ route('materials.index', array_merge($currentQuery, ['category'=>$_c])) }}"
@@ -199,22 +574,22 @@
     </form>
 
     {{-- Table --}}
-    <div class="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
-      <table class="w-full text-sm text-left rounded-2xl overflow-hidden">
-        <thead class="text-xs uppercase">
+    <div class="pixel-table-wrap overflow-x-auto">
+      <table class="pixel-table text-left">
+        <thead>
           <tr>
-            <th class="py-3 px-4 border-b">Name</th>
-            <th class="py-3 px-4 border-b w-52">Category</th>
-            <th class="py-3 px-4 border-b w-24">Unit</th>
-            <th class="py-3 px-4 border-b w-32 text-right">Unit Price</th>
-            <th class="py-3 px-4 border-b w-32 text-right">Quantity</th>
-            <th class="py-3 px-4 border-b w-36 text-right">Line Value</th>
-            <th class="py-3 px-4 border-b w-24 text-center">Used In</th>
-            <th class="py-3 px-4 border-b w-40">Updated</th>
-            <th class="py-3 px-4 border-b w-[320px] text-center">Actions</th>
+            <th>Name</th>
+            <th class="w-64">Category</th>
+            <th class="w-24">Unit</th>
+            <th class="w-32 text-right">Unit Price</th>
+            <th class="w-32 text-right">Quantity (kg)</th>
+            <th class="w-40 text-right">Line Value</th>
+            <th class="w-24 text-center">Used In</th>
+            <th class="w-40">Last Updated</th>
+            <th class="w-[320px] text-center">Actions</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200">
+        <tbody>
         @forelse($rows as $m)
           @php
             $category = $m->category ?? infer_category($m);
@@ -223,100 +598,121 @@
             $lineVal  = $qty * $price;
             $badgeClass = (str_contains($category,'Spices') || str_contains($category,'Fillers')) ? 'b-amber' : 'b-green';
             $isLow = !is_null($m->min_stock_kg ?? null) && $qty < (float)$m->min_stock_kg;
+            $dotColor = $isLow ? '#f97316' : '#22c55e';
           @endphp
           @if((!$cat || $cat === $category) && (!$lowOnly || $isLow))
-            <tr class="hover:bg-gray-50 transition-colors">
-              <td class="py-3 px-4">
-                <div class="font-semibold flex items-center gap-2">
-                  <span class="inline-block h-2.5 w-2.5 rounded-full {{ $isLow ? 'bg-amber-500' : 'bg-emerald-500' }}"></span>
+            <tr>
+              <td>
+                <div class="font-medium flex items-center gap-2">
+                  <span class="status-dot" style="background:{{ $dotColor }};"></span>
                   {{ $m->material_name }}
                 </div>
               </td>
-              <td class="py-3 px-4"><span class="badge {{ $badgeClass }}">{{ $category }}</span></td>
-              <td class="py-3 px-4"><span class="badge b-gray">{{ $m->unit }}</span></td>
-              <td class="py-3 px-4 text-right">₱ {{ number_format($price, 2) }}</td>
-              <td class="py-3 px-4 text-right">{{ number_format($qty, 3) }}</td>
-              <td class="py-3 px-4 text-right">₱ {{ number_format($lineVal, 2) }}</td>
-              <td class="py-3 px-4 text-center">
+              <td>
+                <span class="badge {{ $badgeClass }}">{{ $category }}</span>
+              </td>
+              <td>
+                <span class="badge b-gray">{{ $m->unit }}</span>
+              </td>
+              <td class="text-right">₱ {{ number_format($price, 2) }}</td>
+              <td class="text-right">{{ number_format($qty, 3) }}</td>
+              <td class="text-right">₱ {{ number_format($lineVal, 2) }}</td>
+              <td class="text-center">
                 <span class="badge b-gray">{{ (int)($m->used_in_products ?? 0) }}</span>
               </td>
-              <td class="py-3 px-4 text-gray-600">{{ optional($m->updated_at)->format('Y-m-d H:i') }}</td>
-              <td class="py-3 px-4">
+              <td class="text-gray-600">{{ optional($m->updated_at)->format('Y-m-d H:i') }}</td>
+              <td>
                 <div class="table-actions">
+                  {{-- Edit button removed --}}
                   <button type="button"
-                          class="btn btn-ghost text-[.85rem]"
-                          data-fetch-url="{{ route('materials.edit',$m->id) }}"
-                          data-update-url="{{ route('materials.update',$m->id) }}"
-                          title="Edit {{ $m->material_name }}">
-                    Edit
-                  </button>
-
-                  <button type="button"
-                          class="btn btn-green text-[.85rem]"
+                          class="btn btn-green text-[11px]"
                           data-adjust-url="{{ route('materials.adjust',$m->id) }}"
                           data-name="{{ $m->material_name }}"
                           title="Adjust stock for {{ $m->material_name }}">
-                    Adjust
+                    Adjust stock
                   </button>
 
                   <form action="{{ route('materials.destroy',$m->id) }}" method="POST" onsubmit="return confirm('Delete this material?');">
                     @csrf @method('DELETE')
-                    <button type="submit" class="btn btn-primary" title="Delete {{ $m->material_name }}">Delete</button>
+                    <button type="submit" class="btn btn-ghost text-[11px]" title="Delete {{ $m->material_name }}">Delete</button>
                   </form>
                 </div>
               </td>
             </tr>
           @endif
         @empty
-          <tr><td colspan="9" class="py-6 px-4 text-center text-gray-600">No materials found.</td></tr>
+          <tr>
+            <td colspan="9" class="py-6 px-4 text-center text-gray-600">No materials found.</td>
+          </tr>
         @endforelse
         </tbody>
+        <tfoot>
+          @php
+            $grand = (float)($stats['valuation'] ?? 0);
+          @endphp
+          <tr>
+            <td colspan="5" class="text-right text-gray-700">Total Unit Material Cost</td>
+            <td class="text-right font-bold text-red-800" id="grandTotal">₱ {{ number_format($grand, 2) }}</td>
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
       </table>
     </div>
 
     @if($isPaginated)
-      <div class="mt-4">{{ $materials->withQueryString()->links() }}</div>
+      <div class="mt-4">
+        {{ $materials->withQueryString()->links() }}
+      </div>
     @endif
+
+    <p class="pixel-footnote">This list serves as the reference for recipe costing, production scheduling, and purchasing decisions.</p>
   </div>
 </div>
+
+{{-- TOAST --}}
+<div id="toastPixel" class="toast-pixel" role="status" aria-live="polite"></div>
 
 {{-- CREATE MODAL --}}
 <dialog id="modalCreate" class="modal" aria-label="Add Material">
   <form method="POST" action="{{ route('materials.store') }}" class="modal-box w-full max-w-2xl">
     @csrf
-    <h3 class="font-bold text-lg mb-4 text-gray-900">Add Material</h3>
+    <h3 class="modal-title">Add Raw Material</h3>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <label class="text-xs text-gray-600 mb-1 block">Name</label>
-        <input name="material_name" required class="input-light" placeholder="e.g., Pork Lean"/>
+        <label class="mb-1 block">Material name</label>
+        <input name="material_name" required class="input-light" placeholder="e.g., Pork Lean, Beef Trimmings"/>
       </div>
       <div>
-        <label class="text-xs text-gray-600 mb-1 block">Category</label>
+        <label class="mb-1 block">Category</label>
         <select name="category" class="input-light">
-          <option value="">— Select —</option>
-          @foreach($categoryCatalog as $_c)<option value="{{ $_c }}">{{ $_c }}</option>@endforeach
+          <option value="">Select category</option>
+          @foreach($categoryCatalog as $_c)
+            <option value="{{ $_c }}">{{ $_c }}</option>
+          @endforeach
         </select>
       </div>
       <div>
-        <label class="text-xs text-gray-600 mb-1 block">Unit</label>
+        <label class="mb-1 block">Unit</label>
         <select name="unit" class="input-light" required>
-          @foreach($unitOptions as $v=>$label)<option value="{{ $v }}">{{ $label }}</option>@endforeach
+          @foreach($unitOptions as $v=>$label)
+            <option value="{{ $v }}">{{ $label }}</option>
+          @endforeach
         </select>
       </div>
       <div>
-        <label class="text-xs text-gray-600 mb-1 block">Unit Price (₱)</label>
+        <label class="mb-1 block">Unit Price (₱)</label>
         <input name="unit_price" type="number" min="0" step="0.01" class="input-light" value="0" />
       </div>
       <div>
-        <label class="text-xs text-gray-600 mb-1 block">Quantity (kg)</label>
+        <label class="mb-1 block">Quantity (kg)</label>
         <input name="quantity_kg" type="number" min="0" step="0.001" class="input-light" value="0"/>
       </div>
       <div>
-        <label class="text-xs text-gray-600 mb-1 block">Min Stock (kg)</label>
+        <label class="mb-1 block">Min Stock (kg)</label>
         <input name="min_stock_kg" type="number" min="0" step="0.001" class="input-light"/>
       </div>
       <div class="md:col-span-2">
-        <label class="text-xs text-gray-600 mb-1 block">SKU (optional)</label>
+        <label class="mb-1 block">SKU (optional)</label>
         <input name="sku" class="input-light" placeholder="e.g., MT-PORK-LEAN"/>
       </div>
     </div>
@@ -327,67 +723,20 @@
   </form>
 </dialog>
 
-{{-- EDIT MODAL --}}
-<dialog id="modalEdit" class="modal" aria-label="Edit Material">
-  <form id="editForm" method="POST" class="modal-box w-full max-w-2xl">
-    @csrf @method('PUT')
-    <h3 class="font-bold text-lg mb-4 text-gray-900">Edit Material</h3>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <label class="text-xs text-gray-600 mb-1 block">Name</label>
-        <input name="material_name" required class="input-light"/>
-      </div>
-      <div>
-        <label class="text-xs text-gray-600 mb-1 block">Category</label>
-        <select name="category" class="input-light">
-          <option value="">— Select —</option>
-          @foreach($categoryCatalog as $_c)<option value="{{ $_c }}">{{ $_c }}</option>@endforeach
-        </select>
-      </div>
-      <div>
-        <label class="text-xs text-gray-600 mb-1 block">Unit</label>
-        <select name="unit" class="input-light" required>
-          @foreach($unitOptions as $v=>$label)<option value="{{ $v }}">{{ $label }}</option>@endforeach
-        </select>
-      </div>
-      <div>
-        <label class="text-xs text-gray-600 mb-1 block">Unit Price (₱)</label>
-        <input name="unit_price" type="number" min="0" step="0.01" class="input-light"/>
-      </div>
-      <div>
-        <label class="text-xs text-gray-600 mb-1 block">Quantity (kg)</label>
-        <input name="quantity_kg" type="number" min="0" step="0.001" class="input-light"/>
-      </div>
-      <div>
-        <label class="text-xs text-gray-600 mb-1 block">Min Stock (kg)</label>
-        <input name="min_stock_kg" type="number" min="0" step="0.001" class="input-light"/>
-      </div>
-      <div class="md:col-span-2">
-        <label class="text-xs text-gray-600 mb-1 block">SKU (optional)</label>
-        <input name="sku" class="input-light"/>
-      </div>
-    </div>
-    <div class="flex justify-end gap-2 mt-6">
-      <button type="button" class="btn btn-ghost" data-close>Cancel</button>
-      <button type="submit" class="btn btn-primary">Save Changes</button>
-    </div>
-  </form>
-</dialog>
-
 {{-- ADJUST STOCK MODAL --}}
 <dialog id="modalAdjust" class="modal" aria-label="Adjust Stock">
   <form id="adjustForm" method="POST" class="modal-box w-full max-w-md">
     @csrf
-    <h3 class="font-bold text-lg mb-4 text-gray-900">Adjust Stock</h3>
-    <p class="text-sm text-gray-600 mb-3">Material: <span id="adjustName" class="font-semibold"></span></p>
+    <h3 class="modal-title">Adjust Stock</h3>
+    <p class="text-[12px] text-gray-700 mb-3">Material: <span id="adjustName" class="font-semibold"></span></p>
     <div class="grid grid-cols-1 gap-4">
       <div>
-        <label class="text-xs text-gray-600 mb-1 block">Delta (kg)</label>
+        <label class="mb-1 block">Delta (kg)</label>
         <input name="delta_kg" type="number" step="0.001" class="input-light" placeholder="e.g., 5 or -2.5" required />
       </div>
       <div>
-        <label class="text-xs text-gray-600 mb-1 block">Reason (optional)</label>
-        <input name="reason" class="input-light" placeholder="Receiving PO-123, Correction, etc." />
+        <label class="mb-1 block">Reason (optional)</label>
+        <input name="reason" class="input-light" placeholder="Receiving PO-123, correction, spoilage, etc." />
       </div>
     </div>
     <div class="flex justify-end gap-2 mt-6">
@@ -405,6 +754,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
   const byId = (id) => document.getElementById(id);
 
+  const toastEl = byId('toastPixel');
+  let toastTimeout;
+
+  function showToast(message, type = 'success') {
+    if (!toastEl) return;
+    toastEl.textContent = message || '';
+    toastEl.classList.remove('toast-hide','toast-error','toast-show');
+    if (type === 'error') {
+      toastEl.classList.add('toast-error');
+    }
+    toastEl.classList.add('toast-show');
+    toastEl.style.pointerEvents = 'auto';
+
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+      toastEl.classList.add('toast-hide');
+      toastEl.classList.remove('toast-show');
+      toastEl.style.pointerEvents = 'none';
+    }, 1300);
+  }
+
   // Open any dialog by [data-open]
   document.addEventListener('click', (e) => {
     const openId = e.target?.getAttribute('data-open');
@@ -421,40 +791,6 @@ document.addEventListener('DOMContentLoaded', () => {
       try { dlg?.close(); } catch { dlg?.removeAttribute('open'); }
     }
   }, true);
-
-  // EDIT: fetch JSON & populate then open modal
-  $$('.btn[data-fetch-url]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const fetchUrl  = btn.dataset.fetchUrl;
-      const updateUrl = btn.dataset.updateUrl;
-      const form      = byId('editForm');
-      if (!fetchUrl || !updateUrl || !form) return;
-
-      try {
-        const res = await fetch(fetchUrl, {
-          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
-        });
-        if (!res.ok) throw new Error('Load failed');
-
-        const mat = await res.json();
-        form.setAttribute('action', updateUrl);
-        form.querySelector('[name="material_name"]').value = mat.material_name ?? '';
-        form.querySelector('[name="category"]').value      = mat.category ?? '';
-        form.querySelector('[name="unit"]').value          = mat.unit ?? 'kg';
-        form.querySelector('[name="unit_price"]').value    = (mat.unit_price ?? 0);
-        form.querySelector('[name="quantity_kg"]').value   = (mat.quantity_kg ?? 0);
-        const minEl = form.querySelector('[name="min_stock_kg"]');
-        if (minEl) minEl.value = (mat.min_stock_kg ?? '');
-        form.querySelector('[name="sku"]').value = mat.sku ?? '';
-
-        const modal = byId('modalEdit');
-        if (modal?.showModal) modal.showModal(); else modal?.setAttribute('open','open');
-      } catch (err) {
-        alert('Could not load material details.');
-        console.warn(err);
-      }
-    });
-  });
 
   // ADJUST: open and bind action url
   const adjustModal = byId('modalAdjust');
@@ -480,17 +816,27 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const res = await fetch(action, {
         method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': '{{ csrf_token() }}'
+        },
         body: fd
       });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.message || 'Failed');
-      alert(json.message || 'Stock adjusted.');
-      location.reload();
+
+      try { adjustModal?.close(); } catch { adjustModal?.removeAttribute('open'); }
+
+      showToast(json.message || 'Stock adjusted.', 'success');
+      setTimeout(() => {
+        location.reload();
+      }, 900);
     } catch (err) {
       console.warn(err);
-      // fallback
-      adjustForm.submit();
+      showToast('Adjustment failed, submitting normally.', 'error');
+      setTimeout(() => {
+        adjustForm.submit();
+      }, 500);
     }
   });
 });

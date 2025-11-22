@@ -1,17 +1,28 @@
 {{-- Add Order Modal (parent-aware) --}}
-<div id="addOrderModal" class="fixed inset-0 z-[9999] hidden">
+<div id="addOrderModal"
+     class="fixed inset-0 z-[9999] hidden items-center justify-center order-modal-backdrop">
   <div class="absolute inset-0 bg-black/40" onclick="closeOrderModal()" aria-hidden="true"></div>
 
-  <div class="relative mx-auto my-10 max-w-md w-[92%] page-card animate-fadeIn">
+  <div id="orderModalPanel"
+       class="relative mx-auto my-10 max-w-md w-[92%] page-card order-modal-panel">
     <button type="button" onclick="closeOrderModal()" aria-label="Close"
             class="absolute top-2 right-4 text-2xl font-bold text-[color:var(--muted)] hover:text-[color:var(--red)]">&times;</button>
 
-    <h3 id="modalTitle" class="text-xl font-semibold mb-4">
-      Add Order ({{ $product->product_name }})
+    <h3 id="modalTitle" class="text-xl font-semibold mb-4 flex items-center gap-2">
+      <span class="inline-flex h-7 w-7 items-center justify-center rounded-full
+                   bg-gradient-to-br from-indigo-500 via-sky-500 to-emerald-400
+                   text-white text-sm shadow-lg shadow-sky-500/40 animate-pulse-slow">
+        +
+      </span>
+      <span>Add Order ({{ $product->product_name }})</span>
     </h3>
 
     {{-- POST to production.orders.store --}}
-    <form id="addOrderForm" action="{{ route('production.orders.store') }}" method="POST" class="space-y-3">
+    <form id="addOrderForm"
+          action="{{ route('production.orders.store') }}"
+          method="POST"
+          enctype="multipart/form-data"
+          class="space-y-3">
       @csrf
 
       {{-- parent product = current page --}}
@@ -40,7 +51,11 @@
           <button type="button" id="po_new_toggle" class="btn btn-outline px-2 py-1 text-sm">+ New variant</button>
           @php $chips=['Regular skinless','Special skinless','Garlic skinless','Chicken skinless','Beef skinless','Hamonado']; @endphp
           @foreach($chips as $chip)
-            <button type="button" class="chip js-type-chip" data-value="{{ $chip }}">{{ $chip }}</button>
+            <button type="button"
+                    class="chip js-type-chip chip-animated"
+                    data-value="{{ $chip }}">
+              {{ $chip }}
+            </button>
           @endforeach
         </div>
 
@@ -102,14 +117,115 @@
            Unit Cost / Prices
            + Availability
          ======================= --}}
+      @once
       <style>
-        .accent-pack{border:1px solid rgba(237,209,0,.45);border-radius:12px;padding:12px;box-shadow:0 0 0 1px rgba(237,209,0,.18) inset}
-        .accent-bag{border:1px solid rgba(220,38,38,.45);border-radius:12px;padding:12px;box-shadow:0 0 0 1px rgba(220,38,38,.18) inset}
-        .badge{display:inline-flex;align-items:center;font-weight:700;font-size:.75rem;border-radius:8px;padding:.15rem .5rem}
-        .badge-pack{background:#EDD100;color:#1F1E1E}
-        .badge-bag{background:#dc2626;color:#fff}
-        .qty-input{text-align:center;font-weight:600}
+        .order-modal-backdrop{
+          backdrop-filter:blur(6px);
+        }
+        .order-modal-panel{
+          border-radius:20px;
+          background:
+            radial-gradient(circle at top left, rgba(129,140,248,.15), transparent 55%),
+            radial-gradient(circle at bottom right, rgba(45,212,191,.12), transparent 55%),
+            #ffffff;
+          border:1px solid rgba(148,163,184,.35);
+          box-shadow:
+            0 18px 45px rgba(15,23,42,.35),
+            0 0 0 1px rgba(148,163,184,.35);
+          transform-origin:center;
+        }
+        .order-modal-panel.order-anim-in{
+          animation:orderPopIn .22s ease-out forwards;
+        }
+        .order-modal-panel.order-anim-out{
+          animation:orderPopOut .18s ease-in forwards;
+        }
+        @keyframes orderPopIn{
+          0%{opacity:0;transform:translateY(16px) scale(.96) rotateX(4deg);}
+          100%{opacity:1;transform:translateY(0) scale(1) rotateX(0);}
+        }
+        @keyframes orderPopOut{
+          0%{opacity:1;transform:translateY(0) scale(1);}
+          100%{opacity:0;transform:translateY(10px) scale(.94);}
+        }
+
+        .accent-pack{
+          border:1px solid rgba(237,209,0,.45);
+          border-radius:14px;
+          padding:12px;
+          box-shadow:
+            0 10px 18px rgba(202,138,4,.15),
+            0 0 0 1px rgba(234,179,8,.18) inset;
+          background:linear-gradient(135deg,#fefce8,#fffbeb);
+          transition:transform .16s ease, box-shadow .16s ease, background .16s ease;
+        }
+        .accent-bag{
+          border:1px solid rgba(220,38,38,.45);
+          border-radius:14px;
+          padding:12px;
+          box-shadow:
+            0 10px 18px rgba(220,38,38,.18),
+            0 0 0 1px rgba(248,113,113,.18) inset;
+          background:linear-gradient(135deg,#fee2e2,#fef2f2);
+          transition:transform .16s ease, box-shadow .16s ease, background .16s ease;
+        }
+        .accent-pack:hover{
+          transform:translateY(-2px);
+          box-shadow:
+            0 14px 24px rgba(202,138,4,.25),
+            0 0 0 1px rgba(250,204,21,.35) inset;
+        }
+        .accent-bag:hover{
+          transform:translateY(-2px);
+          box-shadow:
+            0 14px 24px rgba(220,38,38,.30),
+            0 0 0 1px rgba(248,113,113,.40) inset;
+        }
+        .badge{
+          display:inline-flex;align-items:center;
+          font-weight:700;font-size:.75rem;border-radius:999px;
+          padding:.15rem .6rem;
+        }
+        .badge-pack{background:#facc15;color:#1f2937;box-shadow:0 0 0 1px rgba(161,98,7,.25);}
+        .badge-bag{background:#dc2626;color:#fff;box-shadow:0 0 0 1px rgba(185,28,28,.4);}
+        .qty-input{text-align:center;font-weight:600;}
+
+        .chip-animated{
+          position:relative;
+          overflow:hidden;
+        }
+        .chip-animated::after{
+          content:'';position:absolute;inset:0;
+          background:linear-gradient(120deg,transparent,rgba(255,255,255,.8),transparent);
+          transform:translateX(-120%);
+          transition:transform .4s ease;
+          pointer-events:none;
+        }
+        .chip-animated:hover::after{
+          transform:translateX(120%);
+        }
+
+        .order-image-preview{
+          border-radius:14px;
+          padding:10px;
+          border:1px dashed rgba(148,163,184,.7);
+          background:linear-gradient(135deg,#f9fafb,#eff6ff);
+          box-shadow:inset 0 0 0 1px rgba(255,255,255,.8);
+          animation:imgPreviewIn .2s ease-out;
+        }
+        @keyframes imgPreviewIn{
+          from{opacity:0;transform:translateY(4px);}
+          to{opacity:1;transform:translateY(0);}
+        }
+        .animate-pulse-slow{
+          animation:pulseSlow 1.8s ease-in-out infinite;
+        }
+        @keyframes pulseSlow{
+          0%,100%{transform:scale(1);opacity:1;}
+          50%{transform:scale(1.06);opacity:.85;}
+        }
       </style>
+      @endonce
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {{-- Unit Cost --}}
@@ -175,6 +291,28 @@
         </div>
       </div>
 
+      {{-- ✅ Product image upload (goes to ProductionController@storeOrder and then to Product image pipeline) --}}
+      <div>
+        <label class="label">Product Image</label>
+        <div id="po_image_preview_wrap" class="hidden mt-1 order-image-preview">
+          <img id="po_image_preview"
+               src=""
+               alt="Selected product image"
+               class="w-full max-h-56 object-cover rounded-lg border border-white/70 shadow-sm">
+          <div id="po_image_meta" class="mt-1 text-[11px] text-gray-500"></div>
+        </div>
+
+        <div class="mt-1 flex items-center gap-3">
+          <input id="po_image"
+                 name="image"
+                 type="file"
+                 accept="image/*"
+                 class="input file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200">
+          <button type="button" id="po_image_clear" class="btn btn-ghost text-xs">Clear</button>
+        </div>
+        <p class="help mt-1">Optional. If set, this image will appear on the product card (JPG, PNG, or WebP • max 4MB).</p>
+      </div>
+
       {{-- Optional fields --}}
       <div>
         <label class="label">Order Date</label>
@@ -215,9 +353,34 @@
     }
     const m = $$('#addOrderModal'); if (!m) return;
     m.classList.remove('hidden'); m.classList.add('flex');
+
+    const panel = $$('#orderModalPanel');
+    if (panel) {
+      panel.classList.remove('order-anim-out');
+      void panel.offsetWidth; // restart animation
+      panel.classList.add('order-anim-in');
+    }
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
-  function closeOrderModal(){ const m=$$('#addOrderModal'); if(!m) return; m.classList.add('hidden'); m.classList.remove('flex'); }
+
+  function closeOrderModal(){
+    const m = $$('#addOrderModal');
+    const panel = $$('#orderModalPanel');
+    if (!m) return;
+
+    if (panel) {
+      panel.classList.remove('order-anim-in');
+      panel.classList.add('order-anim-out');
+      setTimeout(() => {
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+      }, 160);
+    } else {
+      m.classList.add('hidden');
+      m.classList.remove('flex');
+    }
+  }
 
   function syncExpiryPreview(){
     const shelf = {{ (int)($product->shelf_life_days ?? 7) }};
@@ -231,7 +394,9 @@
     expPv.value = iso; expPv.min = prod.value;
     if (expHidden) expHidden.value = iso;
   }
-  document.addEventListener('change', e => { if (e.target && e.target.id === 'po_prod_date') syncExpiryPreview(); });
+  document.addEventListener('change', e => {
+    if (e.target && e.target.id === 'po_prod_date') syncExpiryPreview();
+  });
 
   function autoFillCostPriceForName(name){
     fetch(`{{ route('production.info', ':name') }}`.replace(':name', encodeURIComponent(name)))
@@ -244,9 +409,13 @@
   }
 
   (function(){
-    const form = $$('#addOrderForm'); const btn  = $$('#submitAddOrder');
+    const form = $$('#addOrderForm');
+    const btn  = $$('#submitAddOrder');
     if (!form || !btn) return;
-    form.addEventListener('submit', () => { btn.disabled = true; btn.textContent = 'Saving...'; });
+    form.addEventListener('submit', () => {
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+    });
   })();
 
   // Keep type label and legacy snapshot in sync
@@ -274,6 +443,13 @@
     const cancel= document.getElementById('po_new_cancel');
     const err   = document.getElementById('po_new_err');
 
+    // IMAGE PREVIEW HOOKS
+    const imgInput  = document.getElementById('po_image');
+    const imgWrap   = document.getElementById('po_image_preview_wrap');
+    const imgEl     = document.getElementById('po_image_preview');
+    const imgMeta   = document.getElementById('po_image_meta');
+    const imgClear  = document.getElementById('po_image_clear');
+
     sel?.addEventListener('change', () => {
       const opt = sel.options[sel.selectedIndex];
       const name = opt.textContent.replace(/\s*\(Base\)\s*$/,'').trim();
@@ -286,8 +462,16 @@
       ch.addEventListener('click', () => setTypeLabel(ch.dataset.value || ch.textContent.trim()));
     });
 
-    tog?.addEventListener('click', () => { wrap?.classList.toggle('hidden'); err?.classList.add('hidden'); err.textContent=''; });
-    cancel?.addEventListener('click', () => { wrap?.classList.add('hidden'); err?.classList.add('hidden'); err.textContent=''; });
+    tog?.addEventListener('click', () => {
+      wrap?.classList.toggle('hidden');
+      err?.classList.add('hidden');
+      err.textContent='';
+    });
+    cancel?.addEventListener('click', () => {
+      wrap?.classList.add('hidden');
+      err?.classList.add('hidden');
+      err.textContent='';
+    });
 
     // Save new variant under parent
     save?.addEventListener('click', async () => {
@@ -296,7 +480,11 @@
       const shelf = parseInt(document.getElementById('po_new_shelf')?.value || '7', 10) || 7;
       const parentId = {{ (int)$product->id }};
 
-      if (!name) { err.textContent = 'Variant name is required.'; err.classList.remove('hidden'); return; }
+      if (!name) {
+        err.textContent = 'Variant name is required.';
+        err.classList.remove('hidden');
+        return;
+      }
 
       try {
         const res = await fetch(@json(route('products.quick-store')), {
@@ -324,10 +512,45 @@
           $$('#po_cost').value = Number(data.unit_cost).toFixed(2);
         }
 
-        wrap?.classList.add('hidden'); err.classList.add('hidden'); err.textContent = '';
+        wrap?.classList.add('hidden');
+        err.classList.add('hidden');
+        err.textContent = '';
       } catch (e) {
-        err.textContent = 'Could not save variant. Please try again.'; err.classList.remove('hidden');
+        err.textContent = 'Could not save variant. Please try again.';
+        err.classList.remove('hidden');
       }
+    });
+
+    // basic image preview (lets backend enforce size/dimensions)
+    function clearImagePreview(){
+      if (imgInput) imgInput.value = '';
+      if (imgEl) imgEl.src = '';
+      if (imgMeta) imgMeta.textContent = '';
+      if (imgWrap) imgWrap.classList.add('hidden');
+    }
+
+    imgInput?.addEventListener('change', () => {
+      const f = imgInput.files?.[0];
+      if (!f) { clearImagePreview(); return; }
+
+      const reader = new FileReader();
+      reader.onload = e => {
+        const url = e.target?.result;
+        if (!url || !imgEl) return;
+        imgEl.onload = () => {
+          if (imgMeta) {
+            const mb = (f.size/(1024*1024)).toFixed(2);
+            imgMeta.textContent = `${f.name} • ${mb} MB • ${imgEl.naturalWidth}×${imgEl.naturalHeight}`;
+          }
+          if (imgWrap) imgWrap.classList.remove('hidden');
+        };
+        imgEl.src = url;
+      };
+      reader.readAsDataURL(f);
+    });
+
+    imgClear?.addEventListener('click', () => {
+      clearImagePreview();
     });
   });
 </script>

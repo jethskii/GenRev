@@ -309,8 +309,8 @@
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-4">
               <div>
-                <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products and Types</h2>
-                <p class="text-xs muted">Top 5 product type combinations by revenue</p>
+                <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products and Variant</h2>
+                <p class="text-xs muted">Top 5 Product Variant combinations by revenue</p>
               </div>
               @if(\Illuminate\Support\Facades\Route::has('sales'))
                 <a href="{{ route('sales') }}" class="btn btn-green text-xs">View all</a>
@@ -321,7 +321,7 @@
               <div class="text-center py-8">
                 <div class="text-4xl mb-2" aria-hidden="true">📊</div>
                 <div class="text-sm muted">No sales data available</div>
-                <div class="text-xs muted mt-1">Start recording sales to see top product type combinations</div>
+                <div class="text-xs muted mt-1">Start recording sales to see top product Variant combinations</div>
               </div>
             @else
               <div class="space-y-3">
@@ -366,7 +366,7 @@
               <thead class="uppercase">
                 <tr>
                   <th scope="col" class="py-2 px-3">Product</th>
-                  <th scope="col" class="py-2 px-3">Type</th>
+                  <th scope="col" class="py-2 px-3">Variant</th>
                   <th scope="col" class="py-2 px-3 text-right">Qty</th>
                   <th scope="col" class="py-2 px-3 text-right">Price</th>
                   <th scope="col" class="py-2 px-3">Date</th>
@@ -573,15 +573,15 @@
             </div>
           </div>
 
-          <!-- Weekly Sales -->
+          <!-- Weekly Sales with AI forecast -->
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Weekly Sales</h2>
               <div class="flex items-center gap-3">
-                <select id="weeklySalesMode" class="input w-40 py-1 text-xs" aria-label="Weekly sales view mode">
+                <select id="weeklySalesMode" class="input w-48 py-1 text-xs" aria-label="Weekly sales view mode">
                   <option value="quantity" selected>Qty + Revenue</option>
                   <option value="profit">Revenue + Profit</option>
-                  <option value="next">Next Production</option>
+                  <option value="forecast">Next Week Forecast (AI)</option>
                 </select>
                 <label class="text-xs flex items-center gap-2">
                   <input id="toggleSales" type="checkbox" checked class="sr-only">
@@ -590,7 +590,7 @@
               </div>
             </div>
             <div class="h-56 relative">
-              <p id="salesDesc" class="sr-only">Combo chart showing quantity sold, revenue and estimated profit.</p>
+              <p id="salesDesc" class="sr-only">Combo chart showing quantity sold, revenue, estimated profit, and AI forecast.</p>
               <canvas id="salesChart" aria-label="Sales chart" aria-describedby="salesDesc"></canvas>
               <div id="salesEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
@@ -613,6 +613,7 @@
                 : 'No projected stockout';
             $globalRecommendedProd = $forecastSummary['total_recommended_production'] ?? null;
             $forecastTopProducts   = $forecastTopProducts ?? collect();
+            $productForecast       = $productForecast ?? collect();
 
             $atRiskCount = ($forecastTopProducts instanceof \Illuminate\Support\Collection)
                 ? $forecastTopProducts->count()
@@ -752,6 +753,97 @@
             </div>
           </div>
 
+          <!-- NEW: Top 5 Products to Produce This Week (AI) -->
+          <div class="card p-5 rounded-2xl">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h2 class="text-base font-semibold">🚀 Top 5 Products to Produce This Week (AI)</h2>
+                <p class="text-xs muted">
+                  Based on recent demand, inventory, and a {{ $productForecast->isNotEmpty() ? '7-day' : 'short' }} forecast horizon.
+                </p>
+              </div>
+              <div class="text-right text-xs muted hidden sm:block">
+                <p>Uses AI-smoothed daily demand</p>
+                <p>to estimate how much to produce.</p>
+              </div>
+            </div>
+
+            @if($productForecast instanceof \Illuminate\Support\Collection && $productForecast->isNotEmpty())
+              @php
+                $topToProduce = $productForecast->sortByDesc('suggested_production')->take(5);
+              @endphp
+              <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
+                @foreach($topToProduce as $row)
+                  @php
+                    $pName       = $row['product_name'] ?? 'Product';
+                    $avgDemand   = $row['avg_daily_demand'] ?? 0;
+                    $forecastTot = $row['forecast_total'] ?? 0;
+                    $stock       = $row['current_inventory'] ?? 0;
+                    $daysLeft    = $row['days_to_stockout'] ?? null;
+                    $suggested   = $row['suggested_production'] ?? 0;
+
+                    $badgeLabel = 'Planned';
+                    $badgeClass = 'text-emerald-700 bg-emerald-50 border border-emerald-100';
+                    if (!is_null($daysLeft)) {
+                      $d = (int) $daysLeft;
+                      if ($d <= 0) {
+                        $badgeLabel = 'Out of stock';
+                        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+                      } elseif ($d <= 3) {
+                        $badgeLabel = 'Urgent this week';
+                        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+                      } elseif ($d <= 7) {
+                        $badgeLabel = 'Produce this week';
+                        $badgeClass = 'text-amber-700 bg-amber-50 border border-amber-100';
+                      }
+                    }
+                  @endphp
+
+                  <div class="flex items-start justify-between gap-3 text-xs">
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 mb-0.5">
+                        <span class="font-medium truncate">{{ $pName }}</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $badgeClass }}">
+                          {{ $badgeLabel }}
+                        </span>
+                      </div>
+                      <div class="muted text-[11px]">
+                        AI daily demand: <span class="font-semibold">{{ number_format($avgDemand, 2) }} kg</span>
+                        • Week demand: <span class="font-semibold">{{ number_format($forecastTot, 1) }} kg</span>
+                      </div>
+                      <div class="muted text-[11px]">
+                        Current inventory: <span class="font-semibold">{{ number_format($stock, 1) }} kg</span>
+                        @if(!is_null($daysLeft))
+                          •
+                          @if($daysLeft <= 0)
+                            already out of stock
+                          @elseif($daysLeft === 1)
+                            approx. 1 day before stockout
+                          @else
+                            approx. {{ $daysLeft }} days before stockout
+                          @endif
+                        @endif
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-[11px] muted">
+                        Suggested this week:
+                      </div>
+                      <div class="font-semibold text-[13px]">
+                        {{ number_format($suggested, 1) }} kg
+                      </div>
+                    </div>
+                  </div>
+                @endforeach
+              </div>
+            @else
+              <p class="text-xs muted">
+                Once enough sales and production history exist, this panel will highlight the top 5 products
+                you should prioritize this week with suggested production quantities in kg.
+              </p>
+            @endif
+          </div>
+
         </div>
       </main>
     </div>
@@ -879,6 +971,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const qty    = (@json($weeklySalesQtySeries ?? []) || []).map(v=>Number(v)||0);
   const rev    = (@json($weeklySalesRevenueSeries ?? []) || []).map(v=>Number(v)||0);
   const profit = (@json($weeklySalesProfitSeries ?? []) || []).map(v=>Number(v)||0);
+
+  // AI forecast series for weekly sales (next week, aligned by weekday)
+  const qtyForecast    = (@json($weeklySalesForecastQtySeries ?? []) || []).map(v=>Number(v)||0);
+  const revForecast    = (@json($weeklySalesForecastRevenueSeries ?? []) || []).map(v=>Number(v)||0);
+  const profitForecast = (@json($weeklySalesForecastProfitSeries ?? []) || []).map(v=>Number(v)||0);
+
   const exp    = (@json($weeklyExpirySeries ?? []) || []).map(v=>Number(v)||0);
 
   // weekly summaries for insights
@@ -887,7 +985,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const estimatedMarginJS     = Number(@json($estimatedGrossMarginPct ?? 0));
   const forecastTopProductsJS = @json($forecastTopProducts ?? []);
 
-  // Forecast data (next N days)
+  // Forecast data (next N days) for production planning
   const forecastLabelsRaw   = @json($forecastLabels ?? []);
   const forecastDemandRaw   = @json($forecastDemandSeries ?? []);
   const forecastInventoryRaw= @json($forecastInventorySeries ?? []);
@@ -914,7 +1012,9 @@ document.addEventListener('DOMContentLoaded', () => {
     el.classList.add('flex');
   };
 
-  // 4) Create charts (safe on missing canvases)
+  const sumArray = (arr = []) => arr.reduce((a,b)=>a+(Number(b)||0),0);
+
+  // 4) Create charts
   const mk = (id, config) => {
     const c = document.getElementById(id);
     return c ? new Chart(c.getContext('2d'), config) : null;
@@ -936,43 +1036,190 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Weekly sales (Qty + Revenue + Profit)
+  // Weekly sales chart with AI forecast datasets (more animated + creative)
   setEmptyBanner([...qty, ...rev], 'salesEmpty');
   const salesChart = mk('salesChart', {
     data: {
       labels,
       datasets: [
-        { type:'bar',  label:'Qty Sold', data: qty, yAxisID:'y',
-          backgroundColor:C_BLUE_30, borderColor:C_BLUE, borderWidth:2, borderRadius:barRadius,
-          topFaceColor:'rgba(37,99,235,.5)', sideFaceColor:'rgba(37,99,235,.3)' },
-        { type:'line', label:'Revenue', data: rev, yAxisID:'y1',
-          borderColor:C_RED, backgroundColor:C_RED, borderWidth:3, tension:.35, pointRadius:3, fill:false },
-        { type:'line', label:'Estimated Profit', data: profit, yAxisID:'y1',
-          borderColor:C_GREEN, backgroundColor:C_GREEN, borderWidth:2, tension:.35, pointRadius:2.5, fill:false, hidden:true }
+        {
+          key:'qtyActual',
+          type:'bar',
+          label:'Qty Sold',
+          data: qty,
+          yAxisID:'y',
+          backgroundColor:(ctx) => {
+            const chart = ctx.chart;
+            const {ctx: c, chartArea} = chart;
+            if (!chartArea) return C_BLUE_30;
+            const g = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+            g.addColorStop(0, 'rgba(37,99,235,.12)');
+            g.addColorStop(0.5, 'rgba(59,130,246,.45)');
+            g.addColorStop(1, 'rgba(191,219,254,.95)');
+            return g;
+          },
+          borderColor:C_BLUE,
+          borderWidth:2,
+          borderRadius:barRadius,
+          topFaceColor:'rgba(37,99,235,.55)',
+          sideFaceColor:'rgba(30,64,175,.35)'
+        },
+        {
+          key:'revActual',
+          type:'line',
+          label:'Revenue',
+          data: rev,
+          yAxisID:'y1',
+          borderColor:(ctx) => {
+            const chart = ctx.chart;
+            const {ctx: c, chartArea} = chart;
+            if (!chartArea) return C_RED;
+            const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+            g.addColorStop(0, 'rgba(248,113,113,1)');
+            g.addColorStop(0.5, 'rgba(239,68,68,1)');
+            g.addColorStop(1, 'rgba(248,250,252,1)');
+            return g;
+          },
+          backgroundColor:C_RED,
+          borderWidth:3,
+          tension:.4,
+          pointRadius:3,
+          pointHoverRadius:6,
+          pointHitRadius:10,
+          fill:false
+        },
+        {
+          key:'profitActual',
+          type:'line',
+          label:'Estimated Profit',
+          data: profit,
+          yAxisID:'y1',
+          borderColor:'rgba(16,185,129,.9)',
+          backgroundColor:'rgba(16,185,129,.9)',
+          borderWidth:2,
+          tension:.35,
+          pointRadius:2.5,
+          pointHoverRadius:5,
+          fill:false,
+          hidden:true
+        },
+        {
+          key:'qtyForecast',
+          type:'bar',
+          label:'Predicted Qty (AI)',
+          data: qtyForecast,
+          yAxisID:'y',
+          backgroundColor:'rgba(37,99,235,.15)',
+          borderColor:'rgba(37,99,235,.6)',
+          borderWidth:2,
+          borderRadius:barRadius,
+          topFaceColor:'rgba(59,130,246,.35)',
+          sideFaceColor:'rgba(30,64,175,.25)',
+          borderDash:[4,3],
+          hidden:true
+        },
+        {
+          key:'revForecast',
+          type:'line',
+          label:'Predicted Revenue (AI)',
+          data: revForecast,
+          yAxisID:'y1',
+          borderColor:'rgba(239,68,68,.6)',
+          backgroundColor:'rgba(239,68,68,.6)',
+          borderWidth:2,
+          tension:.4,
+          pointRadius:2,
+          pointHoverRadius:5,
+          fill:false,
+          borderDash:[6,4],
+          hidden:true
+        },
+        {
+          key:'profitForecast',
+          type:'line',
+          label:'Predicted Profit (AI)',
+          data: profitForecast,
+          yAxisID:'y1',
+          borderColor:'rgba(16,185,129,.5)',
+          backgroundColor:'rgba(16,185,129,.5)',
+          borderWidth:2,
+          tension:.4,
+          pointRadius:2,
+          pointHoverRadius:5,
+          fill:false,
+          borderDash:[6,4],
+          hidden:true
+        }
       ]
     },
     options: {
-      responsive:true, maintainAspectRatio:false,
+      responsive:true,
+      maintainAspectRatio:false,
       plugins:{
         legend:{ labels:{ color: tickColor } },
         title:{ display:true, text:'Weekly Sales', color:'#0f172a' },
         tooltip:{
+          backgroundColor:'rgba(15,23,42,.96)',
+          borderColor:'rgba(148,163,184,.7)',
+          borderWidth:1,
+          padding:10,
+          cornerRadius:10,
           callbacks:{
             label:(ctx)=>{
-              const dsType = ctx.dataset.type;
               const label  = ctx.dataset.label || '';
               const val    = Number(ctx.parsed.y);
-              if (dsType === 'line' && label.includes('Revenue')) {
-                return `Revenue: ₱${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+              if (label.toLowerCase().includes('revenue')) {
+                const tag = label.toLowerCase().includes('predicted') ? 'Predicted revenue' : 'Revenue';
+                return `${tag}: ₱${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`;
               }
-              if (dsType === 'line' && label.includes('Profit')) {
-                return `Estimated profit: ₱${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+              if (label.toLowerCase().includes('profit')) {
+                const tag = label.toLowerCase().includes('predicted') ? 'Predicted profit' : 'Estimated profit';
+                return `${tag}: ₱${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`;
               }
-              return `Qty: ${val}`;
+              if (label.toLowerCase().includes('predicted qty')) {
+                return `Predicted qty: ${val.toLocaleString()}`;
+              }
+              return `Qty: ${val.toLocaleString()}`;
             }
           }
         },
         bar3d:{ enabled:true, depth:10, lift:-6 }
+      },
+      animation:{
+        duration:1000,
+        easing:'easeOutQuart',
+        delay:(ctx) => {
+          if (ctx.type !== 'data' || ctx.mode !== 'default') return 0;
+          return ctx.dataIndex * 60 + ctx.datasetIndex * 80;
+        }
+      },
+      datasets:{
+        bar:{
+          animations:{
+            y:{
+              duration:900,
+              easing:'easeOutBack',
+              from:(ctx)=>{
+                const chart = ctx.chart;
+                const yAxis = chart.scales.y;
+                return yAxis ? yAxis.getPixelForValue(0) : chart.chartArea.bottom;
+              }
+            }
+          }
+        },
+        line:{
+          animations:{
+            y:{
+              duration:900,
+              easing:'easeOutCubic',
+              from:(ctx)=>{
+                const chart = ctx.chart;
+                const yAxis = ctx.scale || chart.scales.y1 || chart.scales.y;
+                return yAxis ? yAxis.getPixelForValue(0) : chart.chartArea.bottom;
+              }
+            }
+          }
+        }
       },
       scales:{
         x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
@@ -1211,17 +1458,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const weeklySalesMode    = document.getElementById('weeklySalesMode');
   const weeklySalesInsight = document.getElementById('weeklySalesInsight');
 
+  function findDs(key) {
+    if (!salesChart) return null;
+    return salesChart.data.datasets.find(d => d.key === key) || null;
+  }
+
   function updateWeeklySalesMode() {
     if (!salesChart || !weeklySalesMode) return;
-    const mode     = weeklySalesMode.value;
-    const dsQty    = salesChart.data.datasets[0];
-    const dsRev    = salesChart.data.datasets[1];
-    const dsProfit = salesChart.data.datasets[2];
+    const mode         = weeklySalesMode.value;
+    const dsQty        = findDs('qtyActual');
+    const dsRev        = findDs('revActual');
+    const dsProfit     = findDs('profitActual');
+    const dsQtyF       = findDs('qtyForecast');
+    const dsRevF       = findDs('revForecast');
+    const dsProfitF    = findDs('profitForecast');
 
     if (mode === 'quantity') {
-      dsQty.hidden    = false;
-      dsRev.hidden    = false;
-      dsProfit.hidden = true;
+      if (dsQty)     dsQty.hidden     = false;
+      if (dsRev)     dsRev.hidden     = false;
+      if (dsProfit)  dsProfit.hidden  = true;
+      if (dsQtyF)    dsQtyF.hidden    = true;
+      if (dsRevF)    dsRevF.hidden    = true;
+      if (dsProfitF) dsProfitF.hidden = true;
+
       salesChart.options.plugins.title.text = 'Weekly Sales: Quantity and Revenue';
 
       if (weeklySalesInsight) {
@@ -1231,36 +1490,54 @@ document.addEventListener('DOMContentLoaded', () => {
           (estimatedMarginJS ? ` with about ${estimatedMarginJS}% gross margin.` : '.');
       }
     } else if (mode === 'profit') {
-      dsQty.hidden    = true;
-      dsRev.hidden    = false;
-      dsProfit.hidden = false;
+      if (dsQty)     dsQty.hidden     = true;
+      if (dsRev)     dsRev.hidden     = false;
+      if (dsProfit)  dsProfit.hidden  = false;
+      if (dsQtyF)    dsQtyF.hidden    = true;
+      if (dsRevF)    dsRevF.hidden    = true;
+      if (dsProfitF) dsProfitF.hidden = true;
+
       salesChart.options.plugins.title.text = 'Weekly Sales: Revenue and Estimated Profit';
 
       if (weeklySalesInsight) {
         weeklySalesInsight.textContent =
           'Each point shows how much of your revenue is likely turning into profit this week based on materials cost. Use spikes to time promos and production pushes.';
       }
-    } else if (mode === 'next') {
-      dsQty.hidden    = false;
-      dsRev.hidden    = true;
-      dsProfit.hidden = true;
-      salesChart.options.plugins.title.text = 'Weekly Sales: Next Production Focus';
+    } else if (mode === 'forecast') {
+      const hasForecast =
+        (qtyForecast && qtyForecast.some(v => v > 0)) ||
+        (revForecast && revForecast.some(v => v > 0)) ||
+        (profitForecast && profitForecast.some(v => v > 0));
+
+      if (dsQty)     dsQty.hidden     = false; // keep as context
+      if (dsRev)     dsRev.hidden     = false;
+      if (dsProfit)  dsProfit.hidden  = true;
+      if (dsQtyF)    dsQtyF.hidden    = !hasForecast;
+      if (dsRevF)    dsRevF.hidden    = !hasForecast;
+      if (dsProfitF) dsProfitF.hidden = !hasForecast;
+
+      salesChart.options.plugins.title.text = 'Weekly Sales: Next Week Forecast (AI)';
 
       if (weeklySalesInsight) {
-        if (Array.isArray(forecastTopProductsJS) && forecastTopProductsJS.length) {
-          const names = forecastTopProductsJS.slice(0, 3)
-            .map(p => p.name || p['name'] || 'Product');
-          const urgent     = forecastTopProductsJS[0] || {};
-          const urgentName = urgent.name || urgent['name'] || names[0] || 'Product';
-          const urgentDays = urgent.days_to_stockout ?? urgent['days_to_stockout'];
+        if (hasForecast) {
+          const totalQtyF     = sumArray(qtyForecast);
+          const totalRevenueF = sumArray(revForecast);
+          const totalProfitF  = sumArray(profitForecast);
 
-          weeklySalesInsight.textContent =
-            `Based on recent demand, focus production on ${names.join(', ')}. ` +
-            `${urgentName} is closest to stockout` +
-            (urgentDays != null ? ` in about ${urgentDays} day(s).` : '.');
+          let text = `AI forecast suggests around ${totalQtyF.toLocaleString()} unit(s) next week `;
+          text    += `with about ₱${totalRevenueF.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})} in revenue`;
+
+          if (totalProfitF > 0) {
+            text += ` and roughly ₱${totalProfitF.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})} in profit.`;
+          } else {
+            text += '.';
+          }
+
+          text += ' Use this as a guide for stock, staffing, and promos.';
+          weeklySalesInsight.textContent = text;
         } else {
           weeklySalesInsight.textContent =
-            'Keep logging sales and production to unlock product-level suggestions for what to produce next.';
+            'Once enough history is available, this view will show AI predicted quantity, revenue, and profit for next week on top of your current week performance.';
         }
       }
     }

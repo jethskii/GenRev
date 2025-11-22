@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
-use Intervention\Image\Laravel\Facades\Image; // NEW
+use Intervention\Image\Laravel\Facades\Image;
 use App\Models\Product;
 use App\Models\Production;
 use App\Models\Sale;
@@ -26,23 +26,23 @@ class ProductionController extends Controller
     public function suggestTypes(Product $parent): JsonResponse
     {
         $fromOrders = Production::query()
-            ->where(function($q) use ($parent){
+            ->where(function ($q) use ($parent) {
                 $q->where('parent_product_id', $parent->id)
-                  ->orWhere(function($q2) use ($parent){
-                      $q2->whereNull('parent_product_id')
-                         ->where('product_id', $parent->id);
-                  });
+                    ->orWhere(function ($q2) use ($parent) {
+                        $q2->whereNull('parent_product_id')
+                           ->where('product_id', $parent->id);
+                    });
             })
             ->whereNotNull('product_name_snapshot')
             ->pluck('product_name_snapshot');
 
         $fromVariants = Product::where('parent_id', $parent->id)->pluck('product_name');
-        $maybeCat = collect($parent->category ? [$parent->category] : []);
+        $maybeCat     = collect($parent->category ? [$parent->category] : []);
 
         $types = $fromOrders
             ->merge($fromVariants)
             ->merge($maybeCat)
-            ->map(fn($s)=>trim((string)$s))
+            ->map(fn ($s) => trim((string) $s))
             ->filter()
             ->unique()
             ->sort()
@@ -55,9 +55,11 @@ class ProductionController extends Controller
     {
         $maxN = 0;
         foreach ($existing as $label) {
-            if (preg_match('/\bType\s+(\d+)\b/i', (string)$label, $m)) {
-                $n = (int)$m[1];
-                if ($n > $maxN) $maxN = $n;
+            if (preg_match('/\bType\s+(\d+)\b/i', (string) $label, $m)) {
+                $n = (int) $m[1];
+                if ($n > $maxN) {
+                    $maxN = $n;
+                }
             }
         }
 
@@ -65,10 +67,12 @@ class ProductionController extends Controller
 
         $proposed = "Type {$candidate}";
         $i = 0;
-        while ($existing->contains(fn($v) => 0 === strcasecmp(trim((string)$v), $proposed))) {
+        while ($existing->contains(fn ($v) => 0 === strcasecmp(trim((string) $v), $proposed))) {
             $i++;
             $proposed = "Type " . ($candidate + $i);
-            if ($i > 999) break;
+            if ($i > 999) {
+                break;
+            }
         }
 
         return $proposed;
@@ -88,12 +92,12 @@ class ProductionController extends Controller
         }
 
         $fromOrders = Production::query()
-            ->where(function($q) use ($parent){
+            ->where(function ($q) use ($parent) {
                 $q->where('parent_product_id', $parent->id)
-                  ->orWhere(function($q2) use ($parent){
-                      $q2->whereNull('parent_product_id')
-                         ->where('product_id', $parent->id);
-                  });
+                    ->orWhere(function ($q2) use ($parent) {
+                        $q2->whereNull('parent_product_id')
+                           ->where('product_id', $parent->id);
+                    });
             })
             ->whereNotNull('product_name_snapshot')
             ->pluck('product_name_snapshot');
@@ -104,7 +108,7 @@ class ProductionController extends Controller
         $list = $fromOrders
             ->merge($fromVariants)
             ->merge($maybeCat)
-            ->map(fn($s)=>trim((string)$s))
+            ->map(fn ($s) => trim((string) $s))
             ->filter()
             ->unique()
             ->sort()
@@ -127,7 +131,7 @@ class ProductionController extends Controller
 
         $products = Product::query()
             ->when($request->filled('search'), function ($q) use ($request) {
-                $s = trim((string)$request->get('search'));
+                $s = trim((string) $request->get('search'));
                 $q->where('product_name', 'like', "%{$s}%");
             })
             ->when($selectedCategory, fn ($q) => $q->where('category', $selectedCategory))
@@ -163,7 +167,7 @@ class ProductionController extends Controller
 
         $products = Product::query()
             ->when($request->filled('category'), fn ($q) => $q->where('category', $request->get('category')))
-            ->when($request->filled('search'),   fn ($q) => $q->where('product_name', 'like', '%' . $request->get('search') . '%'))
+            ->when($request->filled('search'), fn ($q) => $q->where('product_name', 'like', '%' . $request->get('search') . '%'))
             ->orderByDesc('production_date')
             ->get();
 
@@ -176,61 +180,77 @@ class ProductionController extends Controller
     }
 
     /* =============================== CREATE (DASHBOARD CARD) =============================== */
+
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'product_id'        => ['nullable','integer','exists:products,id'],
-            'product_name'      => ['nullable','string','max:255'],
-            'batch_number'      => ['nullable','string','max:255'],
-            'forecasted_demand' => ['nullable','numeric','min:0'],
-            'unit_price_pack'   => ['nullable','numeric','min:0'],
-            'unit_price_bag'    => ['nullable','numeric','min:0'],
-            'available_pack'    => ['nullable','integer','min:0'],
-            'available_bag'     => ['nullable','integer','min:0'],
-            'production_date'   => ['required','date'],
-            'expiration_date'   => ['nullable','date','after_or_equal:production_date'],
-            'category'          => ['nullable','string','max:120'],
-            'remarks'           => ['nullable','string','max:500'],
+            'product_id'        => ['nullable', 'integer', 'exists:products,id'],
+            'product_name'      => ['nullable', 'string', 'max:255'],
+            'batch_number'      => ['nullable', 'string', 'max:255'],
+            'forecasted_demand' => ['nullable', 'numeric', 'min:0'],
+            'unit_price_pack'   => ['nullable', 'numeric', 'min:0'],
+            'unit_price_bag'    => ['nullable', 'numeric', 'min:0'],
+            'available_pack'    => ['nullable', 'integer', 'min:0'],
+            'available_bag'     => ['nullable', 'integer', 'min:0'],
+            'production_date'   => ['required', 'date'],
+            'expiration_date'   => ['nullable', 'date', 'after_or_equal:production_date'],
+            'category'          => ['nullable', 'string', 'max:120'],
+            'remarks'           => ['nullable', 'string', 'max:500'],
 
-            // IMAGE: max 4MB, min 300×300, jpg/png/webp
-            'image'             => ['nullable','image','mimes:jpg,jpeg,png,webp','max:4096','dimensions:min_width=300,min_height=300'],
+            // IMAGE: accept both `image` and legacy `product_image`
+            'image'             => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:min_width=300,min_height=300'],
+            'product_image'     => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:min_width=300,min_height=300'],
 
             // legacy accepted
-            'current_inventory' => ['nullable','numeric','min:0'],
-            'unit_cost'         => ['nullable','numeric','min:0'],
+            'current_inventory' => ['nullable', 'numeric', 'min:0'],
+            'unit_cost'         => ['nullable', 'numeric', 'min:0'],
         ]);
 
         try {
             // Resolve or create product
             if (empty($validated['product_id'])) {
-                $name = isset($validated['product_name']) ? ucfirst(strtolower(trim($validated['product_name']))) : null;
+                $name = isset($validated['product_name'])
+                    ? ucfirst(strtolower(trim($validated['product_name'])))
+                    : null;
+
                 if (!$name) {
                     return $this->respondError($request, ['product_name' => 'Please select a product or enter a new name.']);
                 }
 
                 $attrs = $this->filterProductColumns([
-                    'forecasted_demand' => (float)($validated['forecasted_demand'] ?? 0),
+                    'forecasted_demand' => (float) ($validated['forecasted_demand'] ?? 0),
                     'production_date'   => $validated['production_date'],
                     'stock_status'      => 'in_stock',
                     'category'          => $validated['category'] ?? null,
                 ]);
 
-                $product = Product::firstOrCreate(['product_name' => $name], $attrs);
+                                $product = Product::firstOrCreate(['product_name' => $name], $attrs);
 
-                // IMAGE: prefer Product::setImageFromUpload if present; else process here
-                if ($request->hasFile('image')) {
+                // IMAGE FROM ADD PRODUCTION MODAL
+                $file = $request->file('image') ?? $request->file('product_image');
+                if ($file) {
                     if (method_exists($product, 'setImageFromUpload')) {
-                        try { $product->setImageFromUpload($request->file('image')); }
-                        catch (\Throwable $e) { Log::warning('Product image upload failed', ['error' => $e->getMessage()]); }
+                        try {
+                            $product->setImageFromUpload($file);
+                        } catch (\Throwable $e) {
+                            Log::warning('Product image upload failed', ['error' => $e->getMessage()]);
+                            $this->applyImageToProduct($product, $file);
+                        }
                     } else {
-                        $this->applyImageToProduct($product, $request->file('image'));
+                        $this->applyImageToProduct($product, $file);
                     }
                 }
+
+                // make sure any image fields set by setImageFromUpload are persisted
+                $product->save();
+
             } else {
-                $product = Product::findOrFail((int)$validated['product_id']);
+                $product = Product::findOrFail((int) $validated['product_id']);
 
                 $updates = $this->filterProductColumns([
-                    'forecasted_demand' => array_key_exists('forecasted_demand', $validated) ? (float)$validated['forecasted_demand'] : $product->forecasted_demand,
+                    'forecasted_demand' => array_key_exists('forecasted_demand', $validated)
+                        ? (float) $validated['forecasted_demand']
+                        : $product->forecasted_demand,
                     'category'          => $validated['category'] ?? $product->category,
                     'production_date'   => $validated['production_date'],
                     'stock_status'      => 'in_stock',
@@ -238,12 +258,17 @@ class ProductionController extends Controller
 
                 $product->fill($updates);
 
-                if ($request->hasFile('image')) {
+                $file = $request->file('image') ?? $request->file('product_image');
+                if ($file) {
                     if (method_exists($product, 'setImageFromUpload')) {
-                        try { $product->setImageFromUpload($request->file('image')); }
-                        catch (\Throwable $e) { Log::warning('Product image upload failed', ['error' => $e->getMessage()]); }
+                        try {
+                            $product->setImageFromUpload($file);
+                        } catch (\Throwable $e) {
+                            Log::warning('Product image upload failed', ['error' => $e->getMessage()]);
+                            $this->applyImageToProduct($product, $file);
+                        }
                     } else {
-                        $this->applyImageToProduct($product, $request->file('image'));
+                        $this->applyImageToProduct($product, $file);
                     }
                 }
 
@@ -253,18 +278,18 @@ class ProductionController extends Controller
             $prodDate = Carbon::parse($validated['production_date']);
             $expiry   = !empty($validated['expiration_date'])
                 ? Carbon::parse($validated['expiration_date'])
-                : $prodDate->copy()->addDays((int)($product->shelf_life_days ?? 7));
+                : $prodDate->copy()->addDays((int) ($product->shelf_life_days ?? 7));
 
             // === Sequential Batch #: honor user numeric if unique, else next ===
             $providedInt = $this->normalizeBatchInt($validated['batch_number'] ?? null);
             if ($providedInt !== null) {
-                $candidate = (string)$providedInt;
+                $candidate = (string) $providedInt;
                 if ($this->batchExists($product->id, $candidate)) {
                     $providedInt = null;
                 }
             }
             $batchInt    = $providedInt ?? $this->nextBatchNumberInt($product);
-            $batchNumber = (string)$batchInt;
+            $batchNumber = (string) $batchInt;
 
             // infer qty
             $qty = $this->inferQuantity($validated);
@@ -276,14 +301,26 @@ class ProductionController extends Controller
 
                 try {
                     DB::transaction(function () use ($product, $validated, $prodDate, $expiry, &$batchNumber, $qty) {
-                        $this->consumeMaterials($product, (float)$qty);
-                        $this->createBatchAndRecompute($product, $validated + ['__inferred_qty' => $qty], $prodDate, $expiry, $batchNumber);
+                        $this->consumeMaterials($product, (float) $qty);
+                        $this->createBatchAndRecompute(
+                            $product,
+                            $validated + ['__inferred_qty' => $qty],
+                            $prodDate,
+                            $expiry,
+                            $batchNumber
+                        );
                     });
                 } catch (\RuntimeException $re) {
-                    return $this->respondError($request, ['materials' => $re->getMessage() ]);
+                    return $this->respondError($request, ['materials' => $re->getMessage()]);
                 }
             } else {
-                $this->createBatchAndRecompute($product, $validated + ['__inferred_qty' => $qty], $prodDate, $expiry, $batchNumber);
+                $this->createBatchAndRecompute(
+                    $product,
+                    $validated + ['__inferred_qty' => $qty],
+                    $prodDate,
+                    $expiry,
+                    $batchNumber
+                );
             }
 
             if ($request->ajax() || $request->wantsJson()) {
@@ -297,15 +334,15 @@ class ProductionController extends Controller
                 [$forecastedDemand, $actualInventory, $shortfall, $recommendedProduction] = $this->totalsSnapshot();
 
                 return response()->json([
-                    'ok'        => true,
-                    'message'   => 'Production record added.',
-                    'product_id'=> $freshProduct->id,
-                    'card_html' => $cardHtml,
-                    'totals'    => [
-                        'forecastedDemand'      => (float)$forecastedDemand,
-                        'actualInventory'       => (float)$actualInventory,
-                        'shortfall'             => (float)$shortfall,
-                        'recommendedProduction' => (float)$recommendedProduction,
+                    'ok'         => true,
+                    'message'    => 'Production record added.',
+                    'product_id' => $freshProduct->id,
+                    'card_html'  => $cardHtml,
+                    'totals'     => [
+                        'forecastedDemand'      => (float) $forecastedDemand,
+                        'actualInventory'       => (float) $actualInventory,
+                        'shortfall'             => (float) $shortfall,
+                        'recommendedProduction' => (float) $recommendedProduction,
                     ],
                 ]);
             }
@@ -313,16 +350,20 @@ class ProductionController extends Controller
             return redirect()->route('production.index')->with('success', 'Production record added.');
         } catch (\Throwable $e) {
             Log::error('Failed to save production', ['error' => $e->getMessage()]);
-            $msg = config('app.debug') ? 'Server error: '.$e->getMessage() : 'Server error while saving production.';
+            $msg = config('app.debug')
+                ? 'Server error: ' . $e->getMessage()
+                : 'Server error while saving production.';
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => false, 'message' => $msg], 500);
             }
+
             return back()->with('error', $msg)->withInput();
         }
     }
 
     /* =============================== CREATE (ORDERS PAGE) =============================== */
+
     public function storeOrder(Request $request)
     {
         $rules = [
@@ -340,21 +381,44 @@ class ProductionController extends Controller
             'available_pack'        => ['nullable','integer','min:0'],
             'available_bag'         => ['nullable','integer','min:0'],
             'remarks'               => ['nullable','string','max:500'],
-            // legacy accept but ignore safely
-            'unit_cost'             => ['nullable','numeric','min:0'],
+            'unit_cost'             => ['nullable','numeric','min:0'], // legacy
+
+            // image from Add Order modal, also support both names
+            'image'                 => ['nullable','image','mimes:jpg,jpeg,png,webp','max:4096','dimensions:min_width=300,min_height=300'],
+            'product_image'         => ['nullable','image','mimes:jpg,jpeg,png,webp','max:4096','dimensions:min_width=300,min_height=300'],
         ];
 
         $validated = $request->validate($rules);
 
-        $product  = Product::findOrFail((int)$validated['product_id']);
+        $product         = Product::findOrFail((int)$validated['product_id']);
         $parentProductId = (int)($validated['parent_product_id'] ?? $product->parent_id ?? $product->id);
+
+        // ✅ IMAGE FROM ADD ORDER MODAL:
+        // This updates the Product's media fields so the dashboard product card
+        // (via attachCardMedia + product-cards.blade.php) immediately reflects it.
+        $file = $request->file('image') ?? $request->file('product_image');
+        if ($file) {
+            if (method_exists($product, 'setImageFromUpload')) {
+                try {
+                    $product->setImageFromUpload($file);
+                } catch (\Throwable $e) {
+                    Log::warning('Product image upload failed in storeOrder via setImageFromUpload', [
+                        'product_id' => $product->id,
+                        'error'      => $e->getMessage(),
+                    ]);
+                    $this->applyImageToProduct($product, $file);
+                }
+            } else {
+                $this->applyImageToProduct($product, $file);
+            }
+        }
 
         $prodDate = Carbon::parse($validated['production_date']);
         $expiry   = !empty($validated['expiration_date'])
             ? Carbon::parse($validated['expiration_date'])
             : $prodDate->copy()->addDays((int)($product->shelf_life_days ?? 7));
 
-        // === Sequential Batch #: honor user numeric if unique, else next ===
+        // Sequential batch number: honor user numeric if unique, else next
         $providedInt = $this->normalizeBatchInt($validated['batch_number'] ?? null);
         if ($providedInt !== null) {
             $candidate = (string)$providedInt;
@@ -413,8 +477,8 @@ class ProductionController extends Controller
                         break;
                     } catch (QueryException $e) {
                         if ($e->getCode() === '23000' && $attempt < 2) {
-                            $batchNumber = $this->uniqueBatchNumber($product);
-                            $payload['batch_number'] = $batchNumber;
+                            $batchNumber              = $this->uniqueBatchNumber($product);
+                            $payload['batch_number']  = $batchNumber;
                             continue;
                         }
                         throw $e;
@@ -446,6 +510,7 @@ class ProductionController extends Controller
     }
 
     /* ================================== READ/EDIT ================================== */
+
     public function show($id)
     {
         $product = Product::findOrFail($id);
@@ -453,20 +518,21 @@ class ProductionController extends Controller
         $orders = Production::query()
             ->where(function ($q) use ($id) {
                 $q->where('parent_product_id', $id)
-                  ->orWhere(function ($q2) use ($id) {
-                      $q2->whereNull('parent_product_id')->where('product_id', $id);
-                  });
+                    ->orWhere(function ($q2) use ($id) {
+                        $q2->whereNull('parent_product_id')
+                           ->where('product_id', $id);
+                    });
             })
-            ->with(['product','parentProduct'])
+            ->with(['product', 'parentProduct'])
             ->orderByDesc('production_date')->orderByDesc('id')
             ->get();
 
-        $nextBatchInt     = $this->nextBatchNumberInt($product);
-        $nextBatchNumber  = (string)$nextBatchInt;
-        $nextBatchLabel   = $this->formatBatchLabel($nextBatchInt);
+        $nextBatchInt    = $this->nextBatchNumberInt($product);
+        $nextBatchNumber = (string) $nextBatchInt;
+        $nextBatchLabel  = $this->formatBatchLabel($nextBatchInt);
 
         $defaultProdDate  = now()->toDateString();
-        $defaultExpiry    = Carbon::parse($defaultProdDate)->addDays((int)($product->shelf_life_days ?? 7))->toDateString();
+        $defaultExpiry    = Carbon::parse($defaultProdDate)->addDays((int) ($product->shelf_life_days ?? 7))->toDateString();
         $defaultUnitPrice = $this->defaultUnitPriceFromSales($product);
 
         $allProducts      = Product::orderBy('product_name')->get();
@@ -475,12 +541,24 @@ class ProductionController extends Controller
         $hasRecipe        = method_exists($product, 'recipes') ? $product->recipes()->exists() : false;
 
         return view('production.orders', compact(
-            'product','orders','nextBatchNumber','nextBatchLabel','defaultProdDate','defaultExpiry','defaultUnitPrice',
-            'allProducts','variantProducts','consumeMaterials','hasRecipe'
+            'product',
+            'orders',
+            'nextBatchNumber',
+            'nextBatchLabel',
+            'defaultProdDate',
+            'defaultExpiry',
+            'defaultUnitPrice',
+            'allProducts',
+            'variantProducts',
+            'consumeMaterials',
+            'hasRecipe'
         ));
     }
 
-    public function showOrders($id) { return $this->show($id); }
+    public function showOrders($id)
+    {
+        return $this->show($id);
+    }
 
     public function edit($id)
     {
@@ -491,43 +569,46 @@ class ProductionController extends Controller
     public function update(Request $request, $id)
     {
         $validated = $request->validate([
-            'forecasted_demand'   => ['nullable','numeric','min:0'],
-            'current_inventory'   => ['nullable','integer','min:0'],
-            'unit_price_pack'     => ['nullable','numeric','min:0'],
-            'unit_price_bag'      => ['nullable','numeric','min:0'],
-            'available_pack'      => ['nullable','integer','min:0'],
-            'available_bag'       => ['nullable','integer','min:0'],
-            'production_date'     => ['required','date'],
-            'expiration_date'     => ['nullable','date','after_or_equal:production_date'],
-            'remarks'             => ['nullable','string','max:500'],
-            // legacy accept but ignore
-            'unit_cost'           => ['nullable','numeric','min:0'],
+            'forecasted_demand' => ['nullable', 'numeric', 'min:0'],
+            'current_inventory' => ['nullable', 'integer', 'min:0'],
+            'unit_price_pack'   => ['nullable', 'numeric', 'min:0'],
+            'unit_price_bag'    => ['nullable', 'numeric', 'min:0'],
+            'available_pack'    => ['nullable', 'integer', 'min:0'],
+            'available_bag'     => ['nullable', 'integer', 'min:0'],
+            'production_date'   => ['required', 'date'],
+            'expiration_date'   => ['nullable', 'date', 'after_or_equal:production_date'],
+            'remarks'           => ['nullable', 'string', 'max:500'],
+            'unit_cost'         => ['nullable', 'numeric', 'min:0'], // legacy
         ]);
 
         $production = Production::findOrFail($id);
 
         $payload = [
             'forecasted_demand' => $validated['forecasted_demand'] ?? $production->forecasted_demand,
-            'current_inventory' => array_key_exists('current_inventory', $validated) ? (int)$validated['current_inventory'] : $production->current_inventory,
-            'quantity'          => array_key_exists('current_inventory', $validated) ? (int)$validated['current_inventory'] : $production->quantity,
+            'current_inventory' => array_key_exists('current_inventory', $validated)
+                ? (int) $validated['current_inventory']
+                : $production->current_inventory,
+            'quantity'          => array_key_exists('current_inventory', $validated)
+                ? (int) $validated['current_inventory']
+                : $production->quantity,
             'unit_price_pack'   => $validated['unit_price_pack'] ?? $production->unit_price_pack,
-            'unit_price_bag'    => $validated['unit_price_bag']  ?? $production->unit_price_bag,
+            'unit_price_bag'    => $validated['unit_price_bag'] ?? $production->unit_price_bag,
             'production_date'   => $validated['production_date'],
             'expiration_date'   => $validated['expiration_date'] ?? $production->expiration_date,
         ];
 
         if (Schema::hasColumn('productions', 'available_pack') && array_key_exists('available_pack', $validated)) {
-            $payload['available_pack'] = (int)($validated['available_pack'] ?? 0);
+            $payload['available_pack'] = (int) ($validated['available_pack'] ?? 0);
         }
         if (Schema::hasColumn('productions', 'available_bag') && array_key_exists('available_bag', $validated)) {
-            $payload['available_bag']  = (int)($validated['available_bag'] ?? 0);
+            $payload['available_bag'] = (int) ($validated['available_bag'] ?? 0);
         }
         if (Schema::hasColumn('productions', 'remarks') && array_key_exists('remarks', $validated)) {
-            $payload['remarks'] = (string)($validated['remarks'] ?? '');
+            $payload['remarks'] = (string) ($validated['remarks'] ?? '');
         }
 
         $production->update($payload);
-        $this->recomputeProductBalance((int)$production->product_id);
+        $this->recomputeProductBalance((int) $production->product_id);
 
         return redirect()->route('production.index')->with('success', 'Production record updated.');
     }
@@ -536,21 +617,28 @@ class ProductionController extends Controller
     {
         if (Sale::where('production_id', $production->id)->exists()) {
             if (request()->ajax() || request()->wantsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Cannot delete this batch; it has linked sales.'], 409);
+                return response()->json([
+                    'ok'      => false,
+                    'message' => 'Cannot delete this batch; it has linked sales.',
+                ], 409);
             }
-            return redirect()->route('production.index')->with('error', 'Cannot delete this batch; it has linked sales.');
+
+            return redirect()->route('production.index')
+                ->with('error', 'Cannot delete this batch; it has linked sales.');
         }
 
-        $productId = (int)$production->product_id;
+        $productId = (int) $production->product_id;
         $production->delete();
 
         $this->recomputeProductBalance($productId);
 
         if (request()->ajax() || request()->wantsJson()) {
-            $product = Product::find($productId);
+            $product  = Product::find($productId);
             $cardHtml = null;
+
             if ($product) {
                 $this->attachCardMedia($product);
+
                 $cardHtml = View::exists('production.partials.product-card')
                     ? view('production.partials.product-card', ['p' => $product])->render()
                     : view('production.partials.product-cards', ['products' => collect([$product])])->render();
@@ -559,16 +647,16 @@ class ProductionController extends Controller
             [$forecastedDemand, $actualInventory, $shortfall, $recommendedProduction] = $this->totalsSnapshot();
 
             return response()->json([
-                'ok'        => true,
-                'message'   => 'Production deleted.',
-                'product_id'=> $productId,
-                'card_html' => $cardHtml,
-                'totals'    => [
-                    'forecastedDemand'      => (float)$forecastedDemand,
-                    'actualInventory'       => (float)$actualInventory,
-                    'shortfall'             => (float)$shortfall,
-                    'recommendedProduction' => (float)$recommendedProduction,
-                ]
+                'ok'         => true,
+                'message'    => 'Production deleted.',
+                'product_id' => $productId,
+                'card_html'  => $cardHtml,
+                'totals'     => [
+                    'forecastedDemand'      => (float) $forecastedDemand,
+                    'actualInventory'       => (float) $actualInventory,
+                    'shortfall'             => (float) $shortfall,
+                    'recommendedProduction' => (float) $recommendedProduction,
+                ],
             ]);
         }
 
@@ -587,12 +675,15 @@ class ProductionController extends Controller
         }
 
         if (Sale::where('production_id', $latest->id)->exists()) {
-            return response()->json(['ok' => false, 'message' => 'Cannot delete; batch has linked sales.'], 409);
+            return response()->json([
+                'ok'      => false,
+                'message' => 'Cannot delete; batch has linked sales.',
+            ], 409);
         }
 
         $latest->delete();
 
-        $this->recomputeProductBalance((int)$product->id);
+        $this->recomputeProductBalance((int) $product->id);
 
         $freshProduct = Product::find($product->id);
         $this->attachCardMedia($freshProduct);
@@ -604,16 +695,16 @@ class ProductionController extends Controller
         [$forecastedDemand, $actualInventory, $shortfall, $recommendedProduction] = $this->totalsSnapshot();
 
         return response()->json([
-            'ok'        => true,
-            'message'   => 'Latest batch deleted.',
-            'product_id'=> $product->id,
-            'card_html' => $cardHtml,
-            'totals'    => [
-                'forecastedDemand'      => (float)$forecastedDemand,
-                'actualInventory'       => (float)$actualInventory,
-                'shortfall'             => (float)$shortfall,
-                'recommendedProduction' => (float)$recommendedProduction,
-            ]
+            'ok'         => true,
+            'message'    => 'Latest batch deleted.',
+            'product_id' => $product->id,
+            'card_html'  => $cardHtml,
+            'totals'     => [
+                'forecastedDemand'      => (float) $forecastedDemand,
+                'actualInventory'       => (float) $actualInventory,
+                'shortfall'             => (float) $shortfall,
+                'recommendedProduction' => (float) $recommendedProduction,
+            ],
         ]);
     }
 
@@ -621,15 +712,16 @@ class ProductionController extends Controller
 
     public function archivedIndex(Request $request)
     {
-        $q    = trim((string)$request->get('q', ''));
-        $sort = (string)$request->get('sort', 'deleted_at'); // deleted_at|batch|product|date|qty
+        $q    = trim((string) $request->get('q', ''));
+        $sort = (string) $request->get('sort', 'deleted_at'); // deleted_at|batch|product|date|qty
 
         // --- Auto-purge anything past its purge date (7 days after delete) ---
-        $now = Carbon::now();
+        $now         = Carbon::now();
         $purgedCount = 0;
 
         try {
             $purgeCutoff = $now->copy()->subDays(7);
+
             $purgeQuery = Production::onlyTrashed()
                 ->where('deleted_at', '<=', $purgeCutoff);
 
@@ -638,27 +730,29 @@ class ProductionController extends Controller
                 $purgeQuery->forceDelete();
             }
         } catch (\Throwable $e) {
-            Log::warning('Production auto-purge failed', ['error' => $e->getMessage() ]);
+            Log::warning('Production auto-purge failed', ['error' => $e->getMessage()]);
         }
 
         // List only records still within the 7-day window
         $items = Production::onlyTrashed()
             ->where('deleted_at', '>', $now->copy()->subDays(7))
-            ->when($q !== '', function($qry) use ($q) {
-                $qry->where(function($w) use ($q){
+            ->when($q !== '', function ($qry) use ($q) {
+                $qry->where(function ($w) use ($q) {
                     $w->where('batch_number', 'like', "%{$q}%")
-                      ->orWhere('product_name_snapshot', 'like', "%{$q}%");
+                        ->orWhere('product_name_snapshot', 'like', "%{$q}%");
                 });
             })
-            ->with(['product','parentProduct'])
-            ->when($sort === 'batch',   fn($x)=>$x->orderBy('batch_number'))
-            ->when($sort === 'product', fn($x)=>$x->orderBy('product_id'))
-            ->when($sort === 'date',    fn($x)=>$x->orderByDesc('production_date'))
-            ->when($sort === 'qty',     fn($x)=>$x->orderByDesc('quantity'))
-            ->when($sort === 'deleted_at', fn($x)=>$x->orderByDesc('deleted_at'))
+            ->with(['product', 'parentProduct'])
+            ->when($sort === 'batch', fn ($x) => $x->orderBy('batch_number'))
+            ->when($sort === 'product', fn ($x) => $x->orderBy('product_id'))
+            ->when($sort === 'date', fn ($x) => $x->orderByDesc('production_date'))
+            ->when($sort === 'qty', fn ($x) => $x->orderByDesc('quantity'))
+            ->when($sort === 'deleted_at', fn ($x) => $x->orderByDesc('deleted_at'))
             ->paginate(15)
-            ->through(function($p){
-                $p->purge_at = $p->deleted_at ? Carbon::parse($p->deleted_at)->addDays(7) : null;
+            ->through(function ($p) {
+                $p->purge_at = $p->deleted_at
+                    ? Carbon::parse($p->deleted_at)->addDays(7)
+                    : null;
                 return $p;
             });
 
@@ -666,37 +760,38 @@ class ProductionController extends Controller
     }
 
     public function archived(Request $request)
-{
-    $source = $request->string('source')->toString();   // 'sale', 'manual', 'expired', or null
+    {
+        $source = $request->string('source')->toString();   // 'sale', 'manual', 'expired', or null
 
-    $query = Production::onlyTrashed()
-        ->with(['product','parentProduct'])
-        ->sortArchived($request->get('sort', 'deleted_at'));
+        $query = Production::onlyTrashed()
+            ->with(['product', 'parentProduct'])
+            ->sortArchived($request->get('sort', 'deleted_at'));
 
-    if ($source === 'sale') {
-        $query->where('archived_reason', 'from_sale');
-    } elseif ($source === 'manual') {
-        $query->where('archived_reason', 'manual');
-    } elseif ($source === 'expired') {
-        $query->where('archived_reason', 'expired');
+        if ($source === 'sale') {
+            $query->where('archived_reason', 'from_sale');
+        } elseif ($source === 'manual') {
+            $query->where('archived_reason', 'manual');
+        } elseif ($source === 'expired') {
+            $query->where('archived_reason', 'expired');
+        }
+
+        $productions = $query->paginate(30)->withQueryString();
+
+        return view('production.archived', [
+            'productions'   => $productions,
+            'source'        => $source,
+            'sourceOptions' => [
+                ''        => 'All sources',
+                'sale'    => 'From Sales',
+                'manual'  => 'Manual Archive',
+                'expired' => 'Expired Auto-Archive',
+            ],
+        ]);
     }
 
-    $productions = $query->paginate(30)->withQueryString();
-
-    return view('production.archived', [
-        'productions'   => $productions,
-        'source'        => $source,
-        'sourceOptions' => [
-            ''         => 'All sources',
-            'sale'     => 'From Sales',
-            'manual'   => 'Manual Archive',
-            'expired'  => 'Expired Auto-Archive',
-        ],
-    ]);
-}
     public function restore($id, Request $request)
     {
-        $p = Production::withTrashed()->findOrFail((int)$id);
+        $p = Production::withTrashed()->findOrFail((int) $id);
         if (!$p->trashed()) {
             return $this->archiveJsonOrBack($request, true, 'Record is already active.');
         }
@@ -704,21 +799,33 @@ class ProductionController extends Controller
         $p->restore();
 
         $dirty = false;
-        if (Schema::hasColumn('productions', 'archived_at')) { $p->archived_at = null; $dirty = true; }
-        if (Schema::hasColumn('productions', 'archived_reason')) { $p->archived_reason = null; $dirty = true; }
-        if ($dirty) { $p->save(); }
+        if (Schema::hasColumn('productions', 'archived_at')) {
+            $p->archived_at = null;
+            $dirty          = true;
+        }
+        if (Schema::hasColumn('productions', 'archived_reason')) {
+            $p->archived_reason = null;
+            $dirty              = true;
+        }
+        if ($dirty) {
+            $p->save();
+        }
 
-        $this->recomputeProductBalance((int)$p->product_id);
+        $this->recomputeProductBalance((int) $p->product_id);
 
         return $this->archiveJsonOrBack($request, true, 'Production restored.');
     }
 
     public function destroyForever($id, Request $request)
     {
-        $p = Production::withTrashed()->findOrFail((int)$id);
+        $p = Production::withTrashed()->findOrFail((int) $id);
 
         if (Sale::where('production_id', $p->id)->exists()) {
-            return $this->archiveJsonOrBack($request, false, 'Cannot delete forever. This batch has linked sales.');
+            return $this->archiveJsonOrBack(
+                $request,
+                false,
+                'Cannot delete forever. This batch has linked sales.'
+            );
         }
 
         $productId = (int) $p->product_id;
@@ -734,6 +841,7 @@ class ProductionController extends Controller
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['ok' => $ok, 'message' => $msg]);
         }
+
         return back()->with($ok ? 'success' : 'error', $msg);
     }
 
@@ -742,13 +850,15 @@ class ProductionController extends Controller
     public function getProductInfo($name): JsonResponse
     {
         $product = Product::where('product_name', $name)->latest('production_date')->first();
-        if (!$product) return response()->json(['error' => 'Product not found'], 404);
+        if (!$product) {
+            return response()->json(['error' => 'Product not found'], 404);
+        }
 
         return response()->json([
             'forecasted_demand' => (float) $product->forecasted_demand,
             'current_inventory' => (float) ($product->quantity ?? 0),
-            'unit_cost'         => (float) ($product->unit_cost ?? 0), // kept for compatibility
-            'shelf_life_days'   => (int)  ($product->shelf_life_days ?? 7),
+            'unit_cost'         => (float) ($product->unit_cost ?? 0),
+            'shelf_life_days'   => (int) ($product->shelf_life_days ?? 7),
             'default_price'     => (float) ($product->default_price ?? 0),
         ]);
     }
@@ -768,9 +878,15 @@ class ProductionController extends Controller
             'product_name_snapshot',
         ];
 
-        if (Schema::hasColumn('productions', 'available_pack')) $cols[] = 'available_pack';
-        if (Schema::hasColumn('productions', 'available_bag'))  $cols[] = 'available_bag';
-        if (Schema::hasColumn('productions', 'remarks'))        $cols[] = 'remarks';
+        if (Schema::hasColumn('productions', 'available_pack')) {
+            $cols[] = 'available_pack';
+        }
+        if (Schema::hasColumn('productions', 'available_bag')) {
+            $cols[] = 'available_bag';
+        }
+        if (Schema::hasColumn('productions', 'remarks')) {
+            $cols[] = 'remarks';
+        }
 
         $batches = Production::where('product_id', $product->id)
             ->orderByDesc('production_date')
@@ -778,16 +894,18 @@ class ProductionController extends Controller
             ->get($cols);
 
         $batches = $batches->map(function ($b) {
-            $b->unit_price_pack   = isset($b->unit_price_pack) ? (float)$b->unit_price_pack : null;
-            $b->unit_price_bag    = isset($b->unit_price_bag)  ? (float)$b->unit_price_bag  : null;
-            $b->quantity          = isset($b->quantity)        ? (float)$b->quantity        : 0.0;
-            $b->current_inventory = isset($b->current_inventory) ? (float)$b->current_inventory : 0.0;
+            $b->unit_price_pack   = isset($b->unit_price_pack) ? (float) $b->unit_price_pack : null;
+            $b->unit_price_bag    = isset($b->unit_price_bag) ? (float) $b->unit_price_bag : null;
+            $b->quantity          = isset($b->quantity) ? (float) $b->quantity : 0.0;
+            $b->current_inventory = isset($b->current_inventory) ? (float) $b->current_inventory : 0.0;
+
             if (property_exists($b, 'available_pack') && isset($b->available_pack)) {
-                $b->available_pack = (int)$b->available_pack;
+                $b->available_pack = (int) $b->available_pack;
             }
             if (property_exists($b, 'available_bag') && isset($b->available_bag)) {
-                $b->available_bag = (int)$b->available_bag;
+                $b->available_bag = (int) $b->available_bag;
             }
+
             return $b;
         });
 
@@ -798,7 +916,7 @@ class ProductionController extends Controller
 
     private function respondNeedsRecipe(Request $request, Product $product)
     {
-        $msg = "No recipe set for {$product->product_name}. Add materials first.";
+        $msg      = "No recipe set for {$product->product_name}. Add materials first.";
         $redirect = route('products.materials.index', $product->id);
 
         if ($request->ajax() || $request->wantsJson()) {
@@ -818,7 +936,7 @@ class ProductionController extends Controller
         switch ($sort) {
             case 'expiry':
                 return $products->sortBy(function ($p) {
-                    $shelf  = (int)($p->shelf_life_days ?? 7);
+                    $shelf  = (int) ($p->shelf_life_days ?? 7);
                     $expiry = $p->expiration_date
                         ? Carbon::parse($p->expiration_date)
                         : ($p->production_date
@@ -828,29 +946,31 @@ class ProductionController extends Controller
                 })->values();
 
             case 'name':
-                return $products->sortBy(fn ($p) => mb_strtolower($p->product_name ?? ''))->values();
+                return $products->sortBy(
+                    fn ($p) => mb_strtolower($p->product_name ?? '')
+                )->values();
 
             case 'urgency':
             default:
                 return $products->sortBy(function ($p) {
-                    $qty = (float)($p->quantity ?? 0);
-                    $fc  = (float)($p->forecasted_demand ?? 0);
+                    $qty = (float) ($p->quantity ?? 0);
+                    $fc  = (float) ($p->forecasted_demand ?? 0);
                     return $qty - $fc;
                 })->values();
         }
     }
 
-    /*** UPDATED: sequential-batch compatible unique generator (fallback paths) ***/
     private function uniqueBatchNumber(Product $product, ?string $preferred = null): string
     {
         $providedInt = $this->normalizeBatchInt($preferred);
         if ($providedInt !== null) {
-            $candidate = (string)$providedInt;
+            $candidate = (string) $providedInt;
             if (!$this->batchExists($product->id, $candidate)) {
                 return $candidate;
             }
         }
-        return (string)$this->nextBatchNumberInt($product);
+
+        return (string) $this->nextBatchNumberInt($product);
     }
 
     private function batchExists(int $productId, string $batch): bool
@@ -875,10 +995,12 @@ class ProductionController extends Controller
         $produced = (float) Production::where('product_id', $productId)->sum('quantity');
 
         $sold = (float) Sale::where('product_id', $productId)
-            ->select(DB::raw('COALESCE(SUM(quantity_kg), 0) + COALESCE(SUM(quantity), 0) as s'))
+            ->select(DB::raw(
+                'COALESCE(SUM(quantity_kg), 0) + COALESCE(SUM(quantity), 0) as s'
+            ))
             ->value('s');
 
-        $balance  = max(0.0, $produced - $sold);
+        $balance        = max(0.0, $produced - $sold);
         $latestProdDate = Production::where('product_id', $productId)->max('production_date');
 
         Product::where('id', $productId)->update([
@@ -891,6 +1013,7 @@ class ProductionController extends Controller
     private function totalsSnapshot(): array
     {
         $products = Product::all();
+
         $forecastedDemand      = (float) $products->sum('forecasted_demand');
         $actualInventory       = (float) $products->sum('quantity');
         $shortfall             = max($forecastedDemand - $actualInventory, 0.0);
@@ -904,6 +1027,7 @@ class ProductionController extends Controller
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json(['ok' => false, 'errors' => $errors], 422);
         }
+
         return back()->withErrors($errors)->withInput();
     }
 
@@ -916,68 +1040,95 @@ class ProductionController extends Controller
     private function consumeMaterials(Product $product, float $batchUnits): void
     {
         if (!method_exists($product, 'recipes')) {
-            Log::info('Product has no recipes() relation; skipping consumption', ['product_id' => $product->id]);
+            Log::info('Product has no recipes() relation; skipping consumption', [
+                'product_id' => $product->id,
+            ]);
             return;
         }
 
         $rows = $product->recipes()->with('material')->get();
         if ($rows->isEmpty()) {
             Log::info('Skipping material consumption: no recipe for product', [
-                'product_id'  => $product->id,
-                'product'     => $product->product_name,
+                'product_id' => $product->id,
+                'product'    => $product->product_name,
             ]);
             return;
         }
 
         $locked = [];
+
+        // Check availability
         foreach ($rows as $r) {
             $materialId = $r->material_id ?? $r->ingredient_id ?? $r->material?->id;
-            if (!$materialId) continue;
-            $mat = $locked[$materialId] ??= Material::whereKey($materialId)->lockForUpdate()->first();
-            if (!$mat) continue;
+            if (!$materialId) {
+                continue;
+            }
 
-            $needed = (float)$r->qty * $batchUnits;
+            $mat = $locked[$materialId] ??= Material::whereKey($materialId)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$mat) {
+                continue;
+            }
+
+            $needed = (float) $r->qty * $batchUnits;
             if ($mat->quantity_kg < $needed) {
-                throw new \RuntimeException("Insufficient stock for {$mat->material_name}. Need {$needed} {$mat->unit}, available {$mat->quantity_kg}.");
+                throw new \RuntimeException(
+                    "Insufficient stock for {$mat->material_name}. " .
+                    "Need {$needed} {$mat->unit}, available {$mat->quantity_kg}."
+                );
             }
         }
 
+        // Deduct
         foreach ($rows as $r) {
             $materialId = $r->material_id ?? $r->ingredient_id ?? $r->material?->id;
-            if (!$materialId || !isset($locked[$materialId])) continue;
-            $mat = $locked[$materialId];
-            $needed = (float)$r->qty * $batchUnits;
-            $mat->quantity_kg = (float)$mat->quantity_kg - $needed;
+            if (!$materialId || !isset($locked[$materialId])) {
+                continue;
+            }
+
+            $mat    = $locked[$materialId];
+            $needed = (float) $r->qty * $batchUnits;
+
+            $mat->quantity_kg = (float) $mat->quantity_kg - $needed;
             $mat->save();
         }
     }
 
-    private function createBatchAndRecompute(Product $product, array $validated, Carbon $prodDate, Carbon $expiry, string $batchNumber): void
-    {
+    private function createBatchAndRecompute(
+        Product $product,
+        array $validated,
+        Carbon $prodDate,
+        Carbon $expiry,
+        string $batchNumber
+    ): void {
         $qty = isset($validated['current_inventory'])
-            ? (int)$validated['current_inventory']
-            : (isset($validated['quantity']) ? (int)$validated['quantity'] : (int)($validated['__inferred_qty'] ?? 0));
+            ? (int) $validated['current_inventory']
+            : (isset($validated['quantity'])
+                ? (int) $validated['quantity']
+                : (int) ($validated['__inferred_qty'] ?? 0));
 
         $payload = [
             'product_id'        => $product->id,
             'batch_number'      => $batchNumber,
-            'forecasted_demand' => (float)($validated['forecasted_demand'] ?? ($product->forecasted_demand ?? 0)),
+            'forecasted_demand' => (float) ($validated['forecasted_demand'] ?? ($product->forecasted_demand ?? 0)),
             'current_inventory' => $qty,
             'quantity'          => $qty,
-            'unit_price_pack'   => (float)($validated['unit_price_pack'] ?? 0),
-            'unit_price_bag'    => (float)($validated['unit_price_bag']  ?? 0),
+            'unit_price_pack'   => (float) ($validated['unit_price_pack'] ?? 0),
+            'unit_price_bag'    => (float) ($validated['unit_price_bag'] ?? 0),
             'production_date'   => $prodDate->toDateString(),
             'expiration_date'   => $expiry->toDateString(),
         ];
 
         if (Schema::hasColumn('productions', 'available_pack')) {
-            $payload['available_pack'] = (int)($validated['available_pack'] ?? 0);
+            $payload['available_pack'] = (int) ($validated['available_pack'] ?? 0);
         }
         if (Schema::hasColumn('productions', 'available_bag')) {
-            $payload['available_bag']  = (int)($validated['available_bag'] ?? 0);
+            $payload['available_bag'] = (int) ($validated['available_bag'] ?? 0);
         }
         if (Schema::hasColumn('productions', 'remarks')) {
-            $payload['remarks'] = (string)($validated['remarks'] ?? '');
+            $payload['remarks'] = (string) ($validated['remarks'] ?? '');
         }
 
         for ($attempt = 1; $attempt <= 2; $attempt++) {
@@ -986,39 +1137,93 @@ class ProductionController extends Controller
                 break;
             } catch (QueryException $e) {
                 if ($e->getCode() === '23000' && $attempt < 2) {
-                    $batchNumber = $this->uniqueBatchNumber($product);
-                    $payload['batch_number'] = $batchNumber;
+                    $batchNumber              = $this->uniqueBatchNumber($product);
+                    $payload['batch_number']  = $batchNumber;
                     continue;
                 }
                 throw $e;
             }
         }
 
-        $this->recomputeProductBalance((int)$product->id);
+        $this->recomputeProductBalance((int) $product->id);
     }
 
     private function enrichProductsForCards($products)
     {
-        return $products->map(function ($p) { $this->attachCardMedia($p); return $p; });
+        return $products->map(function ($p) {
+            $this->attachCardMedia($p);
+            return $p;
+        });
     }
 
+    /**
+     * Attach media + expiry snapshot fields used by the dashboard
+     * product cards (product-cards.blade.php).
+     */
     private function attachCardMedia($p): void
     {
-        // Prefer processed fields (set by image upload). Fallback to legacy image_url or default.
+        if (!$p) {
+            return;
+        }
+
+        // === Latest expiry snapshot for "Next Expiry" stat chip ===
+        try {
+            $latestExp = Production::where('product_id', $p->id)
+                ->whereNotNull('expiration_date')
+                ->orderByDesc('expiration_date')
+                ->value('expiration_date');
+
+            if ($latestExp) {
+                // Used by the Blade: $p->latest_expiration_date
+                $p->latest_expiration_date = $latestExp;
+            }
+        } catch (\Throwable $e) {
+            Log::debug('attachCardMedia: could not compute latest_expiration_date', [
+                'product_id' => $p->id ?? null,
+                'error'      => $e->getMessage(),
+            ]);
+        }
+
+        // Try to derive URL from legacy image_path if present
+        $fromPath = null;
+        if (!empty($p->image_path)) {
+            try {
+                $fromPath = Storage::disk('public')->url($p->image_path);
+            } catch (\Throwable $e) {
+                $fromPath = null;
+            }
+        }
+
+        // Primary image pipeline:
+        // 1) card_image_url (preferred)
+        // 2) image_thumb_url
+        // 3) image_url
+        // 4) legacy file path
+        // 5) default placeholder
         $primary = $p->card_image_url
+            ?? $p->image_thumb_url
             ?? $p->image_url
+            ?? $fromPath
             ?? asset('images/default-product.png');
 
-        $p->card_image_url     = $primary;
-        $p->card_image_srcset  = $p->card_image_srcset ?? null;
-        $p->image_thumb_url    = null;          // unused in current cards, kept for API compatibility
-        $p->image_medium_url   = null;
-        $p->image_original_url = $p->image_url ?? $primary;
+        $p->card_image_url    = $primary;
+        $p->card_image_srcset = $p->card_image_srcset ?? null;
+
+        // Keep these for compatibility / potential use
+        $p->image_thumb_url    = $p->image_thumb_url ?? null;
+        $p->image_medium_url   = $p->image_medium_url ?? null;
+        $p->image_original_url = $p->image_original_url
+            ?? $p->image_url
+            ?? $fromPath
+            ?? $primary;
     }
 
     private function productHasRecipe(Product $product): bool
     {
-        if (!method_exists($product, 'recipes')) return false;
+        if (!method_exists($product, 'recipes')) {
+            return false;
+        }
+
         return $product->recipes()->exists();
     }
 
@@ -1029,6 +1234,7 @@ class ProductionController extends Controller
         if (View::exists('production.create')) {
             return view('production.create');
         }
+
         return redirect()->route('production.index')
             ->with('info', 'Create view not found. Using dashboard instead.');
     }
@@ -1036,26 +1242,27 @@ class ProductionController extends Controller
     public function pdf($id)
     {
         try {
-            $production = Production::with(['product','parentProduct'])->findOrFail((int)$id);
+            $production = Production::with(['product', 'parentProduct'])->findOrFail((int) $id);
 
             if (View::exists('production.pdf')) {
                 if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-                    $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('production.pdf', ['production' => $production]);
-                    $filename = 'production-'.$production->id.'.pdf';
+                    $pdf      = \Barryvdh\DomPDF\Facade\Pdf::loadView('production.pdf', ['production' => $production]);
+                    $filename = 'production-' . $production->id . '.pdf';
                     return $pdf->download($filename);
                 }
+
                 return view('production.pdf', ['production' => $production]);
             }
 
             return response()->json([
-                'ok' => true,
+                'ok'      => true,
                 'message' => 'PDF view not found; returning JSON payload.',
-                'data' => $production,
+                'data'    => $production,
             ]);
         } catch (\Throwable $e) {
             Log::error('PDF generation failed', ['id' => $id, 'error' => $e->getMessage()]);
             return response()->json([
-                'ok' => false,
+                'ok'      => false,
                 'message' => 'PDF generation not available on this environment.',
             ], 501);
         }
@@ -1063,10 +1270,11 @@ class ProductionController extends Controller
 
     public function quickAddPayload(Product $product): JsonResponse
     {
-        $price = (float)($product->price ?? $product->default_price ?? 0);
+        $price = (float) ($product->price ?? $product->default_price ?? 0);
 
         $latestBatch = Production::where('product_id', $product->id)
-            ->orderByDesc('production_date')->orderByDesc('id')->first();
+            ->orderByDesc('production_date')->orderByDesc('id')
+            ->first();
 
         $productionDate = $latestBatch?->production_date
             ? Carbon::parse($latestBatch->production_date)->toDateString()
@@ -1075,26 +1283,26 @@ class ProductionController extends Controller
         $expirationDate = $latestBatch?->expiration_date
             ? Carbon::parse($latestBatch->expiration_date)->toDateString()
             : ($productionDate
-                ? Carbon::parse($productionDate)->addDays((int)($product->shelf_life_days ?? 7))->toDateString()
-                : null
-            );
+                ? Carbon::parse($productionDate)->addDays((int) ($product->shelf_life_days ?? 7))->toDateString()
+                : null);
 
         // Provide next raw number and pretty label for the modal
         $nextInt = $this->nextBatchNumberInt($product);
 
         return response()->json([
-            'id'                 => $product->id,
-            'name'               => $product->product_name,
-            'price'              => $price,
-            'production_id'      => $latestBatch?->id,
-            'production_date'    => $productionDate,
-            'expiration_date'    => $expirationDate,
-            'next_batch_number'  => $nextInt,                     // submit as hidden input
-            'batch_label'        => $this->formatBatchLabel($nextInt), // display-only: "BATCH #N"
+            'id'                => $product->id,
+            'name'              => $product->product_name,
+            'price'             => $price,
+            'production_id'     => $latestBatch?->id,
+            'production_date'   => $productionDate,
+            'expiration_date'   => $expirationDate,
+            'next_batch_number' => $nextInt,
+            'batch_label'       => $this->formatBatchLabel($nextInt),
         ]);
     }
 
     /* =============== NEW: central qty inference =============== */
+
     private function inferQuantity(array $data): int
     {
         if (isset($data['current_inventory'])) {
@@ -1107,8 +1315,9 @@ class ProductionController extends Controller
             return (int) max(0, (float) $data['produced_qty_kg']);
         }
 
-        $packs = (int)($data['available_pack'] ?? 0);
-        $bags  = (int)($data['available_bag']  ?? 0);
+        $packs = (int) ($data['available_pack'] ?? 0);
+        $bags  = (int) ($data['available_bag'] ?? 0);
+
         return max(0, $packs + $bags);
     }
 
@@ -1120,79 +1329,127 @@ class ProductionController extends Controller
         $nums = Production::where('product_id', $product->id)
             ->pluck('batch_number')
             ->map(function ($v) {
-                if ($v === null) return 0;
-                $v = (string)$v;
-                if (ctype_digit($v)) return (int)$v;                 // already numeric
-                if (preg_match('/(\d+)\s*$/', $v, $m)) return (int)$m[1]; // extract trailing number from legacy formats
+                if ($v === null) {
+                    return 0;
+                }
+                $v = (string) $v;
+
+                if (ctype_digit($v)) {
+                    return (int) $v;
+                }
+
+                if (preg_match('/(\d+)\s*$/', $v, $m)) {
+                    return (int) $m[1];
+                }
+
                 return 0;
             });
 
         $max = $nums->max() ?? 0;
-        return max(0, (int)$max) + 1;
+        return max(0, (int) $max) + 1;
     }
 
     /** Extract an integer from a user-provided batch number; null if invalid/empty. */
     private function normalizeBatchInt(?string $raw): ?int
     {
-        if ($raw === null) return null;
+        if ($raw === null) {
+            return null;
+        }
+
         $raw = trim($raw);
-        if ($raw === '') return null;
-        if (ctype_digit($raw)) return (int)$raw;
-        if (preg_match('/(\d+)/', $raw, $m)) return (int)$m[1]; // “BATCH #12”, “B-2025-0001”, etc.
+        if ($raw === '') {
+            return null;
+        }
+
+        if (ctype_digit($raw)) {
+            return (int) $raw;
+        }
+
+        if (preg_match('/(\d+)/', $raw, $m)) {
+            return (int) $m[1];
+        }
+
         return null;
     }
 
     /** UI label like "BATCH #5". */
     private function formatBatchLabel(int $n): string
     {
-        return 'BATCH #'.$n;
+        return 'BATCH #' . $n;
     }
 
     /* =============================== IMAGE PROCESSOR (NEW) =============================== */
 
     /**
-     * Process upload to 1200/800/400 WebP, auto-orient, scale down, and
-     * persist URLs on the product for immediate card rendering.
+     * Process upload to 1200/800/400 WebP, auto-orient, scale down,
+     * and persist URLs on the product for immediate card rendering.
      */
-    private function applyImageToProduct(Product $product, \Illuminate\Http\UploadedFile $file): void
-    {
+    /**
+ * Process upload to 1200/800/400 WebP, auto-orient, scale down,
+ * and persist URLs on the product for immediate card rendering.
+ */
+private function applyImageToProduct(Product $product, \Illuminate\Http\UploadedFile $file): void
+{
+    try {
+        if (!class_exists(Image::class)) {
+            throw new \RuntimeException('Intervention Image not installed/configured');
+        }
+
+        $disk = 'public';
+
+        $uuid = (string) Str::uuid();
+        $base = "products/{$product->id}/{$uuid}";
+
+        // read + auto-orient
+        $img    = Image::read($file->getRealPath())->orientate();
+        $master = (clone $img)->scaleDown(1600, 1600);
+
+        // 1200 / 800 / 400 pipeline
+        $w1200 = (clone $master)->scaleDown(1200, 1200);
+        $w800  = (clone $master)->scaleDown(800, 800);
+        $w400  = (clone $master)->scaleDown(400, 400);
+
+        $path1200 = "{$base}-1200.webp";
+        $path800  = "{$base}-800.webp";
+        $path400  = "{$base}-400.webp";
+
+        Storage::disk($disk)->put($path1200, (string) $w1200->toWebp(80), 'public');
+        Storage::disk($disk)->put($path800,  (string) $w800->toWebp(80),  'public');
+        Storage::disk($disk)->put($path400,  (string) $w400->toWebp(80),  'public');
+
+        $url1200 = Storage::disk($disk)->url($path1200);
+
+        // ✅ only REAL columns here
+        $product->image_disk        = $disk;
+        $product->image_path        = $path1200;     // main / largest
+        $product->image_medium_path = $path800;
+        $product->image_thumb_path  = $path400;
+        $product->image_url         = $url1200;
+
+        $product->save();
+
+    } catch (\Throwable $e) {
+        Log::warning('applyImageToProduct failed, using simple store()', [
+            'product_id' => $product->id,
+            'error'      => $e->getMessage(),
+        ]);
+
         try {
-            $uuid = (string) Str::uuid();
-            $base = "products/{$product->id}/{$uuid}";
+            $path = $file->store('products', 'public');
+            $url  = Storage::disk('public')->url($path);
 
-            // read + auto-orient
-            $img = Image::read($file->getRealPath())->orientate();
-
-            // cap master to 1600 for performance
-            $master = (clone $img)->scaleDown(1600, 1600);
-
-            $w1200 = (clone $master)->scaleDown(1200, 1200);
-            $w800  = (clone $master)->scaleDown(800, 800);
-            $w400  = (clone $master)->scaleDown(400, 400);
-
-            $path1200 = "{$base}-1200.webp";
-            $path800  = "{$base}-800.webp";
-            $path400  = "{$base}-400.webp";
-
-            Storage::disk('public')->put($path1200, (string) $w1200->toWebp(80), 'public');
-            Storage::disk('public')->put($path800,  (string) $w800->toWebp(80),  'public');
-            Storage::disk('public')->put($path400,  (string) $w400->toWebp(80),  'public');
-
-            $url1200 = Storage::disk('public')->url($path1200);
-            $url800  = Storage::disk('public')->url($path800);
-            $url400  = Storage::disk('public')->url($path400);
-
-            $srcset  = "{$url400} 400w, {$url800} 800w, {$url1200} 1200w";
-
-            $product->card_image_url    = $url800;   // good default for cards
-            $product->card_image_srcset = $srcset;
-            $product->image_url         = $url1200;  // keep a larger reference
+            $product->image_disk        = 'public';
+            $product->image_path        = $path;
+            $product->image_medium_path = null;
+            $product->image_thumb_path  = null;
+            $product->image_url         = $url;
             $product->save();
-        } catch (\Throwable $e) {
-            Log::warning('applyImageToProduct failed', [
+        } catch (\Throwable $e2) {
+            Log::error('Fallback store() for product image failed', [
                 'product_id' => $product->id,
-                'error' => $e->getMessage(),
+                'error'      => $e2->getMessage(),
             ]);
         }
     }
+}
 }

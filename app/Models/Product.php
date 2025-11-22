@@ -9,6 +9,9 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Intervention\Image\Laravel\Facades\Image;
 
 use App\Models\Production;
 use App\Models\Sale;
@@ -63,12 +66,15 @@ class Product extends Model
         'stock_status',
         'unit',
 
-        // Media
+        // Media (legacy + new)
         'image_disk',
         'image_path',
         'image_medium_path',
         'image_thumb_path',
-        'image_url',
+        'image_url',           // large / reference
+        'card_image_url',      // mid-size for cards
+        'card_image_srcset',   // responsive set
+        'image_original_url',  // optional original URL
 
         // Legacy/optional
         'production_date',
@@ -110,11 +116,15 @@ class Product extends Model
         'produced_qty_kg',
         'sold_qty_kg',
         'available_stock_kg',
-        'image_url',
+        'image_url',          // accessor below
         'unit_material_cost',
         'display_name',
         'is_variant',
         'base_name',
+
+        // Type helpers
+        'type_name',
+        'type_keywords',
 
         // Latest production snapshot
         'latest_batch_number',
@@ -128,6 +138,11 @@ class Product extends Model
         // Rollups
         'total_available_pack',
         'total_available_bag',
+
+        // Image helpers for cards
+        'image_thumb_url',
+        'card_image_url',
+        'card_image_srcset',
     ];
 
     /* ----------------------------------------------------------------------
@@ -142,7 +157,6 @@ class Product extends Model
 
     /**
      * Latest production record (no N+1 when eager loaded).
-     * FIX: use ofMany('production_date','max') with the correct FK.
      */
     public function latestProduction()
     {
@@ -184,18 +198,117 @@ class Product extends Model
         );
     }
 
-    /** Public URL for images; prefer DB `image_url` if present */
+    /**
+     * Public URL for images; prefer DB `image_url` if present,
+     * else derive from legacy image_path, else default placeholder.
+     */
     public function getImageUrlAttribute($value): string
     {
-        if (!empty($value)) return (string)$value;
+        // Prefer the stored URL if present
+        if (!empty($value)) {
+            return (string) $value;
+        }
 
+        // Derive URL from stored path on configured disk
         $path = $this->image_path ?: null;
         if ($path) {
-            $disk = $this->image_disk ?: config('filesystems.default', 'public');
-            try { return Storage::disk($disk)->url(ltrim($path, '/')); }
-            catch (\Throwable $e) { return asset('storage/' . ltrim($path, '/')); }
+            $disk = $this->imageDisk();
+            try {
+                return Storage::disk($disk)->url(ltrim($path, '/'));
+            } catch (\Throwable $e) {
+                // Fallback if disk url() fails
+                return asset('storage/' . ltrim($path, '/'));
+            }
         }
+
+        // If we have a thumb, use that
+        if ($this->image_thumb_url !== null) {
+            return $this->image_thumb_url;
+        }
+
+        // Last resort: placeholder
         return asset('images/default-product.png');
+    }
+
+    /**
+     * Small helper: which disk to use for images.
+     */
+    protected function imageDisk(): string
+    {
+        return $this->image_disk ?: config('filesystems.default', 'public');
+    }
+
+    /**
+     * Small helper: thumbnail URL (400px) for cards.
+     */
+    public function getImageThumbUrlAttribute(): ?string
+    {
+        $disk = $this->imageDisk();
+
+        try {
+            if ($this->image_thumb_path) {
+                return Storage::disk($disk)->url($this->image_thumb_path);
+            }
+
+            if ($this->image_medium_path) {
+                return Storage::disk($disk)->url($this->image_medium_path);
+            }
+
+            if ($this->image_path) {
+                return Storage::disk($disk)->url($this->image_path);
+            }
+        } catch (\Throwable $e) {
+            // ignore, fall through
+        }
+
+        return null;
+    }
+
+    /**
+     * Main image URL that the product cards should use.
+     * Prefer the explicit stored card_image_url (set by upload),
+     * then the thumb, then the generic image_url, then default.
+     */
+    public function getCardImageUrlAttribute($value): string
+    {
+        if (!empty($value)) {
+            return (string) $value;
+        }
+
+        return $this->image_thumb_url
+            ?? $this->getImageUrlAttribute($this->attributes['image_url'] ?? null)
+            ?? asset('images/default-product.png');
+    }
+
+    /**
+     * Responsive srcset for cards.
+     * Prefer stored card_image_srcset (upload),
+     * else compose from *path columns.
+     */
+    public function getCardImageSrcsetAttribute($value): ?string
+    {
+        if (!empty($value)) {
+            return (string) $value;
+        }
+
+        $disk  = $this->imageDisk();
+        $parts = [];
+
+        $push = function (?string $path, string $size) use (&$parts, $disk) {
+            if (!$path) return;
+            try {
+                $url = Storage::disk($disk)->url($path);
+            } catch (\Throwable $e) {
+                $url = asset('storage/' . ltrim($path, '/'));
+            }
+            $parts[] = "{$url} {$size}";
+        };
+
+        $push($this->image_thumb_path,  '400w');
+        $push($this->image_medium_path, '800w');
+        $push($this->image_path,        '1200w');
+
+        return $parts ? implode(', ', $parts) : null;
     }
 
     /** BOM material cost per ONE unit (sum of qty * snapshot unit price) */
@@ -204,8 +317,8 @@ class Product extends Model
         $rows = $this->relationLoaded('recipes') ? $this->recipes : $this->recipes()->get();
         $sum  = 0.0;
         foreach ($rows as $r) {
-            $qty  = is_numeric($r->qty) ? (float)$r->qty : 0.0;
-            $unit = is_numeric($r->unit_price_snapshot) ? (float)$r->unit_price_snapshot : 0.0;
+            $qty  = is_numeric($r->qty) ? (float) $r->qty : 0.0;
+            $unit = is_numeric($r->unit_price_snapshot) ? (float) $r->unit_price_snapshot : 0.0;
             $sum += $qty * $unit;
         }
         return round($sum, 2);
@@ -214,8 +327,8 @@ class Product extends Model
     /** Effective unit cost: prefer declared unit_cost; else fallback to BOM cost */
     public function getEffectiveUnitCostAttribute(): float
     {
-        $declared = $this->unit_cost !== null ? (float)$this->unit_cost : null;
-        return $declared !== null ? $declared : (float)$this->unit_material_cost;
+        $declared = $this->unit_cost !== null ? (float) $this->unit_cost : null;
+        return $declared !== null ? $declared : (float) $this->unit_material_cost;
     }
 
     /** Preferred selling price for UI/Quick Sale */
@@ -225,7 +338,7 @@ class Product extends Model
             ?? $this->getRawOriginal('default_price')
             ?? $this->getRawOriginal('selling_price'); // legacy
 
-        return (float)($p !== null ? $p : $this->effective_unit_cost);
+        return (float) ($p !== null ? $p : $this->effective_unit_cost);
     }
 
     /** Gross margin percentage (price vs effective unit cost) */
@@ -255,7 +368,7 @@ class Product extends Model
     public function getAvailableStockKgAttribute(): float
     {
         $available = $this->produced_qty_kg - $this->sold_qty_kg;
-        return $available > 0 ? (float)$available : 0.0;
+        return $available > 0 ? (float) $available : 0.0;
     }
 
     public function getIsVariantAttribute(): bool
@@ -268,12 +381,64 @@ class Product extends Model
         return $this->parent?->product_name;
     }
 
+    /**
+     * Human-friendly type name for a product or variant,
+     * used on product-level views (not per-batch).
+     */
+    public function getTypeNameAttribute(): string
+    {
+        $childName  = trim((string) ($this->product_name ?? ''));
+        $parentName = trim((string) ($this->parent?->product_name ?? ''));
+        $category   = trim((string) ($this->category ?? ''));
+
+        // Base product: prefer category, else "Base"
+        if (!$this->is_variant) {
+            return $category !== '' ? $category : 'Base';
+        }
+
+        // Variant logic
+        if ($childName !== '' && $parentName !== '') {
+            // If child contains parent, strip parent name to get just the type
+            if (stripos($childName, $parentName) !== false) {
+                $type = trim(preg_replace('/\s+/', ' ', str_ireplace($parentName, '', $childName)));
+                if ($type !== '') return $type;
+            }
+        }
+
+        // Try to parse patterns like "Product - Type" or "Product (Type)"
+        if (preg_match('/[-–]\s*(.+)$/u', $childName, $m)) {
+            return trim($m[1]);
+        }
+        if (preg_match('/\(([^)]+)\)/', $childName, $m)) {
+            return trim($m[1]);
+        }
+
+        // Fallbacks
+        if ($category !== '') return $category;
+        return $childName !== '' ? $childName : 'Variant';
+    }
+
+    /**
+     * Searchable type keywords for this product.
+     */
+    public function getTypeKeywordsAttribute(): string
+    {
+        $parts = [
+            mb_strtolower($this->type_name),
+            mb_strtolower($this->product_name ?? ''),
+            mb_strtolower($this->parent?->product_name ?? ''),
+            mb_strtolower($this->category ?? ''),
+        ];
+
+        return trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($parts))));
+    }
+
     /** Convenience: compute an expiry date from a given production date */
     public function computeExpiryFrom(\DateTimeInterface|string|null $productionDate): ?string
     {
         if (!$productionDate || !$this->shelf_life_days) return null;
         $c = \Carbon\Carbon::make($productionDate) ?? \Carbon\Carbon::parse($productionDate);
-        return $c->addDays((int)$this->shelf_life_days)->toDateString();
+        return $c->addDays((int) $this->shelf_life_days)->toDateString();
     }
 
     /* ---------- Production snapshot accessors ----------- */
@@ -317,55 +482,55 @@ class Product extends Model
     public function getLatestUnitPricePackAttribute(): ?float
     {
         $snap = $this->getRawOriginal('latest_unit_price_pack');
-        if ($snap !== null) return (float)$snap;
+        if ($snap !== null) return (float) $snap;
 
         $latest = $this->relationLoaded('latestProduction')
             ? $this->latestProduction
             : $this->latestProduction()->first();
 
-        return $latest?->unit_price_pack !== null ? (float)$latest->unit_price_pack : null;
+        return $latest?->unit_price_pack !== null ? (float) $latest->unit_price_pack : null;
     }
 
     public function getLatestUnitPriceBagAttribute(): ?float
     {
         $snap = $this->getRawOriginal('latest_unit_price_bag');
-        if ($snap !== null) return (float)$snap;
+        if ($snap !== null) return (float) $snap;
 
         $latest = $this->relationLoaded('latestProduction')
             ? $this->latestProduction
             : $this->latestProduction()->first();
 
-        return $latest?->unit_price_bag !== null ? (float)$latest->unit_price_bag : null;
+        return $latest?->unit_price_bag !== null ? (float) $latest->unit_price_bag : null;
     }
 
     public function getLatestAvailablePackAttribute(): ?int
     {
         $snap = $this->getRawOriginal('latest_available_pack');
-        if ($snap !== null) return (int)$snap;
+        if ($snap !== null) return (int) $snap;
 
         $latest = $this->relationLoaded('latestProduction')
             ? $this->latestProduction
             : $this->latestProduction()->first();
 
-        return $latest?->available_pack !== null ? (int)$latest->available_pack : null;
+        return $latest?->available_pack !== null ? (int) $latest->available_pack : null;
     }
 
     public function getLatestAvailableBagAttribute(): ?int
     {
         $snap = $this->getRawOriginal('latest_available_bag');
-        if ($snap !== null) return (int)$snap;
+        if ($snap !== null) return (int) $snap;
 
         $latest = $this->relationLoaded('latestProduction')
             ? $this->latestProduction
             : $this->latestProduction()->first();
 
-        return $latest?->available_bag !== null ? (int)$latest->available_bag : null;
+        return $latest?->available_bag !== null ? (int) $latest->available_bag : null;
     }
 
     public function getTotalAvailablePackAttribute(): int
     {
         $snap = $this->getRawOriginal('total_available_pack');
-        if ($snap !== null) return (int)$snap;
+        if ($snap !== null) return (int) $snap;
 
         return (int) $this->productions()->sum('available_pack');
     }
@@ -373,20 +538,80 @@ class Product extends Model
     public function getTotalAvailableBagAttribute(): int
     {
         $snap = $this->getRawOriginal('total_available_bag');
-        if ($snap !== null) return (int)$snap;
+        if ($snap !== null) return (int) $snap;
 
         return (int) $this->productions()->sum('available_bag');
     }
 
     /* ----------------------------------------------------------------------
-     | Upload helpers
+     | Upload helpers (1200/800/400 WebP pipeline)
      * ---------------------------------------------------------------------*/
     public function setImageFromUpload(UploadedFile $file): void
     {
-        $path = $file->store('products', 'public');
-        $this->replaceImagePath($path);
+        $disk = 'public';
+
+        try {
+            $productId = $this->id ?: 'tmp';
+            $uuid = (string) Str::uuid();
+            $base = "products/{$productId}/{$uuid}";
+
+            // read + auto-orient
+            $img = Image::read($file->getRealPath())->orientate();
+
+            // cap master to 1600 for performance
+            $master = (clone $img)->scaleDown(1600, 1600);
+
+            $w1200 = (clone $master)->scaleDown(1200, 1200);
+            $w800  = (clone $master)->scaleDown(800, 800);
+            $w400  = (clone $master)->scaleDown(400, 400);
+
+            $path1200 = "{$base}-1200.webp";
+            $path800  = "{$base}-800.webp";
+            $path400  = "{$base}-400.webp";
+
+            Storage::disk($disk)->put($path1200, (string) $w1200->toWebp(80), 'public');
+            Storage::disk($disk)->put($path800,  (string) $w800->toWebp(80),  'public');
+            Storage::disk($disk)->put($path400,  (string) $w400->toWebp(80),  'public');
+
+            $url1200 = Storage::disk($disk)->url($path1200);
+            $url800  = Storage::disk($disk)->url($path800);
+            $url400  = Storage::disk($disk)->url($path400);
+
+            $srcset = "{$url400} 400w, {$url800} 800w, {$url1200} 1200w";
+
+            // Persist paths + primary URLs
+            $this->image_disk        = $disk;
+            $this->image_path        = $path1200;
+            $this->image_medium_path = $path800;
+            $this->image_thumb_path  = $path400;
+
+            $this->image_url          = $url1200; // large reference
+            $this->card_image_url     = $url800;  // mid-size for cards
+            $this->card_image_srcset  = $srcset;
+            $this->image_original_url = $url1200;
+
+        } catch (\Throwable $e) {
+            Log::warning('Product::setImageFromUpload failed', [
+                'product_id' => $this->id,
+                'error'      => $e->getMessage(),
+            ]);
+
+            // Fallback to simple single-file storage to avoid hard failure
+            $path = $file->store('products', $disk);
+            $url  = Storage::disk($disk)->url($path);
+
+            $this->image_disk        = $disk;
+            $this->image_path        = $path;
+            $this->image_url         = $url;
+            $this->card_image_url    = $url;
+            $this->card_image_srcset = null;
+        }
     }
 
+    /**
+     * Replace image_path and delete the previous file.
+     * (Leave medium/thumb cleanup to future if you want.)
+     */
     public function replaceImagePath(?string $newPath): void
     {
         $old = $this->getOriginal('image_path');
@@ -444,12 +669,27 @@ class Product extends Model
     public function scopeSearch($q, ?string $term)
     {
         if (!$term) return $q;
+
         $s = trim($term);
+
         return $q->where(function ($qq) use ($s) {
-            $qq->where('product_name', 'like', "%{$s}%")
-               ->orWhere('product_code', 'like', "%{$s}%")
-               ->orWhere('category', 'like', "%{$s}%")
-               ->orWhere('name', 'like', "%{$s}%"); // optional legacy
+            // Base: product_name always
+            $qq->where('product_name', 'like', "%{$s}%");
+
+            // Optional: product_code only if column exists
+            if (self::has('product_code')) {
+                $qq->orWhere('product_code', 'like', "%{$s}%");
+            }
+
+            // Optional: category if present
+            if (self::has('category')) {
+                $qq->orWhere('category', 'like', "%{$s}%");
+            }
+
+            // Optional legacy "name" column
+            if (self::has('name')) {
+                $qq->orWhere('name', 'like', "%{$s}%");
+            }
         });
     }
 

@@ -1,114 +1,376 @@
 @extends('layout.mainlayout')
 
 @section('content')
-<div class="bg-dark-bg text-white border border-dark-line p-6 rounded shadow-md">
+<div class="pixel-wrapper">
+  <div class="pixel-panel">
 
-  {{-- Header + Actions --}}
-  <div class="flex flex-col lg:flex-row justify-between items-center gap-4 mb-6">
-    <div>
-      <h2 class="text-xl font-bold">
-        Recipe (BOM) for: <span class="text-armygreen">{{ $product->product_name }}</span>
-      </h2>
-      <div class="text-sm text-gray-400 mt-1">
-        <a href="{{ route('products.index') }}" class="hover:underline">Products</a>
-        <span class="mx-1">/</span>
-        <a href="{{ route('products.show', $product) }}" class="hover:underline">{{ $product->product_name }}</a>
-        <span class="mx-1">/</span>
-        <span>Recipe</span>
+    {{-- Header + Actions --}}
+    <div class="flex flex-col lg:flex-row justify-between items-center gap-4 mb-5">
+      <div>
+        <div class="pixel-tag mb-2">
+          <span class="pixel-tag-dot"></span>
+          <span class="pixel-tag-text">Recipe Editor • BOM</span>
+        </div>
+
+        <h2 class="pixel-title">
+          Recipe for:
+          <span class="pixel-title-accent">{{ $product->product_name }}</span>
+        </h2>
+
+        <div class="pixel-breadcrumb">
+          <a href="{{ route('products.index') }}" class="pixel-link">Products</a>
+          <span>/</span>
+          <a href="{{ route('products.show', $product) }}" class="pixel-link">{{ $product->product_name }}</a>
+          <span>/</span>
+          <span>Recipe</span>
+        </div>
+        <p class="pixel-caption mt-1">Per 1 {{ $product->unit ?? 'kg' }} of finished goods</p>
       </div>
-      <p class="text-xs text-gray-400 mt-1">Per 1 {{ $product->unit ?? 'kg' }} of finished goods</p>
+
+      <div class="flex gap-2">
+        @if(Route::has('products.materials.defaults'))
+          <button id="btnLoadDefaults" class="pixel-btn pixel-btn-secondary">
+            <span class="pixel-btn-label">Load Defaults</span>
+          </button>
+        @endif
+
+        <button id="btnAddRow" class="pixel-btn pixel-btn-primary">
+          <span class="pixel-btn-label">+ Add Row</span>
+        </button>
+      </div>
     </div>
 
-    <div class="flex gap-2">
-      @if(Route::has('products.materials.defaults'))
-        <button id="btnLoadDefaults" class="btn-armygreen">Load Defaults</button>
-      @endif
-      <button id="btnAddRow" class="px-4 py-2 rounded text-sm bg-gray-600 hover:bg-gray-700 transition">+ Add Row</button>
-    </div>
-  </div>
+    @if(session('success'))
+      <div class="pixel-alert pixel-alert-success mb-3">
+        {{ session('success') }}
+      </div>
+    @endif
 
-  @if(session('success'))
-    <div class="mb-4 text-green-400 text-sm">{{ session('success') }}</div>
-  @endif
+    {{-- Main window frame --}}
+    <div class="pixel-window mb-4">
+      <div class="pixel-window-bar">
+        <span class="pixel-window-title">Material Lines</span>
+        <div class="pixel-window-dots">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+      </div>
 
-  {{-- Recipe form --}}
-  <form id="recipeForm" action="{{ route('products.recipe.store', $product) }}" method="POST">
-    @csrf
-    <div class="overflow-x-auto rounded-lg">
-      <table class="w-full text-sm text-left bg-dark-bg rounded-lg overflow-hidden border-collapse" id="recipeTable">
-        <thead class="bg-sidebar text-white text-xs uppercase">
-          <tr>
-            <th class="py-3 px-4 border-b border-dark-line w-12">#</th>
-            <th class="py-3 px-4 border-b border-dark-line">Material</th>
-            <th class="py-3 px-4 border-b border-dark-line w-24">Unit</th>
-            <th class="py-3 px-4 border-b border-dark-line w-32">Qty / 1 {{ $product->unit ?? 'kg' }}</th>
-            <th class="py-3 px-4 border-b border-dark-line w-40">Unit Price (snapshot)</th>
-            <th class="py-3 px-4 border-b border-dark-line w-40 text-right">Line Total</th>
-            <th class="py-3 px-4 border-b border-dark-line w-20 text-center">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="text-gray-100 divide-y divide-dark-line" id="recipeBody">
-          @foreach($recipe as $line)
-            <tr>
-              <td class="py-3 px-4 row-number"></td>
+      {{-- Recipe form --}}
+      <form id="recipeForm" action="{{ route('products.recipe.store', $product) }}" method="POST">
+        @csrf
 
-              <td class="py-3 px-4">
-                <select class="input-dark w-full ingredient-select" required>
-                  @foreach($materials as $m)
-                    <option value="{{ $m->id }}"
-                      data-unit="{{ $m->unit }}"
-                      data-price="{{ $m->default_unit_price }}"
-                      @selected($m->id === $line->material_id)
-                    >{{ $m->material_name }}</option>
-                  @endforeach
-                </select>
-                <input type="hidden" name="rows[][ingredient_id]" value="{{ $line->material_id }}">
-              </td>
+        <div class="overflow-x-auto">
+          <table class="pixel-table w-full text-left" id="recipeTable">
+            <thead>
+              <tr>
+                <th class="w-12">#</th>
+                <th>Material</th>
+                <th class="w-24">Unit</th>
+                <th class="w-32">Qty / 1 {{ $product->unit ?? 'kg' }}</th>
+                <th class="w-40">Unit Price</th>
+                <th class="w-40 text-right">Line Total</th>
+                <th class="w-20 text-center">Actions</th>
+              </tr>
+            </thead>
 
-              <td class="py-3 px-4 unit-cell">{{ $line->material->unit ?? '—' }}</td>
+            <tbody id="recipeBody">
+              @foreach($recipe as $line)
+                @php
+                  $lineTotal = (float)($line->qty ?? 0) * (float)($line->unit_price_snapshot ?? 0);
+                @endphp
+                <tr>
+                  <td class="row-number text-center"></td>
 
-              <td class="py-3 px-4">
-                <input type="number" step="0.001" min="0" name="rows[][qty]" value="{{ $line->qty }}" class="input-dark w-28 qty-input">
-              </td>
+                  <td>
+                    <select class="pixel-input w-full ingredient-select" required>
+                      @foreach($materials as $m)
+                        <option value="{{ $m->id }}"
+                          data-unit="{{ $m->unit }}"
+                          data-price="{{ $m->default_unit_price }}"
+                          @selected($m->id === $line->material_id)
+                        >{{ $m->material_name }}</option>
+                      @endforeach
+                    </select>
+                    <input type="hidden" name="rows[][ingredient_id]" value="{{ $line->material_id }}">
+                  </td>
 
-              <td class="py-3 px-4">
-                <input type="number" step="0.01" min="0" name="rows[][unit_price]" value="{{ $line->unit_price_snapshot }}" class="input-dark w-32 price-input">
-              </td>
+                  <td class="unit-cell text-center">
+                    {{ $line->material->unit ?? '—' }}
+                  </td>
 
+                  <td>
+                    <input type="number" step="0.001" min="0"
+                      name="rows[][qty]"
+                      value="{{ $line->qty }}"
+                      class="pixel-input w-full text-right qty-input">
+                  </td>
+
+                  <td>
+                    <input type="number" step="0.01" min="0"
+                      name="rows[][unit_price]"
+                      value="{{ $line->unit_price_snapshot }}"
+                      class="pixel-input w-full text-right price-input">
+                  </td>
+
+                  <td class="text-right line-total">
+                    {{ number_format($lineTotal, 2) }}
+                  </td>
+
+                  <td class="text-center">
+                    <form method="POST" action="{{ route('products.recipe.destroy', [$product, $line]) }}"
+                          onsubmit="return confirm('Remove this material from recipe?');">
+                      @csrf @method('DELETE')
+                      <button type="submit" class="pixel-link pixel-link-danger">
+                        Delete
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              @endforeach
+            </tbody>
+
+            <tfoot>
               @php
-                $lineTotal = (float)($line->qty ?? 0) * (float)($line->unit_price_snapshot ?? 0);
+                $grand = (float)($recipe->sum(fn($l) => (float)($l->qty ?? 0) * (float)($l->unit_price_snapshot ?? 0)));
               @endphp
-              <td class="py-3 px-4 text-right line-total">{{ number_format($lineTotal, 2) }}</td>
+              <tr>
+                <td colspan="5" class="text-right">Total Unit Material Cost</td>
+                <td class="text-right" id="grandTotal">
+                  {{ number_format($grand, 2) }}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
 
-              <td class="py-3 px-4 text-center">
-                <form method="POST" action="{{ route('products.recipe.destroy', [$product, $line]) }}"
-                      onsubmit="return confirm('Remove this material from recipe?');">
-                  @csrf @method('DELETE')
-                  <button type="submit" class="text-red-400 hover:underline">Delete</button>
-                </form>
-              </td>
-            </tr>
-          @endforeach
-        </tbody>
-
-        <tfoot class="bg-sidebar text-white text-xs uppercase">
-          @php
-            $grand = (float)($recipe->sum(fn($l) => (float)($l->qty ?? 0) * (float)($l->unit_price_snapshot ?? 0)));
-          @endphp
-          <tr>
-            <td colspan="5" class="py-3 px-4 text-right">Total Unit Material Cost</td>
-            <td class="py-3 px-4 text-right" id="grandTotal">{{ number_format($grand, 2) }}</td>
-            <td></td>
-          </tr>
-        </tfoot>
-      </table>
+        <div class="flex justify-end mt-4">
+          <button type="submit" class="pixel-btn pixel-btn-success">
+            <span class="pixel-btn-label">Save Recipe</span>
+          </button>
+        </div>
+      </form>
     </div>
 
-    <div class="flex justify-end mt-4">
-      <button type="submit" class="btn-armygreen">Save Recipe</button>
-    </div>
-  </form>
+    <p class="pixel-footnote">Tip: keep ingredient order consistent with your production sheet so operators can follow easily.</p>
+  </div>
 </div>
+@endsection
+
+@section('styles')
+<style>
+  /* Global wrapper with retro grid background */
+  .pixel-wrapper{
+    padding:1.5rem;
+    background:
+      repeating-linear-gradient(to right,#dbeafe 0,#dbeafe 1px,transparent 1px,transparent 24px),
+      repeating-linear-gradient(to bottom,#dbeafe 0,#dbeafe 1px,transparent 1px,transparent 24px),
+      #fefce8;
+  }
+
+  .pixel-panel{
+    max-width: 1100px;
+    margin:0 auto;
+    background:#fefcf5;
+    border:3px solid #222;
+    box-shadow:4px 4px 0 #000;
+    padding:1.25rem 1.5rem;
+    font-family:"Press Start 2P","VT323",system-ui,monospace;
+    font-size:11px;
+    color:#111827;
+  }
+
+  .pixel-title{
+    font-size:15px;
+    line-height:1.4;
+    text-transform:uppercase;
+  }
+  .pixel-title-accent{
+    padding:2px 4px;
+    background:#fde68a;
+    border:2px solid #111;
+    box-shadow:2px 2px 0 #111;
+  }
+
+  .pixel-breadcrumb{
+    margin-top:4px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px;
+    color:#6b7280;
+  }
+  .pixel-caption{
+    color:#9ca3af;
+  }
+
+  .pixel-link{
+    color:#2563eb;
+    text-decoration:none;
+    border-bottom:1px dashed transparent;
+  }
+  .pixel-link:hover{
+    border-bottom-color:#2563eb;
+  }
+  .pixel-link-danger{
+    color:#ef4444;
+  }
+
+  .pixel-footnote{
+    margin-top:.35rem;
+    color:#9ca3af;
+    font-size:9px;
+  }
+
+  .pixel-tag{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:3px 8px;
+    border:2px solid #111827;
+    background:#e0f2fe;
+    box-shadow:2px 2px 0 #111827;
+  }
+  .pixel-tag-dot{
+    width:8px;
+    height:8px;
+    background:#22c55e;
+    border:2px solid #111827;
+  }
+  .pixel-tag-text{
+    letter-spacing:1px;
+  }
+
+  /* Buttons */
+  .pixel-btn{
+    position:relative;
+    padding:7px 14px;
+    border:3px solid #111827;
+    border-radius:0;
+    box-shadow:3px 3px 0 #111827;
+    background:#e5e7eb;
+    cursor:pointer;
+    text-transform:uppercase;
+    font-size:10px;
+  }
+  .pixel-btn-label{
+    position:relative;
+    top:1px;
+  }
+  .pixel-btn:active{
+    box-shadow:1px 1px 0 #111827;
+    transform:translate(2px,2px);
+  }
+  .pixel-btn-primary{
+    background:#bfdbfe;
+  }
+  .pixel-btn-secondary{
+    background:#fee2e2;
+  }
+  .pixel-btn-success{
+    background:#bbf7d0;
+  }
+
+  /* Alert */
+  .pixel-alert{
+    padding:6px 10px;
+    border:3px solid #111827;
+    box-shadow:3px 3px 0 #111827;
+    background:#e5e7eb;
+  }
+  .pixel-alert-success{
+    background:#dcfce7;
+  }
+
+  /* Window-style frame */
+  .pixel-window{
+    border:3px solid #111827;
+    box-shadow:4px 4px 0 #111827;
+    background:#f9fafb;
+  }
+  .pixel-window-bar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:4px 8px;
+    background:#0f172a;
+    color:#e5e7eb;
+    border-bottom:3px solid #111827;
+  }
+  .pixel-window-title{
+    text-transform:uppercase;
+    letter-spacing:1px;
+  }
+  .pixel-window-dots{
+    display:flex;
+    gap:3px;
+  }
+  .pixel-window-dots .dot{
+    width:8px;
+    height:8px;
+    border:2px solid #111827;
+    background:#f9fafb;
+  }
+  .pixel-window-dots .dot.red{ background:#fca5a5; }
+  .pixel-window-dots .dot.yellow{ background:#facc15; }
+  .pixel-window-dots .dot.green{ background:#4ade80; }
+
+  /* Table */
+  .pixel-table{
+    border-collapse:separate;
+    border-spacing:0;
+    width:100%;
+    border-top:3px solid #111827;
+  }
+  .pixel-table thead th{
+    padding:8px;
+    background:#e0f2fe;
+    border-bottom:3px solid #111827;
+    border-right:2px solid #111827;
+    text-transform:uppercase;
+  }
+  .pixel-table thead th:last-child{
+    border-right:0;
+  }
+  .pixel-table tbody td{
+    padding:6px 8px;
+    border-bottom:2px solid #d1d5db;
+    border-right:2px solid #e5e7eb;
+  }
+  .pixel-table tbody tr:nth-child(odd){
+    background:#fefce8;
+  }
+  .pixel-table tbody tr:nth-child(even){
+    background:#fff7ed;
+  }
+  .pixel-table tfoot td{
+    padding:8px;
+    border-top:3px solid #111827;
+    background:#f3e8ff;
+  }
+
+  .pixel-input{
+    border:2px solid #111827;
+    background:#f9fafb;
+    padding:4px 6px;
+    border-radius:0;
+    font-family:inherit;
+    font-size:11px;
+  }
+  .pixel-input:focus{
+    outline:none;
+    border-color:#2563eb;
+    background:#e0f2fe;
+  }
+
+  @media (max-width:768px){
+    .pixel-panel{
+      padding:1rem;
+      box-shadow:3px 3px 0 #111827;
+    }
+  }
+</style>
 @endsection
 
 @section('scripts')
@@ -119,27 +381,34 @@
   const grand = document.getElementById('grandTotal');
 
   function money(n){ return (Math.round(n * 100)/100).toFixed(2); }
+
   function renumberRows(){
-    document.querySelectorAll('#recipeBody tr').forEach((tr,i)=> tr.querySelector('.row-number').textContent = i+1);
+    document.querySelectorAll('#recipeBody tr').forEach((tr,i)=>{
+      const cell = tr.querySelector('.row-number');
+      if (cell) cell.textContent = i+1;
+    });
   }
+
   function recalcRow(tr){
     const qty   = parseFloat(tr.querySelector('.qty-input')?.value || 0);
     const price = parseFloat(tr.querySelector('.price-input')?.value || 0);
-    tr.querySelector('.line-total').textContent = money(qty * price);
+    const cell  = tr.querySelector('.line-total');
+    if (cell) cell.textContent = money(qty * price);
   }
+
   function recalcAll(){
     let total = 0;
     document.querySelectorAll('#recipeBody tr').forEach(tr => {
       recalcRow(tr);
-      total += parseFloat(tr.querySelector('.line-total').textContent || 0);
+      total += parseFloat(tr.querySelector('.line-total')?.textContent || 0);
     });
-    grand.textContent = money(total);
+    if (grand) grand.textContent = money(total);
     renumberRows();
   }
 
   function makeMaterialSelect(selectedId=null){
     const select = document.createElement('select');
-    select.className = 'input-dark w-full ingredient-select';
+    select.className = 'pixel-input w-full ingredient-select';
     select.required  = true;
     materialsCatalog.forEach(m => {
       const opt = document.createElement('option');
@@ -156,13 +425,13 @@
   function addRow({material_id=null, unit='', qty=0, unit_price=0} = {}){
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="py-3 px-4 row-number"></td>
-      <td class="py-3 px-4"></td>
-      <td class="py-3 px-4 unit-cell">${unit || ''}</td>
-      <td class="py-3 px-4"><input type="number" step="0.001" min="0" name="rows[][qty]" value="${qty}" class="input-dark w-28 qty-input"></td>
-      <td class="py-3 px-4"><input type="number" step="0.01" min="0" name="rows[][unit_price]" value="${unit_price}" class="input-dark w-32 price-input"></td>
-      <td class="py-3 px-4 text-right line-total">0.00</td>
-      <td class="py-3 px-4 text-center"><button type="button" class="text-red-400 hover:underline btnRemoveRow">Delete</button></td>
+      <td class="row-number text-center"></td>
+      <td></td>
+      <td class="unit-cell text-center">${unit || ''}</td>
+      <td><input type="number" step="0.001" min="0" name="rows[][qty]" value="${qty}" class="pixel-input w-full text-right qty-input"></td>
+      <td><input type="number" step="0.01" min="0" name="rows[][unit_price]" value="${unit_price}" class="pixel-input w-full text-right price-input"></td>
+      <td class="text-right line-total">0.00</td>
+      <td class="text-center"><button type="button" class="pixel-link pixel-link-danger btnRemoveRow">Delete</button></td>
     `;
 
     const cell   = tr.children[1];
@@ -204,17 +473,18 @@
   document.querySelectorAll('#recipeBody tr').forEach(tr => {
     const select = tr.querySelector('.ingredient-select');
     const hidden = tr.querySelector('input[type="hidden"][name="rows[][ingredient_id]"]');
-    select?.addEventListener('change', () => {
-      const opt = select.options[select.selectedIndex];
-      tr.querySelector('.unit-cell').textContent = opt.dataset.unit || '';
-      const priceInput = tr.querySelector('.price-input');
-      if (Number(priceInput.value) === 0) priceInput.value = opt.dataset.price || 0;
-      hidden.value = select.value;
-      recalcAll();
-    });
+    if (select){
+      select.addEventListener('change', () => {
+        const opt = select.options[select.selectedIndex];
+        tr.querySelector('.unit-cell').textContent = opt.dataset.unit || '';
+        const priceInput = tr.querySelector('.price-input');
+        if (Number(priceInput.value) === 0) priceInput.value = opt.dataset.price || 0;
+        if (hidden) hidden.value = select.value;
+        recalcAll();
+      });
+    }
     tr.querySelector('.qty-input')?.addEventListener('input', recalcAll);
     tr.querySelector('.price-input')?.addEventListener('input', recalcAll);
-    tr.querySelector('.btnRemoveRow')?.addEventListener('click', () => { tr.remove(); recalcAll(); });
   });
 
   document.getElementById('btnAddRow')?.addEventListener('click', () => addRow());

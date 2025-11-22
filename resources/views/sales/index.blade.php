@@ -51,13 +51,37 @@
 <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
 <style>
-  :root{ --chart-1:#ef4444; --chart-2:#22c55e; --chart-3:#f59e0b; --chart-4:#3b82f6; }
+  :root{
+    --chart-1:#ef4444;
+    --chart-2:#22c55e;
+    --chart-3:#f59e0b;
+    --chart-4:#3b82f6;
+  }
 
-  body, p, ul, li, a, button { font-family: 'Jost', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-  .light-card{ background:#fff; border:1px solid #e5e7eb; border-radius:16px; box-shadow:0 8px 18px rgba(17,24,39,.04); }
-  .input-light{ background:#fff; border:1px solid #e5e7eb; color:#111827; border-radius:12px; padding:.5rem .75rem; }
+  body, p, ul, li, a, button {
+    font-family: 'Jost', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+
+  .light-card{
+    background:#fff;
+    border:1px solid #e5e7eb;
+    border-radius:16px;
+    box-shadow:0 8px 18px rgba(17,24,39,.04);
+  }
+
+  .input-light{
+    background:#fff;
+    border:1px solid #e5e7eb;
+    color:#111827;
+    border-radius:12px;
+    padding:.5rem .75rem;
+  }
   .input-light::placeholder{ color:#9ca3af; }
-  .input-light:focus{ outline:none; box-shadow:0 0 0 2px rgba(59,130,246,.25); border-color:#93c5fd; }
+  .input-light:focus{
+    outline:none;
+    box-shadow:0 0 0 2px rgba(59,130,246,.25);
+    border-color:#93c5fd;
+  }
 
   .btn{ @apply inline-flex items-center justify-center px-3 py-2 rounded-md border text-sm font-medium; }
   .btn-primary{ @apply bg-blue-600 text-white border-blue-600 hover:bg-blue-700; }
@@ -66,28 +90,68 @@
   .btn-secondary-green{ @apply bg-white text-green-700 border-green-200 hover:bg-green-50; }
   .btn-ghost{ @apply bg-transparent; }
 
-  .chip{ border:1px solid; padding:.25rem .6rem; border-radius:999px; font-size:.72rem; font-weight:600; }
-  .table-wrap{ border:1px solid #e5e7eb; border-radius:14px; overflow:hidden; }
-  thead th{ background:#f9fafb; color:#374151; font-weight:700; }
+  .chip{
+    border:1px solid;
+    padding:.25rem .6rem;
+    border-radius:999px;
+    font-size:.72rem;
+    font-weight:600;
+  }
+
+  .table-wrap{
+    border:1px solid #e5e7eb;
+    border-radius:14px;
+    overflow:hidden;
+  }
+
+  thead th{
+    background:#f9fafb;
+    color:#374151;
+    font-weight:700;
+  }
+
   tbody td{ color:#111827; }
 
   /* Unit type chip (kg / pack / bag) */
   .u-chip{
-    display:inline-flex; align-items:center; gap:.35rem;
-    padding:.15rem .5rem; border-radius:999px; font-size:.7rem; font-weight:600;
-    border:1px solid #e5e7eb; background:#f8fafc; color:#334155; margin-left:.4rem;
+    display:inline-flex;
+    align-items:center;
+    gap:.35rem;
+    padding:.15rem .5rem;
+    border-radius:999px;
+    font-size:.7rem;
+    font-weight:600;
+    border:1px solid #e5e7eb;
+    background:#f8fafc;
+    color:#334155;
+    margin-left:.4rem;
   }
 
   /* Pack/bag price chips under product */
   .price-chip{
-    display:inline-flex; align-items:center; gap:.35rem;
-    padding:.12rem .45rem; border-radius:999px; font-size:.68rem; font-weight:600;
-    border:1px solid #e5e7eb; background:#f8fafc; color:#334155;
+    display:inline-flex;
+    align-items:center;
+    gap:.35rem;
+    padding:.12rem .45rem;
+    border-radius:999px;
+    font-size:.68rem;
+    font-weight:600;
+    border:1px solid #e5e7eb;
+    background:#f8fafc;
+    color:#334155;
   }
-  .price-row{ margin-top:.25rem; display:flex; flex-wrap:wrap; gap:.35rem; }
+
+  .price-row{
+    margin-top:.25rem;
+    display:flex;
+    flex-wrap:wrap;
+    gap:.35rem;
+  }
 
   /* Exporting state */
-  #salesOverviewRoot.exporting .light-card { background:#ffffff !important; }
+  #salesOverviewRoot.exporting .light-card{
+    background:#ffffff !important;
+  }
 
   /* Selection column */
   .select-col{ width: 38px; }
@@ -95,7 +159,9 @@
 
   /* Bulk bar */
   #bulkBar{
-    position: sticky; top: 0; z-index: 30;
+    position: sticky;
+    top: 0;
+    z-index: 30;
     display: none;
   }
   #bulkBar.active{ display: block; }
@@ -105,13 +171,23 @@
     transition: opacity .25s ease, transform .25s ease;
   }
   #flashModal.hidden-soft{
-    opacity:0; pointer-events:none; transform:translateY(-10px) scale(.98);
+    opacity:0;
+    pointer-events:none;
+    transform:translateY(-10px) scale(.98);
   }
 
   @media print{
     body{ background:#ffffff !important; }
-    .btn, .input-light, #exportPdfBtn, #bulkBar, [onclick]{ display:none !important; }
-    .light-card{ break-inside: avoid; box-shadow:none; border:1px solid #e5e7eb; }
+    .btn,
+    .input-light,
+    #exportPdfBtn,
+    #bulkBar,
+    [onclick]{ display:none !important; }
+    .light-card{
+      break-inside: avoid;
+      box-shadow:none;
+      border:1px solid #e5e7eb;
+    }
     thead{ display: table-header-group; }
     tfoot{ display: table-footer-group; }
   }
@@ -198,7 +274,13 @@
         <div class="flex flex-wrap items-center gap-2">
           <button type="button" class="btn btn-secondary-blue" id="bulkOpenReceipts">Open Receipts</button>
           <button type="button" class="btn btn-secondary" id="bulkExportPdf">Export Selected PDF</button>
-          <button type="button" class="btn btn-ghost text-rose-700 border border-rose-200 hover:bg-rose-50" id="bulkDelete">Delete Selected</button>
+          <button
+            type="button"
+            class="btn btn-ghost text-rose-700 border border-rose-200 hover:bg-rose-50"
+            id="bulkArchive"
+          >
+            Archive Selected
+          </button>
         </div>
       </div>
     </div>
@@ -207,7 +289,13 @@
       <h2 class="text-xl font-semibold">Sales</h2>
       <div class="flex flex-wrap items-center gap-3">
         <div class="relative">
-          <input id="salesSearch" type="text" placeholder="Search invoice / product / type / status…" class="w-64 input-light pr-8" aria-label="Search sales">
+          <input
+            id="salesSearch"
+            type="text"
+            placeholder="Search invoice / product / type / status…"
+            class="w-64 input-light pr-8"
+            aria-label="Search sales"
+          >
           <span class="absolute right-3 top-2.5 text-gray-400" aria-hidden="true">⌕</span>
         </div>
         <input id="dateFilter" type="date" class="input-light" aria-label="Filter by date">
@@ -252,7 +340,9 @@
                 if ($typeLabel === '' && isset($row->production) && $row->production?->product_name_snapshot) {
                   $typeLabel = $row->production->product_name_snapshot;
                 }
-                if ($typeLabel === '') $typeLabel = '—';
+                if ($typeLabel === '') {
+                  $typeLabel = '—';
+                }
 
                 // Batch prices from eager-loaded production
                 $packPrice = optional($row->production)->unit_price_pack;
@@ -262,10 +352,12 @@
               @endphp
               <tr class="hover:bg-gray-50 transition-colors" data-row-id="{{ $row->id }}">
                 <td class="select-col px-3 py-3 text-center">
-                  <input type="checkbox"
-                         class="row-select"
-                         aria-label="Select row {{ $invoice }}"
-                         data-row-id="{{ $row->id }}">
+                  <input
+                    type="checkbox"
+                    class="row-select"
+                    aria-label="Select row {{ $invoice }}"
+                    data-row-id="{{ $row->id }}"
+                  >
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap">{{ $invoice }}</td>
 
@@ -290,7 +382,9 @@
                   <span class="chip border bg-slate-50 text-slate-700">{{ $typeLabel }}</span>
                 </td>
 
-                <td class="px-4 py-3">{{ $date ? \Carbon\Carbon::parse($date)->timezone('Asia/Manila')->format('Y-m-d') : '' }}</td>
+                <td class="px-4 py-3">
+                  {{ $date ? \Carbon\Carbon::parse($date)->timezone('Asia/Manila')->format('Y-m-d') : '' }}
+                </td>
 
                 {{-- Quantity with unit chip --}}
                 <td class="px-4 py-3 text-right">
@@ -303,9 +397,15 @@
                   ₱ {{ number_format($unit, 2) }}
                   @if($uType === 'kg' && ($hasPack || $hasBag))
                     <div class="mt-1 text-xs text-gray-500">
-                      @if($hasPack) <span>pack ₱ {{ number_format((float)$packPrice, 2) }}</span>@endif
-                      @if($hasPack && $hasBag) <span class="mx-1">·</span>@endif
-                      @if($hasBag)  <span>bag ₱ {{ number_format((float)$bagPrice, 2) }}</span>@endif
+                      @if($hasPack)
+                        <span>pack ₱ {{ number_format((float)$packPrice, 2) }}</span>
+                      @endif
+                      @if($hasPack && $hasBag)
+                        <span class="mx-1">·</span>
+                      @endif
+                      @if($hasBag)
+                        <span>bag ₱ {{ number_format((float)$bagPrice, 2) }}</span>
+                      @endif
                     </div>
                   @endif
                   @if(in_array($uType, ['pack','bag']))
@@ -313,10 +413,14 @@
                   @endif
                 </td>
 
-                <td class="px-4 py-3 text-right">₱ {{ number_format($tot, 2) }}</td>
+                <td class="px-4 py-3 text-right">
+                  ₱ {{ number_format($tot, 2) }}
+                </td>
 
                 <td class="px-4 py-3">
-                  @php $cls = $statusColors[$row->status] ?? 'bg-gray-100 text-gray-800 border-gray-200'; @endphp
+                  @php
+                    $cls = $statusColors[$row->status] ?? 'bg-gray-100 text-gray-800 border-gray-200';
+                  @endphp
                   <span class="chip {{ $cls }} border">{{ $row->status ?? 'Pending' }}</span>
                 </td>
 
@@ -324,9 +428,17 @@
                   <div class="flex items-center justify-center gap-2">
                     <a href="{{ route('sales.receipt', $row) }}" class="btn btn-secondary-blue receipt-link">Receipt</a>
                     <a href="{{ route('sales.edit', $row) }}" class="btn btn-secondary-green">Edit</a>
-                    <form action="{{ route('sales.destroy', $row) }}" method="POST" onsubmit="return confirm('Delete this sale?')" class="inline delete-form">
-                      @csrf @method('DELETE')
-                      <button class="btn btn-ghost text-rose-700 border border-rose-200 hover:bg-rose-50">Delete</button>
+                    <form
+                      action="{{ route('sales.destroy', $row) }}"
+                      method="POST"
+                      onsubmit="return confirm('Archive this sale?')"
+                      class="inline archive-form"
+                    >
+                      @csrf
+                      @method('DELETE')
+                      <button class="btn btn-ghost text-rose-700 border border-rose-200 hover:bg-rose-50">
+                        Archive
+                      </button>
                     </form>
                   </div>
                 </td>
@@ -352,7 +464,13 @@
 
 {{-- Center flash popup (success / error) --}}
 @if (session('success') || session('error'))
-  <div id="flashModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+  <div
+    id="flashModal"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+    role="dialog"
+    aria-modal="true"
+    aria-live="polite"
+  >
     <div class="max-w-sm w-full mx-4 rounded-2xl shadow-2xl bg-white px-6 py-5 text-center">
       @if (session('success'))
         <div class="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-green-600">
@@ -368,9 +486,11 @@
         <p class="text-sm text-gray-700">{{ session('error') }}</p>
       @endif
 
-      <button type="button"
-              data-close-flash="1"
-              class="mt-4 inline-flex items-center justify-center rounded-full bg-gray-900 text-white text-xs px-4 py-1.5">
+      <button
+        type="button"
+        data-close-flash="1"
+        class="mt-4 inline-flex items-center justify-center rounded-full bg-gray-900 text-white text-xs px-4 py-1.5"
+      >
         Close
       </button>
     </div>
@@ -391,38 +511,53 @@
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function(){
+document.addEventListener('DOMContentLoaded', function () {
   /* ---------- Filters ---------- */
   const search = document.getElementById('salesSearch');
   const dateFilter = document.getElementById('dateFilter');
   const rows = Array.from(document.querySelectorAll('#salesTableBody tr'));
+
   function applyFilters() {
     const term = (search?.value || '').toLowerCase();
     const date = (dateFilter?.value || '');
+
     rows.forEach(tr => {
-      const tds = tr.querySelectorAll('td'); if (!tds.length) return;
+      const tds = tr.querySelectorAll('td');
+      if (!tds.length) return;
+
       const invoice = (tds[1].textContent || '').toLowerCase();
       const product = (tds[2].textContent || '').toLowerCase();
       const typeCol = (tds[3].textContent || '').toLowerCase();
       const rowDate = (tds[4].textContent || '').trim();
       const status  = (tds[8].textContent || '').toLowerCase();
+
       const matchTerm = !term || invoice.includes(term) || product.includes(term) || typeCol.includes(term) || status.includes(term);
       const matchDate = !date || rowDate === date;
+
       tr.style.display = (matchTerm && matchDate) ? '' : 'none';
-      // If hidden, uncheck
+
+      // If hidden, uncheck from selection
       if (tr.style.display === 'none') {
         const cb = tr.querySelector('.row-select');
-        if (cb && cb.checked) { cb.checked = false; selected.delete(tr.dataset.rowId); updateBulkUI(); }
+        if (cb && cb.checked) {
+          cb.checked = false;
+          selected.delete(tr.dataset.rowId);
+          updateBulkUI();
+        }
       }
     });
   }
+
   search?.addEventListener('input', applyFilters);
   dateFilter?.addEventListener('change', applyFilters);
 
   window.toggleAddSaleModal = (open) => {
-    const el = document.getElementById('addSaleModal'); if (!el) return;
+    const el = document.getElementById('addSaleModal');
+    if (!el) return;
+
     el.classList.toggle('hidden', !open);
     el.classList.toggle('flex', open);
+
     if (open) {
       const form = el.querySelector('form');
       if (form) {
@@ -431,16 +566,20 @@ document.addEventListener('DOMContentLoaded', function(){
           form.reset();
         }
         const btn = form.querySelector('button[type="submit"]');
-        if (btn) { btn.disabled = false; btn.classList.remove('opacity-70','cursor-not-allowed'); }
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-70', 'cursor-not-allowed');
+        }
       }
     }
   };
 
   /* ---------- Charts ---------- */
-  function cssVar(name, fallback){
+  function cssVar(name, fallback) {
     const v = getComputedStyle(document.body).getPropertyValue(name).trim();
     return v || fallback;
   }
+
   const C_RED    = cssVar('--chart-1', '#ef4444');
   const C_GREEN  = cssVar('--chart-2', '#22c55e');
   const C_YELLOW = cssVar('--chart-3', '#f59e0b');
@@ -455,28 +594,71 @@ document.addEventListener('DOMContentLoaded', function(){
       const barEl = document.querySelector('#salesBar3D');
       const months = @json(array_values($chartMonths));
       const totals = @json(array_map('floatval', $chartTotals));
+
       const barOpts = {
         chart: {
-          type:'bar', height:340, toolbar:{show:false}, foreColor:'#374151', background:'transparent',
-          animations:{enabled:true, easing:'easeinout', speed:600}
+          type: 'bar',
+          height: 340,
+          toolbar: { show: false },
+          foreColor: '#374151',
+          background: 'transparent',
+          animations: { enabled: true, easing: 'easeinout', speed: 600 }
         },
-        grid:{borderColor:'#e5e7eb', strokeDashArray:4, padding:{left:10,right:10}},
-        plotOptions:{ bar:{ columnWidth:'45%', borderRadius:8, borderRadiusApplication:'around' } },
-        colors:[C_BLUE],
-        dataLabels:{enabled:false},
-        series:[{name:'Revenue', data: totals}],
-        xaxis:{
-          categories:months,
-          labels:{rotate:-15, style:{colors:'#374151'}},
-          axisBorder:{color:'#e5e7eb'}, axisTicks:{color:'#e5e7eb'}
+        grid: {
+          borderColor: '#e5e7eb',
+          strokeDashArray: 4,
+          padding: { left: 10, right: 10 }
         },
-        yaxis:{labels:{formatter:(v)=>'₱ '+Number(v).toLocaleString(), style:{colors:'#374151'}}},
-        tooltip:{theme:'light', y:{formatter:(v)=>'₱ '+Number(v).toLocaleString()}},
-        fill:{type:'gradient', gradient:{shade:'light', type:'vertical',
-              gradientToColors:[C_GREEN], opacityFrom:.95, opacityTo:.9, stops:[0,60,100]}}
+        plotOptions: {
+          bar: {
+            columnWidth: '45%',
+            borderRadius: 8,
+            borderRadiusApplication: 'around'
+          }
+        },
+        colors: [C_BLUE],
+        dataLabels: { enabled: false },
+        series: [
+          { name: 'Revenue', data: totals }
+        ],
+        xaxis: {
+          categories: months,
+          labels: { rotate: -15, style: { colors: '#374151' } },
+          axisBorder: { color: '#e5e7eb' },
+          axisTicks: { color: '#e5e7eb' }
+        },
+        yaxis: {
+          labels: {
+            formatter: (v) => '₱ ' + Number(v).toLocaleString(),
+            style: { colors: '#374151' }
+          }
+        },
+        tooltip: {
+          theme: 'light',
+          y: {
+            formatter: (v) => '₱ ' + Number(v).toLocaleString()
+          }
+        },
+        fill: {
+          type: 'gradient',
+          gradient: {
+            shade: 'light',
+            type: 'vertical',
+            gradientToColors: [C_GREEN],
+            opacityFrom: .95,
+            opacityTo: .9,
+            stops: [0, 60, 100]
+          }
+        }
       };
-      if (barEl) new ApexCharts(barEl, barOpts).render();
-    } catch (e) { console.error('Bar chart error:', e); }
+
+      if (barEl) {
+        const barChart = new ApexCharts(barEl, barOpts);
+        barChart.render();
+      }
+    } catch (e) {
+      console.error('Bar chart error:', e);
+    }
 
     // DONUT (Top Products by Type)
     try {
@@ -484,70 +666,102 @@ document.addEventListener('DOMContentLoaded', function(){
       const labels = @json($donutLabels);
       const values = @json($donutValues);
       const colors = [C_RED, C_GREEN, C_YELLOW, C_BLUE, '#60a5fa', '#34d399'];
+
       const donutOpts = {
-        chart:{type:'donut', height:340, foreColor:'#374151', background:'transparent'},
+        chart: {
+          type: 'donut',
+          height: 340,
+          foreColor: '#374151',
+          background: 'transparent'
+        },
         series: values,
         labels: labels,
-        legend:{show:false},
+        legend: { show: false },
         colors: colors,
-        tooltip:{
-          theme:'light',
-          y:{ formatter:(v)=>'₱ '+Number(v).toLocaleString() },
-          x:{ formatter:(name)=>name }
+        tooltip: {
+          theme: 'light',
+          y: {
+            formatter: (v) => '₱ ' + Number(v).toLocaleString()
+          },
+          x: {
+            formatter: (name) => name
+          }
         },
-        dataLabels:{
-          enabled:true,
-          formatter:(val,opts)=>{
+        dataLabels: {
+          enabled: true,
+          formatter: (val, opts) => {
             const full = opts.w.globals.labels[opts.seriesIndex] || '';
             const parts = full.split('·');
             const type = (parts[1] || full).trim();
             return type;
           }
         },
-        plotOptions:{
-          pie:{
-            donut:{
-              size:'68%',
-              labels:{
-                show:true,
-                total:{
-                  show:true,
-                  label:'Total',
-                  formatter:(w)=>{
-                    const sum=w.globals.seriesTotals.reduce((a,b)=>a+b,0);
-                    return '₱ '+Number(sum).toLocaleString();
+        plotOptions: {
+          pie: {
+            donut: {
+              size: '68%',
+              labels: {
+                show: true,
+                total: {
+                  show: true,
+                  label: 'Total',
+                  formatter: (w) => {
+                    const sum = w.globals.seriesTotals.reduce((a, b) => a + b, 0);
+                    return '₱ ' + Number(sum).toLocaleString();
                   }
                 }
               }
             }
           }
         },
-        stroke:{ colors:['#ffffff'] }
+        stroke: { colors: ['#ffffff'] }
       };
+
       if (donutEl) {
         const donut = new ApexCharts(donutEl, donutOpts);
-        donut.render().then(()=>{
+        donut.render().then(() => {
           const ul = document.getElementById('topProductsLegend');
           if (ul) {
-            ul.innerHTML = labels.map((label,i)=>
-              `<li class="flex justify-between"><span>${label}</span><span>₱ ${Number(values[i]??0).toLocaleString()}</span></li>`
-            ).join('');
+            ul.innerHTML = labels.map((label, i) => {
+              const value = Number(values[i] ?? 0);
+              return `
+                <li class="flex justify-between">
+                  <span>${label}</span>
+                  <span>₱ ${value.toLocaleString()}</span>
+                </li>`;
+            }).join('');
           }
         });
       }
-    } catch (e) { console.error('Donut chart error:', e); }
+    } catch (e) {
+      console.error('Donut chart error:', e);
+    }
   }
 
   /* ---------- PDF EXPORT (Full Page) ---------- */
-  const btn = document.getElementById('exportPdfBtn');
+  const pdfBtn = document.getElementById('exportPdfBtn');
   const ROOT = document.getElementById('salesOverviewRoot');
-  if (btn && ROOT) {
-    btn.addEventListener('click', async () => {
-      try{
-        const original = btn.innerHTML;
-        btn.disabled = true; btn.classList.add('opacity-70','cursor-not-allowed'); btn.innerHTML = 'Generating…';
+
+  function ensurePdfLibs() {
+    if (typeof html2canvas === 'undefined' || !window.jspdf) {
+      alert('PDF libraries failed to load. Please check your internet connection and try again.');
+      return false;
+    }
+    return true;
+  }
+
+  if (pdfBtn && ROOT) {
+    pdfBtn.addEventListener('click', async () => {
+      if (!ensurePdfLibs()) return;
+
+      try {
+        const original = pdfBtn.innerHTML;
+        pdfBtn.disabled = true;
+        pdfBtn.classList.add('opacity-70', 'cursor-not-allowed');
+        pdfBtn.innerHTML = 'Generating…';
         ROOT.classList.add('exporting');
-        await new Promise(r => setTimeout(r, 350));
+
+        await new Promise(resolve => setTimeout(resolve, 350));
 
         const canvas = await html2canvas(ROOT, {
           backgroundColor: '#ffffff',
@@ -558,14 +772,16 @@ document.addEventListener('DOMContentLoaded', function(){
         });
 
         const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({ orientation:'p', unit:'pt', format:'a4' });
+        const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
         const pageWidth  = pdf.internal.pageSize.getWidth();
         const pageHeight = pdf.internal.pageSize.getHeight();
 
         const imgWidth = pageWidth;
         const sliceHeightPx = (pageHeight * canvas.width) / pageWidth;
 
-        let y = 0, page = 0;
+        let y = 0;
+        let page = 0;
+
         while (y < canvas.height) {
           const part = document.createElement('canvas');
           part.width  = canvas.width;
@@ -576,21 +792,30 @@ document.addEventListener('DOMContentLoaded', function(){
           const partData = part.toDataURL('image/jpeg', 0.95);
           const partHeightOnPdf = (part.height * imgWidth) / part.width;
 
-          if (page > 0) pdf.addPage();
+          if (page > 0) {
+            pdf.addPage();
+          }
           pdf.addImage(partData, 'JPEG', 0, 0, imgWidth, partHeightOnPdf, undefined, 'FAST');
 
-          y += sliceHeightPx; page++;
+          y += sliceHeightPx;
+          page++;
         }
 
         const d = new Date();
-        const name = `Sales_Overview_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.pdf`;
+        const name = `Sales_Overview_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}.pdf`;
         pdf.save(name);
 
-        btn.innerHTML = original; btn.disabled = false; btn.classList.remove('opacity-70','cursor-not-allowed'); ROOT.classList.remove('exporting');
-      }catch(err){
+        pdfBtn.innerHTML = original;
+        pdfBtn.disabled = false;
+        pdfBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+        ROOT.classList.remove('exporting');
+      } catch (err) {
         console.error('PDF export failed:', err);
         alert('Export failed. Please try again.');
-        btn.disabled = false; btn.classList.remove('opacity-70','cursor-not-allowed'); btn.innerHTML = '⤓ Export PDF'; ROOT.classList.remove('exporting');
+        pdfBtn.disabled = false;
+        pdfBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+        pdfBtn.innerHTML = '⤓ Export PDF';
+        ROOT.classList.remove('exporting');
       }
     });
   }
@@ -602,29 +827,39 @@ document.addEventListener('DOMContentLoaded', function(){
   const bulkBar = document.getElementById('bulkBar');
   const bulkCount = document.getElementById('bulkCount');
   const bulkOpenReceipts = document.getElementById('bulkOpenReceipts');
-  const bulkDelete = document.getElementById('bulkDelete');
+  const bulkArchive = document.getElementById('bulkArchive');
   const bulkExportPdf = document.getElementById('bulkExportPdf');
 
-  function updateBulkUI(){
+  function updateBulkUI() {
     const count = selected.size;
     bulkCount.textContent = count;
     bulkBar.classList.toggle('active', count > 0);
-    // Sync header checkbox when all visible are selected
+
     const visibles = rowCbs().filter(cb => cb.closest('tr').style.display !== 'none');
     const allVisibleChecked = visibles.length > 0 && visibles.every(cb => cb.checked);
-    selectAll.checked = allVisibleChecked;
-    selectAll.indeterminate = count > 0 && !allVisibleChecked;
+
+    if (selectAll) {
+      selectAll.checked = allVisibleChecked;
+      selectAll.indeterminate = count > 0 && !allVisibleChecked;
+    }
   }
 
   // Handle Select All (visible only)
   selectAll?.addEventListener('change', () => {
-    const visibleRows = Array.from(document.querySelectorAll('#salesTableBody tr')).filter(tr => tr.style.display !== 'none');
+    const visibleRows = Array.from(document.querySelectorAll('#salesTableBody tr'))
+      .filter(tr => tr.style.display !== 'none');
+
     visibleRows.forEach(tr => {
       const cb = tr.querySelector('.row-select');
       if (!cb) return;
       cb.checked = selectAll.checked;
       const id = tr.dataset.rowId;
-      if (cb.checked) selected.add(id); else selected.delete(id);
+      if (!id) return;
+      if (cb.checked) {
+        selected.add(id);
+      } else {
+        selected.delete(id);
+      }
     });
     updateBulkUI();
   });
@@ -635,7 +870,12 @@ document.addEventListener('DOMContentLoaded', function(){
     const tr = e.target.closest('tr');
     const id = tr?.dataset.rowId;
     if (!id) return;
-    if (e.target.checked) selected.add(id); else selected.delete(id);
+
+    if (e.target.checked) {
+      selected.add(id);
+    } else {
+      selected.delete(id);
+    }
     updateBulkUI();
   });
 
@@ -647,31 +887,34 @@ document.addEventListener('DOMContentLoaded', function(){
       const tr = document.querySelector(`tr[data-row-id="${id}"]`);
       const a = tr?.querySelector('.receipt-link');
       if (a && a.href) {
-        setTimeout(()=> window.open(a.href, '_blank'), i * 120);
+        setTimeout(() => window.open(a.href, '_blank'), i * 120);
       }
     });
   });
 
-  // Bulk: Delete (reuses each row's delete form)
-  bulkDelete?.addEventListener('click', async () => {
+  // Bulk: Archive (reuses each row's archive form)
+  bulkArchive?.addEventListener('click', async () => {
     if (selected.size === 0) return;
-    if (!confirm(`Delete ${selected.size} selected sale(s)?`)) return;
-    // Submit one by one to preserve existing flow and CSRF
+    if (!confirm(`Archive ${selected.size} selected sale(s)?`)) return;
+
     const ids = Array.from(selected);
-    for (let i = 0; i < ids.length; i++){
+    for (let i = 0; i < ids.length; i++) {
       const id = ids[i];
       const tr = document.querySelector(`tr[data-row-id="${id}"]`);
-      const form = tr?.querySelector('form.delete-form');
+      const form = tr?.querySelector('form.archive-form');
       if (form) form.submit();
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(resolve => setTimeout(resolve, 150));
     }
   });
 
   // Bulk: Export Selected PDF (table-only, clean)
   bulkExportPdf?.addEventListener('click', async () => {
     if (selected.size === 0) return;
-    try{
+    if (!ensurePdfLibs()) return;
+
+    try {
       const ids = Array.from(selected);
+
       // Build a minimal table clone with selected rows
       const table = document.createElement('table');
       table.style.width = '100%';
@@ -691,14 +934,18 @@ document.addEventListener('DOMContentLoaded', function(){
         </thead>
         <tbody></tbody>
       `;
+
       const tbody = table.querySelector('tbody');
+
+      const safeText = (el) => (el?.textContent || '').trim();
 
       ids.forEach(id => {
         const tr = document.querySelector(`tr[data-row-id="${id}"]`);
         if (!tr) return;
+
         const tds = tr.querySelectorAll('td');
         const row = document.createElement('tr');
-        const safeText = (el) => (el?.textContent || '').trim();
+
         row.innerHTML = `
           <td style="padding:8px;border:1px solid #e5e7eb;">${safeText(tds[1])}</td>
           <td style="padding:8px;border:1px solid #e5e7eb;">${safeText(tds[2])}</td>
@@ -709,39 +956,45 @@ document.addEventListener('DOMContentLoaded', function(){
           <td style="padding:8px;text-align:right;border:1px solid #e5e7eb;">${safeText(tds[7])}</td>
           <td style="padding:8px;border:1px solid #e5e7eb;">${safeText(tds[8])}</td>
         `;
+
         tbody.appendChild(row);
       });
 
       const wrap = document.createElement('div');
       wrap.style.padding = '20px';
+
       const title = document.createElement('h2');
       title.textContent = 'Selected Sales';
       title.style.margin = '0 0 12px 0';
       title.style.font = '600 16px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+
       wrap.appendChild(title);
       wrap.appendChild(table);
       document.body.appendChild(wrap);
 
       const canvas = await html2canvas(wrap, {
-        backgroundColor:'#ffffff',
+        backgroundColor: '#ffffff',
         scale: Math.min(Math.max(window.devicePixelRatio || 1, 2), 3)
       });
 
       const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ orientation:'p', unit:'pt', format:'a4' });
+      const pdf = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
       const pageWidth  = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
       const imgWidth = pageWidth - 40; // margins
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-      let y = 20;
-      if (imgHeight + 40 <= pdf.internal.pageSize.getHeight()){
-        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 20, y, imgWidth, imgHeight, undefined, 'FAST');
-      }else{
+      if (imgHeight + 40 <= pageHeight) {
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 20, 20, imgWidth, imgHeight, undefined, 'FAST');
+      } else {
         // slice into pages
-        const pageHeight = pdf.internal.pageSize.getHeight() - 40;
-        const sliceHeightPx = (pageHeight * canvas.width) / imgWidth;
-        let top = 0, page = 0;
-        while (top < canvas.height){
+        const usableHeight = pageHeight - 40;
+        const sliceHeightPx = (usableHeight * canvas.width) / imgWidth;
+        let top = 0;
+        let page = 0;
+
+        while (top < canvas.height) {
           const part = document.createElement('canvas');
           part.width = canvas.width;
           part.height = Math.min(sliceHeightPx, canvas.height - top);
@@ -749,32 +1002,48 @@ document.addEventListener('DOMContentLoaded', function(){
           ctx.drawImage(canvas, 0, top, part.width, part.height, 0, 0, part.width, part.height);
 
           const partData = part.toDataURL('image/jpeg', 0.95);
-          if (page > 0) pdf.addPage();
-          pdf.addImage(partData, 'JPEG', 20, 20, imgWidth, (part.height * imgWidth) / part.width, undefined, 'FAST');
+          if (page > 0) {
+            pdf.addPage();
+          }
+          pdf.addImage(
+            partData,
+            'JPEG',
+            20,
+            20,
+            imgWidth,
+            (part.height * imgWidth) / part.width,
+            undefined,
+            'FAST'
+          );
 
-          top += sliceHeightPx; page++;
+          top += sliceHeightPx;
+          page++;
         }
       }
+
       const d = new Date();
-      pdf.save(`Sales_Selected_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.pdf`);
+      pdf.save(`Sales_Selected_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.pdf`);
 
       document.body.removeChild(wrap);
-    }catch(e){
+    } catch (e) {
       console.error(e);
       alert('Export failed. Please try again.');
     }
   });
-
 });
 
 /* ---------- FLASH POPUP AUTO-CLOSE ---------- */
 const flashModal = document.getElementById('flashModal');
-if (flashModal){
+if (flashModal) {
   const hideFlash = () => {
     flashModal.classList.add('hidden-soft');
-    setTimeout(()=>{ flashModal.style.display='none'; }, 260);
+    setTimeout(() => {
+      flashModal.style.display = 'none';
+    }, 260);
   };
+
   setTimeout(hideFlash, 2600);
+
   flashModal.addEventListener('click', (e) => {
     if (e.target.id === 'flashModal' || e.target.closest('[data-close-flash]')) {
       hideFlash();
@@ -788,7 +1057,9 @@ window.addEventListener('load', function () {
   if (window.toggleAddSaleModal) {
     const modal = document.getElementById('addSaleModal');
     const form = modal ? modal.querySelector('form') : null;
-    if (form) { form.dataset.hasOld = '1'; }
+    if (form) {
+      form.dataset.hasOld = '1';
+    }
     window.toggleAddSaleModal(true);
   }
 });

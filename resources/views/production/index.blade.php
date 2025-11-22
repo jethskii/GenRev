@@ -1,16 +1,246 @@
 @extends('layout.mainlayout')
 
 @section('content')
-<div class="bg-white text-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200">
+
+@once
+<style>
+  /* ===== Page shell / overall wrapper ===== */
+  .production-shell {
+    position: relative;
+    overflow: hidden;
+  }
+  .production-shell::before {
+    content:'';
+    position:absolute;
+    inset:-40%;
+    background:
+      radial-gradient(circle at top left, rgba(129,140,248,.18), transparent 60%),
+      radial-gradient(circle at bottom right, rgba(45,212,191,.18), transparent 60%);
+    opacity:.45;
+    pointer-events:none;
+    z-index:-1;
+  }
+
+  /* subtle fade-in for main content */
+  .production-shell {
+    opacity:0;
+    transform:translateY(6px) scale(.99);
+    animation:prodShellIn .28s ease-out forwards;
+  }
+  @keyframes prodShellIn {
+    to { opacity:1; transform:translateY(0) scale(1); }
+  }
+
+  /* ===== Header accents ===== */
+  .prod-header-title {
+    position:relative;
+    padding-left:.5rem;
+  }
+  .prod-header-title::before {
+    content:'';
+    position:absolute;
+    left:0; top:50%;
+    transform:translateY(-50%);
+    width:4px; height:1.75rem;
+    border-radius:999px;
+    background:linear-gradient(180deg,#4f46e5,#22c55e,#f97316);
+  }
+
+  .materials-pill {
+    transition:transform .12s ease-out, box-shadow .12s ease-out, background .12s ease-out;
+  }
+  .materials-pill:hover {
+    transform:translateY(-1px);
+    box-shadow:0 8px 18px rgba(15,23,42,.12);
+  }
+
+  .btn-hero {
+    position:relative;
+    overflow:hidden;
+    transition:transform .14s ease-out, box-shadow .14s ease-out, filter .14s ease-out;
+  }
+  .btn-hero::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    background:radial-gradient(circle at 0 0, rgba(255,255,255,.45), transparent 55%);
+    opacity:0;
+    transition:opacity .18s ease-out;
+    pointer-events:none;
+  }
+  .btn-hero:hover::before { opacity:1; }
+  .btn-hero:hover {
+    transform:translateY(-1px) scale(1.01);
+    box-shadow:0 12px 24px rgba(220,38,38,.35);
+    filter:brightness(1.05);
+  }
+  .btn-hero:active {
+    transform:translateY(0) scale(1);
+    box-shadow:0 6px 14px rgba(220,38,38,.25);
+  }
+
+  /* ===== Category pills ===== */
+  .category-btn {
+    position:relative;
+    overflow:hidden;
+    transition:
+      background .18s ease-out,
+      transform .12s ease-out,
+      box-shadow .12s ease-out,
+      border-color .18s ease-out,
+      color .18s ease-out;
+  }
+  .category-btn::before {
+    content:'';
+    position:absolute;
+    inset:-40%;
+    background:radial-gradient(circle at 0 0, rgba(59,130,246,.15), transparent 55%);
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .18s ease-out;
+  }
+  .category-btn:hover {
+    transform:translateY(-1px);
+    box-shadow:0 6px 14px rgba(15,23,42,.15);
+  }
+  .category-btn:hover::before { opacity:1; }
+
+  .category-btn--active {
+    background:linear-gradient(135deg,#4f46e5,#0ea5e9);
+    color:#f9fafb;
+    border-color:rgba(129,140,248,.9);
+    box-shadow:0 10px 22px rgba(37,99,235,.45);
+  }
+  .category-btn--active::before {
+    opacity:.7;
+  }
+
+  /* ===== Summary metric cards ===== */
+  .metric-card {
+    position:relative;
+    overflow:hidden;
+    background:
+      radial-gradient(circle at top right, rgba(59,130,246,.06), transparent 55%),
+      #ffffff;
+    border-radius:20px;
+    border:1px solid rgba(148,163,184,.4);
+    box-shadow:0 10px 28px rgba(15,23,42,.12);
+    transform:translateY(4px) scale(.99);
+    opacity:0;
+    animation:metricIn .26s ease-out forwards;
+  }
+  .metric-card::before {
+    content:'';
+    position:absolute;
+    inset:-40%;
+    background:conic-gradient(from 200deg,
+      rgba(129,140,248,.0),
+      rgba(129,140,248,.25),
+      rgba(34,197,94,.2),
+      rgba(251,191,36,.25),
+      rgba(129,140,248,.0)
+    );
+    opacity:0;
+    mix-blend-mode:soft-light;
+    pointer-events:none;
+    transition:opacity .24s ease-out;
+  }
+  .metric-card:hover::before { opacity:.75; }
+  .metric-card:hover {
+    transform:translateY(-2px) scale(1.01);
+    box-shadow:0 18px 35px rgba(15,23,42,.22);
+  }
+  .metric-card:nth-child(1){ animation-delay:.03s; }
+  .metric-card:nth-child(2){ animation-delay:.06s; }
+  .metric-card:nth-child(3){ animation-delay:.09s; }
+  .metric-card:nth-child(4){ animation-delay:.12s; }
+  @keyframes metricIn{
+    to{opacity:1;transform:translateY(0) scale(1);}
+  }
+
+  /* ===== Product grid fade-in ===== */
+  #product-container {
+    animation:prodGridIn .26s ease-out;
+  }
+  @keyframes prodGridIn{
+    from{opacity:0;transform:translateY(8px);}
+    to{opacity:1;transform:translateY(0);}
+  }
+
+  /* ===== Add Production Modal animation & scrollable body ===== */
+  #addModal.flex {
+    align-items:center;
+    justify-content:center;
+  }
+  #addModal::before {
+    content:'';
+    position:absolute;
+    inset:0;
+    background:radial-gradient(circle at top, rgba(15,23,42,.55), transparent 60%);
+    opacity:.8;
+    pointer-events:none;
+  }
+  .add-modal-backdrop {
+    animation:addBackIn .22s ease-out forwards;
+  }
+  .add-modal-card {
+    animation:addCardIn .26s ease-out forwards;
+    transform-origin:center;
+
+    /* make modal constrained & column-based */
+    max-height:90vh;
+    display:flex;
+    flex-direction:column;
+  }
+  @keyframes addBackIn{
+    from{opacity:0;}
+    to{opacity:1;}
+  }
+  @keyframes addCardIn{
+    0%{opacity:0;transform:translateY(14px) scale(.96);}
+    60%{opacity:1;transform:translateY(-2px) scale(1.01);}
+    100%{opacity:1;transform:translateY(0) scale(1);}
+  }
+
+  .add-modal-scroll{
+    overflow-y:auto;
+    max-height:calc(90vh - 7.5rem); /* header + footer space */
+  }
+  .add-modal-scroll::-webkit-scrollbar{
+    width:6px;
+  }
+  .add-modal-scroll::-webkit-scrollbar-track{
+    background:transparent;
+  }
+  .add-modal-scroll::-webkit-scrollbar-thumb{
+    background:rgba(148,163,184,.75);
+    border-radius:999px;
+  }
+
+  /* small glow for image preview in modal */
+  #imagePreview{
+    box-shadow:0 10px 24px rgba(15,23,42,.22);
+    transition:box-shadow .18s ease-out, transform .14s ease-out;
+  }
+  #imagePreview:hover{
+    transform:translateY(-2px);
+    box-shadow:0 16px 36px rgba(15,23,42,.28);
+  }
+</style>
+@endonce
+
+<div class="production-shell bg-white text-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200">
 
     {{-- Header --}}
     <div class="flex justify-between items-center mb-2">
-        <h2 class="text-2xl font-bold tracking-wide">Production Overview</h2>
+        <h2 class="prod-header-title text-2xl font-bold tracking-wide">
+            Production Overview
+        </h2>
 
         <div class="flex items-center gap-3">
             {{-- Global Materials Mode Badge (index-level) --}}
             @if(!$consumeMaterials)
-                <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium
+                <span class="materials-pill inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium
                              bg-gray-100 text-gray-700 border border-gray-200">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 12H6" />
@@ -18,7 +248,7 @@
                     Materials: Off
                 </span>
             @else
-                <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium
+                <span class="materials-pill inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium
                              bg-green-100 text-green-700 border border-green-200">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 0 1 0 1.414l-7.364 7.364a1 1 0 0 1-1.414 0L3.293 9.435a1 1 0 1 1 1.414-1.414l3.071 3.07 6.657-6.657a1 1 0 0 1 1.272-.141z" clip-rule="evenodd" />
@@ -28,7 +258,7 @@
             @endif
 
             {{-- Primary action: red --}}
-            <button onclick="openAddModal()" class="btn btn-primary">
+            <button onclick="openAddModal()" class="btn btn-primary btn-hero">
                 + Add Production
             </button>
         </div>
@@ -83,19 +313,19 @@
 
     {{-- Summary Cards --}}
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-6">
-        <div class="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+        <div class="metric-card bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
             <p class="text-sm text-gray-500">Forecasted Demand</p>
             <h3 id="sum-forecast" class="text-lg font-bold text-gray-900">{{ number_format((float)$forecastedDemand, 3) }} kg</h3>
         </div>
-        <div class="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+        <div class="metric-card bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
             <p class="text-sm text-gray-500">Current Inventory</p>
             <h3 id="sum-inventory" class="text-lg font-bold text-gray-900">{{ number_format((float)$actualInventory, 3) }} kg</h3>
         </div>
-        <div class="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+        <div class="metric-card bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
             <p class="text-sm text-gray-500">Shortfall</p>
             <h3 id="sum-shortfall" class="text-lg font-bold text-red-600">{{ number_format((float)$shortfall, 3) }} kg</h3>
         </div>
-        <div class="bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
+        <div class="metric-card bg-white rounded-2xl p-4 border border-gray-200 shadow-sm">
             <p class="text-sm text-gray-500">Recommended Production</p>
             <h3 id="sum-recommended" class="text-lg font-bold text-green-600">{{ number_format((float)$recommendedProduction, 3) }} kg</h3>
         </div>
@@ -107,155 +337,205 @@
     </div>
 </div>
 
-{{-- Add Production Modal (updated) --}}
-<div id="addModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/40" role="dialog" aria-modal="true" aria-labelledby="addProdTitle">
-  <div class="w-full max-w-2xl mx-4 rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
+{{-- Add Production Modal (updated, animated & scrollable) --}}
+<div id="addModal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/40 add-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="addProdTitle">
+  <div class="w-full max-w-2xl mx-4 rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg add-modal-card">
+    {{-- Header (fixed) --}}
     <div class="flex items-center justify-between px-5 py-4 border-b border-gray-200">
       <h3 id="addProdTitle" class="text-gray-900 font-semibold text-lg">Add Production</h3>
       <button type="button" class="text-gray-500 hover:text-gray-700" onclick="closeAddModal()" aria-label="Close">✕</button>
     </div>
 
-    <form id="ajaxProdForm" action="{{ route('production.store') }}" method="POST" enctype="multipart/form-data" class="px-5 py-4 space-y-4">
+    {{-- Form: scrollable body + fixed footer --}}
+    <form id="ajaxProdForm" action="{{ route('production.store') }}" method="POST" enctype="multipart/form-data" class="flex flex-col">
       @csrf
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div class="md:col-span-2">
-          <label class="block text-sm text-gray-600 mb-1" for="product_id">Product</label>
+      {{-- SCROLLABLE BODY --}}
+      <div class="px-5 py-4 space-y-4 add-modal-scroll">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="md:col-span-2">
+            <label class="block text-sm text-gray-600 mb-1" for="product_id">Product</label>
 
-          {{-- existing product --}}
-          <select id="product_id" name="product_id" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
-            <option value="">— Select product —</option>
-            @foreach ($allProducts as $p)
-              <option value="{{ $p->id }}">{{ $p->product_name }}</option>
-            @endforeach
-          </select>
+            {{-- existing product --}}
+            <select id="product_id" name="product_id" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
+              <option value="">— Select product —</option>
+              @foreach ($allProducts as $p)
+                <option value="{{ $p->id }}">{{ $p->product_name }}</option>
+              @endforeach
+            </select>
 
-          {{-- new product --}}
-          <input type="text" id="product_name" name="product_name" class="hidden w-full mt-2 rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="Or enter new product name" autocomplete="off">
+            {{-- new product --}}
+            <input type="text" id="product_name" name="product_name" class="hidden w-full mt-2 rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="Or enter new product name" autocomplete="off">
 
-          <button type="button" id="toggleNewBtn" class="text-xs text-blue-700 mt-1" aria-expanded="false">+ Add new product</button>
-        </div>
-
-        <div>
-          <label class="block text-sm text-gray-600 mb-1" for="category">Type of Product</label>
-          <input type="text" id="category" name="category" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="e.g., Pork, Beef" autocomplete="off">
-        </div>
-      </div>
-
-      {{-- Shelf life only matters when creating a new product --}}
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 new-only hidden" id="shelfRow">
-        <div>
-          <label class="block text-sm text-gray-600 mb-1" for="shelf_life_days">Shelf Life (days)</label>
-          <input type="number" min="1" max="365" id="shelf_life_days" name="shelf_life_days" value="7" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <label class="block text-sm text-gray-600 mb-1">Batch Number</label>
-
-          {{-- UPDATED: display pretty label, submit raw integer --}}
-          <input type="text" id="batch_number_display" class="w-full rounded-xl bg-gray-50 border border-gray-300 px-3 py-2 font-semibold text-gray-900" value="Select a product…" readonly>
-          <input type="hidden" id="batch_number" name="batch_number" value="">
-          <p class="mt-1 text-[11px] text-gray-500">Shown as label only. Actual number increments per product starting at 1.</p>
-        </div>
-        <div>
-          <label class="block text-sm text-gray-600 mb-1" for="production_date">Production Date</label>
-          <input type="date" id="production_date" name="production_date" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" value="{{ now()->toDateString() }}" required>
-        </div>
-        <div>
-          <label class="block text-sm text-gray-600 mb-1" for="expiration_date">Expiration (optional)</label>
-          <input type="date" id="expiration_date" name="expiration_date" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
-        </div>
-      </div>
-
-      {{-- Forecast only --}}
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <label class="block text-sm text-gray-600 mb-1" for="forecasted_demand">Forecasted Demand</label>
-          <input type="number" step="0.01" min="0" id="forecasted_demand" name="forecasted_demand" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
-        </div>
-      </div>
-
-      {{-- Prices per pack/bag + Availability --}}
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {{-- Pack --}}
-        <div class="rounded-xl p-3 border border-yellow-300/60 shadow-[inset_0_0_0_1px_rgba(234,179,8,0.18)]">
-          <div class="flex items-center justify-between mb-2">
-            <label class="block text-sm text-gray-700 m-0">Per Pack</label>
-            <span class="inline-flex items-center font-bold text-xs rounded-md px-2 py-0.5 bg-yellow-400 text-gray-900 select-none">PACK</span>
+            <button type="button" id="toggleNewBtn" class="text-xs text-blue-700 mt-1" aria-expanded="false">+ Add new product</button>
           </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-xs text-gray-500 mb-1" for="unit_price_pack">Price per Pack (₱)</label>
-              <input type="number" step="0.01" min="0" id="unit_price_pack" name="unit_price_pack"
-                     class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="0.00">
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1" for="available_pack">Available Packs</label>
-              <input type="number" step="1" min="0" id="available_pack" name="available_pack"
-                     class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2 text-center font-semibold" placeholder="Qty" value="0">
-            </div>
+
+          <div>
+            <label class="block text-sm text-gray-600 mb-1" for="category">Type of Product</label>
+            <input type="text" id="category" name="category" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="e.g., Pork, Beef" autocomplete="off">
           </div>
         </div>
 
-        {{-- Bag --}}
-        <div class="rounded-xl p-3 border border-red-400/60 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.18)]">
-          <div class="flex items-center justify-between mb-2">
-            <label class="block text-sm text-gray-700 m-0">Per Bag</label>
-            <span class="inline-flex items-center font-bold text-xs rounded-md px-2 py-0.5 bg-red-600 text-white select-none">BAG</span>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block text-xs text-gray-500 mb-1" for="unit_price_bag">Price per Bag (₱)</label>
-              <input type="number" step="0.01" min="0" id="unit_price_bag" name="unit_price_bag"
-                     class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="0.00">
-            </div>
-            <div>
-              <label class="block text-xs text-gray-500 mb-1" for="available_bag">Available Bags</label>
-              <input type="number" step="1" min="0" id="available_bag" name="available_bag"
-                     class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2 text-center font-semibold" placeholder="Qty" value="0">
-            </div>
+        {{-- Shelf life only matters when creating a new product --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 new-only hidden" id="shelfRow">
+          <div>
+            <label class="block text-sm text-gray-600 mb-1" for="shelf_life_days">Shelf Life (days)</label>
+            <input type="number" min="1" max="365" id="shelf_life_days" name="shelf_life_days" value="7" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
           </div>
         </div>
-      </div>
 
-      {{-- Image upload + live preview --}}
-      <div>
-        <label for="image" class="block text-sm text-gray-600 mb-1">Product Image</label>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-sm text-gray-600 mb-1">Batch Number</label>
 
-        <div id="imagePreview" class="hidden rounded-xl border border-gray-200 p-3 mb-2">
-          <img id="imagePreviewImg" src="#" alt="Selected image preview"
-               class="block w-full max-h-56 object-cover rounded-lg border border-gray-100">
-          <div id="imageMeta" class="mt-2 text-xs text-gray-500"></div>
+            {{-- Display label, submit raw integer --}}
+            <input type="text" id="batch_number_display" class="w-full rounded-xl bg-gray-50 border border-gray-300 px-3 py-2 font-semibold text-gray-900" value="Select a product…" readonly>
+            <input type="hidden" id="batch_number" name="batch_number" value="">
+            <p class="mt-1 text-[11px] text-gray-500">Shown as label only. Actual number increments per product starting at 1.</p>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1" for="production_date">Production Date</label>
+            <input type="date" id="production_date" name="production_date" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" value="{{ now()->toDateString() }}" required>
+          </div>
+          <div>
+            <label class="block text-sm text-gray-600 mb-1" for="expiration_date">Expiration (optional)</label>
+            <input type="date" id="expiration_date" name="expiration_date" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
+          </div>
         </div>
 
-        <div class="flex items-center gap-3">
-          <input type="file"
-                 id="image"
-                 name="image"
-                 accept="image/jpeg,image/png,image/webp"
-                 class="block w-full text-sm text-gray-900 rounded-xl border border-gray-300 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200">
-          <button type="button" id="clearImageBtn" class="btn btn-ghost">Clear</button>
+        {{-- Forecast only --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-sm text-gray-600 mb-1" for="forecasted_demand">Forecasted Demand</label>
+            <input type="number" step="0.01" min="0" id="forecasted_demand" name="forecasted_demand" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
+          </div>
         </div>
-        <p class="mt-1 text-[11px] text-gray-500">JPG, PNG, or WebP • max 4&nbsp;MB • minimum 300×300 px</p>
+
+        {{-- Prices per pack/bag + Availability --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {{-- Pack --}}
+          <div class="rounded-xl p-3 border border-yellow-300/60 shadow-[inset_0_0_0_1px_rgba(234,179,8,0.18)]">
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-sm text-gray-700 m-0">Per Pack</label>
+              <span class="inline-flex items-center font-bold text-xs rounded-md px-2 py-0.5 bg-yellow-400 text-gray-900 select-none">PACK</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1" for="unit_price_pack">Price per Pack (₱)</label>
+                <input type="number" step="0.01" min="0" id="unit_price_pack" name="unit_price_pack"
+                       class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="0.00">
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1" for="available_pack">Available Packs</label>
+                <input type="number" step="1" min="0" id="available_pack" name="available_pack"
+                       class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2 text-center font-semibold" placeholder="Qty" value="0">
+              </div>
+            </div>
+          </div>
+
+          {{-- Bag --}}
+          <div class="rounded-xl p-3 border border-red-400/60 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.18)]">
+            <div class="flex items-center justify-between mb-2">
+              <label class="block text-sm text-gray-700 m-0">Per Bag</label>
+              <span class="inline-flex items-center font-bold text-xs rounded-md px-2 py-0.5 bg-red-600 text-white select-none">BAG</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1" for="unit_price_bag">Price per Bag (₱)</label>
+                <input type="number" step="0.01" min="0" id="unit_price_bag" name="unit_price_bag"
+                       class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="0.00">
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1" for="available_bag">Available Bags</label>
+                <input type="number" step="1" min="0" id="available_bag" name="available_bag"
+                       class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2 text-center font-semibold" placeholder="Qty" value="0">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {{-- Image upload + live preview --}}
+        <div>
+          <label for="image" class="block text-sm font-medium text-gray-700 mb-1">
+            Product Image
+          </label>
+
+          {{-- Live preview card --}}
+          <div
+            id="imagePreview"
+            class="hidden rounded-xl border border-gray-200 p-3 mb-2 bg-white/80 backdrop-blur-sm
+                   shadow-sm transition-all duration-200 ease-out
+                   hover:shadow-md hover:border-emerald-300/70"
+          >
+            <div class="relative overflow-hidden rounded-lg border border-gray-100">
+              <img
+                id="imagePreviewImg"
+                src=""
+                alt="Selected image preview"
+                class="block w-full max-h-56 object-cover rounded-lg
+                       transition-transform duration-200 ease-out hover:scale-[1.02]"
+              >
+              {{-- subtle top gradient overlay --}}
+              <div class="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-black/10 to-transparent"></div>
+            </div>
+
+            <div
+              id="imageMeta"
+              class="mt-2 text-xs text-gray-500 flex items-center gap-2"
+            >
+              {{-- meta text injected by JS --}}
+            </div>
+          </div>
+
+          {{-- File input + clear --}}
+          <div class="flex items-center gap-3">
+            <input
+              type="file"
+              id="image"
+              name="image"
+              accept="image/*"
+              class="block w-full text-sm text-gray-900 rounded-xl border border-gray-300
+                     bg-white px-3 py-2
+                     file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0
+                     file:bg-emerald-50 file:text-emerald-700
+                     hover:file:bg-emerald-100
+                     focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-300
+                     transition"
+            >
+            <button
+              type="button"
+              id="clearImageBtn"
+              class="inline-flex items-center justify-center px-3 py-2 text-xs font-medium
+                    rounded-lg border border-gray-200 text-gray-600 bg-gray-50
+                    hover:bg-gray-100 hover:text-gray-800
+                    active:scale-[0.97] transition"
+            >
+              Clear
+            </button>
+          </div>
+          <p class="mt-1 text-[11px] text-gray-500 flex items-center gap-1">
+            <span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            JPG, PNG, or WebP • max 4&nbsp;MB • minimum 300×300 px
+          </p>
+        </div>
+
+        {{-- Remarks --}}
+        <div>
+          <label for="remarks" class="block text-sm text-gray-600 mb-1">Remarks (optional)</label>
+          <textarea id="remarks" name="remarks" rows="3" maxlength="500"
+                    class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2"
+                    placeholder="Any internal notes about this batch"></textarea>
+          <div class="mt-1 text-[11px] text-gray-500">
+            <span id="remarksCount">0</span>/500 characters
+          </div>
+        </div>
       </div>
 
-      {{-- Remarks --}}
-      <div>
-        <label for="remarks" class="block text-sm text-gray-600 mb-1">Remarks (optional)</label>
-        <textarea id="remarks" name="remarks" rows="3" maxlength="500"
-                  class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2"
-                  placeholder="Any internal notes about this batch"></textarea>
-        <div class="mt-1 text-[11px] text-gray-500">
-          <span id="remarksCount">0</span>/500 characters
-        </div>
-      </div>
-
-      <div class="flex items-center justify-end gap-3 pt-2">
+      {{-- FIXED FOOTER (buttons) --}}
+      <div class="flex items-center justify-end gap-3 px-5 pb-4 pt-3 border-t border-gray-100">
         <button type="button" class="btn btn-ghost" onclick="closeAddModal()">Cancel</button>
         {{-- Primary confirmation: red --}}
-        <button id="ajaxSubmitBtn" type="submit" class="btn btn-primary">Save</button>
+        <button id="ajaxSubmitBtn" type="submit" class="btn btn-primary btn-hero">Save</button>
       </div>
     </form>
   </div>
@@ -277,7 +557,7 @@
     const toggleNewBtn = document.getElementById('toggleNewBtn');
     const shelfRow     = document.getElementById('shelfRow');
 
-    // UPDATED: batch fields (display + hidden)
+    // batch fields (display + hidden)
     const batchDisplay = document.getElementById('batch_number_display');
     const batchHidden  = document.getElementById('batch_number');
 
@@ -291,6 +571,8 @@
     const MAX_MB = 4;
     const MIN_W  = 300;
     const MIN_H  = 300;
+
+    let currentPreviewUrl = null;
 
     const totals = {
       forecast: document.getElementById('sum-forecast'),
@@ -376,45 +658,80 @@
     }
 
     function hidePreview(){
-      previewWrap?.classList.add('hidden');
-      if (previewImg) previewImg.src = '#';
+      currentPreviewUrl = null;
+      if (previewWrap) previewWrap.classList.add('hidden');
+      if (previewImg) previewImg.src = '';
       if (imageMeta) imageMeta.textContent = '';
     }
+
     function bytesToMB(b){ return (b / (1024*1024)).toFixed(2); }
 
+    // FileReader-based preview
     imageInput?.addEventListener('change', () => {
       const f = imageInput.files?.[0];
-      if (!f) { hidePreview(); return; }
+      if (!f) {
+        hidePreview();
+        return;
+      }
 
-      const validTypes = ['image/jpeg','image/png','image/webp'];
-      if (!validTypes.includes(f.type)){
-        toast('Only JPG, PNG, or WebP allowed.', 'notice');   // neutral
+      const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(f.type)) {
+        toast('Only JPG, PNG, or WebP are supported.', 'notice');
         imageInput.value = '';
         hidePreview();
         return;
       }
+
       if (f.size > MAX_MB * 1024 * 1024){
-        toast(`Image too large. Max ${MAX_MB}MB.`, 'notice');  // neutral
+        toast(`Image too large. Max ${MAX_MB}MB.`, 'notice');
         imageInput.value = '';
         hidePreview();
         return;
       }
 
-      const url = URL.createObjectURL(f);
-      previewImg.onload = () => {
-        const w = previewImg.naturalWidth;
-        const h = previewImg.naturalHeight;
-        if (w < MIN_W || h < MIN_H){
-          toast(`Image too small. Min ${MIN_W}×${MIN_H}.`, 'notice'); // neutral
-          imageInput.value = '';
-          hidePreview();
-          URL.revokeObjectURL(url);
+      hidePreview();
+
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        const url = e.target?.result;
+        if (!url || !previewImg) {
+          toast('Preview failed, but the image can still be uploaded.', 'notice');
           return;
         }
-        imageMeta.textContent = `${f.name} • ${bytesToMB(f.size)} MB • ${w}×${h}`;
-        previewWrap.classList.remove('hidden');
+
+        currentPreviewUrl = url;
+
+        previewImg.onload = () => {
+          const w = previewImg.naturalWidth;
+          const h = previewImg.naturalHeight;
+
+          if (w < MIN_W || h < MIN_H){
+            toast(`Image too small. Min ${MIN_W}×${MIN_H}.`, 'notice');
+            imageInput.value = '';
+            hidePreview();
+            return;
+          }
+
+          if (imageMeta) {
+            imageMeta.textContent = `${f.name} • ${bytesToMB(f.size)} MB • ${w}×${h}`;
+          }
+          if (previewWrap) previewWrap.classList.remove('hidden');
+        };
+
+        previewImg.onerror = () => {
+          toast('Preview failed, but the image can still be uploaded.', 'notice');
+          if (previewWrap) previewWrap.classList.add('hidden');
+        };
+
+        previewImg.src = url;
       };
-      previewImg.src = url;
+
+      reader.onerror = () => {
+        toast('Could not read file for preview, but the image can still be uploaded.', 'notice');
+      };
+
+      reader.readAsDataURL(f);
     });
 
     clearBtn?.addEventListener('click', () => {
@@ -441,7 +758,7 @@
         const fd  = new FormData(form);
 
         if (!fd.get('product_id') && !fd.get('product_name')) {
-            toast('Please select a product or enter a new name.', 'notice'); // neutral
+            toast('Please select a product or enter a new name.', 'notice');
             submitBtn.disabled = false;
             submitBtn.classList.remove('opacity-70','cursor-not-allowed');
             return;
@@ -458,7 +775,7 @@
                 if (res.status === 422) {
                     const j = await res.json().catch(()=>({}));
                     const msg = j?.errors ? Object.values(j.errors).flat().join('\n') : 'Validation error';
-                    toast(msg, 'notice'); // neutral for validation from server
+                    toast(msg, 'notice');
                 } else {
                     const txt = await res.text();
                     const snippet = (txt||'').replace(/<[^>]*>/g,'').slice(0,200);
@@ -469,7 +786,7 @@
                       res.status === 500 ? 'Server error' :
                       res.status === 302 ? 'Redirected (auth?)' :
                       `HTTP ${res.status}`;
-                    toast(`${label}${snippet ? `\n${snippet}` : ''}`, 'error'); // real errors
+                    toast(`${label}${snippet ? `\n${snippet}` : ''}`, 'error');
                 }
                 return;
             }
@@ -502,7 +819,7 @@
             const temp = document.createElement('div');
             temp.innerHTML = html.trim();
             const node = temp.firstElementChild;
-            container.prepend(node);
+            if (node) container.prepend(node);
         }
     }
 
@@ -516,43 +833,52 @@
         if (totals.recommended) totals.recommended.textContent = `${nf(t.recommendedProduction)} kg`;
     }
 
-    // NEUTRAL toast theme (light, calm)
+    // NEUTRAL toast theme
     function toast(message, type='info') {
         const el = document.createElement('div');
         el.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-xl text-sm shadow border z-[9999]';
         el.textContent = message;
 
-        // palette
         const apply = (cls) => el.classList.add(...cls.split(' '));
         if (type === 'success') {
           apply('bg-green-50 text-green-700 border-green-200');
         } else if (type === 'error') {
-          apply('bg-gray-50 text-gray-700 border-gray-300');   // softer than red
+          apply('bg-gray-50 text-gray-700 border-gray-300');
         } else if (type === 'notice') {
-          apply('bg-blue-50 text-blue-700 border-blue-200');   // neutral info
+          apply('bg-blue-50 text-blue-700 border-blue-200');
         } else {
-          apply('bg-slate-50 text-slate-700 border-slate-200'); // default
+          apply('bg-slate-50 text-slate-700 border-slate-200');
         }
 
         document.body.appendChild(el);
         setTimeout(() => { el.remove(); }, 3000);
     }
 
-    // Category filter (keeps current sort)
+    // Category filter (keeps current sort + active state)
     const sortSelect = document.getElementById('sort-select');
-    document.querySelectorAll('.category-btn').forEach(btn => {
+    const categoryButtons = document.querySelectorAll('.category-btn');
+
+    function setActiveCategory(btn) {
+      categoryButtons.forEach(b => b.classList.remove('category-btn--active'));
+      if (btn) btn.classList.add('category-btn--active');
+    }
+
+    categoryButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             const category = btn.dataset.category;
             const sort = sortSelect ? sortSelect.value : 'urgency';
+            setActiveCategory(btn);
             fetch(`{{ route('production.filter') }}?category=${encodeURIComponent(category)}&sort=${encodeURIComponent(sort) }`)
                 .then(res => res.json())
                 .then(data => { document.getElementById('product-container').innerHTML = data.html; })
                 .catch(() => toast('Could not apply filter.', 'error'));
         });
     });
+
     const clear = document.querySelector('.clear-filter');
     if (clear) clear.addEventListener('click', () => {
         const sort = sortSelect ? sortSelect.value : 'urgency';
+        setActiveCategory(null);
         fetch(`{{ route('production.filter') }}?sort=${encodeURIComponent(sort) }`)
             .then(res => res.json())
             .then(data => { document.getElementById('product-container').innerHTML = data.html; })

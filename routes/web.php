@@ -34,6 +34,7 @@ Route::pattern('sale', '[0-9]+');
 Route::pattern('allocation', '[0-9]+');
 Route::pattern('item', '[0-9]+');
 Route::pattern('line', '[0-9]+');
+Route::pattern('material', '[0-9]+'); // added to align with whereNumber('material')
 
 /* Landing */
 Route::redirect('/', '/dashboard')->name('home');
@@ -57,8 +58,7 @@ Route::middleware('guest')->group(function () {
         ->middleware('throttle:10,1') // avoid OTP abuse
         ->name('register.submit');
     Route::post('/register/otp', [AuthController::class, 'requestOtp'])
-    ->name('register.otp');
-
+        ->name('register.otp');
 
     // legacy alias
     Route::redirect('/settings/notifications', '/notifications')->name('settings.notifications');
@@ -161,9 +161,9 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
         Route::get('/materials/defaults',    [ProductRecipeController::class, 'defaults'])->name('products.materials.defaults');
         Route::post('/materials',            [ProductRecipeController::class, 'store'])->name('products.materials.store');
         Route::delete('/materials/{line}',   [ProductRecipeController::class, 'destroy'])
-            ->whereNumber('line')->name('products.materials.destroy'); // correct controller
+            ->whereNumber('line')->name('products.materials.destroy');
 
-        // Legacy aliases (optional, keep if referenced)
+        // Legacy aliases
         Route::post('/recipe',               [ProductController::class, 'recipeStore'])->name('products.recipe.store');
         Route::delete('/recipe/{line}',      [ProductController::class, 'recipeDestroy'])
             ->whereNumber('line')->name('products.recipe.destroy');
@@ -172,11 +172,11 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
     // ===== Production / Batches =====
     Route::prefix('production')->name('production.')->controller(ProductionController::class)->group(function () {
         Route::get('/',               'index')->name('index');
-        Route::get('/filter',         'filter')->name('filter'); // AJAX cards refresh
+        Route::get('/filter',         'filter')->name('filter');
         Route::get('/info/{name}',    'getProductInfo')->name('info');
 
-        // Lightweight types endpoints for chips & modals
-        Route::get('/sales-types', 'salesTypes')->name('sales.types');              // ?product_id=123
+        // Lightweight types endpoints for chips and modals
+        Route::get('/sales-types', 'salesTypes')->name('sales.types');
         Route::get('/{parent}/types', 'suggestTypes')->whereNumber('parent')->name('types');
 
         // Orders under a parent product
@@ -184,34 +184,34 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
         Route::post('/orders',     'storeOrder')->name('orders.store');
         Route::post('/orders/legacy', 'storeOrder')->name('storeOrder');
 
-        // Create + store production
+        // Create and store production
         Route::get('/create', 'create')->name('create');
         Route::post('/',      'store')->name('store');
 
-        // Edit/update/delete batch
+        // Edit, update, delete batch
         Route::get('/{id}/edit',       'edit')->whereNumber('id')->name('edit');
         Route::put('/{id}',            'update')->whereNumber('id')->name('update');
         Route::delete('/{production}', 'destroy')->whereNumber('production')->name('destroy');
         Route::delete('/batch/latest/{product}', 'destroyLatest')->whereNumber('product')->name('batch.destroyLatest');
 
-        // Archive (list + actions)
+        // Archive
         Route::get('/archived',        'archivedIndex')->name('archived');
         Route::post('/{id}/archive',   'archive')->whereNumber('id')->name('archive');
         Route::post('/{id}/restore',   'restore')->whereNumber('id')->name('restore');
         Route::delete('/{id}/force',   'destroyForever')->whereNumber('id')->name('force');
 
-        // PDF (keep before catch-all show)
+        // PDF
         Route::get('/{id}/pdf', 'pdf')->whereNumber('id')->name('pdf');
 
-        // Show a single production/batch/product view (keep last)
+        // Show single production
         Route::get('/{id}', 'show')->whereNumber('id')->name('show');
     });
 
-    // Quick-add payload (kept outside to avoid collision with /{id})
+    // Quick-add payload
     Route::get('/production/quick-add/{product}', [ProductionController::class, 'quickAddPayload'])
         ->whereNumber('product')->name('production.quickAdd');
 
-    // Alias for convenience
+    // Alias
     Route::redirect('/production-alias', '/production')->name('production');
 });
 
@@ -225,7 +225,7 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
     // Sales resource
     Route::resource('sales', SalesController::class)->except(['create', 'show']);
 
-    // Availability endpoint (GET/POST)
+    // Availability endpoint
     Route::match(['GET', 'POST'], '/inventory/available', [SalesController::class, 'available'])
         ->name('sales.available');
 
@@ -254,7 +254,6 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
 /*
 |--------------------------------------------------------------------------
 | Shared Production API for Admin + Production + Sales
-| (used by Sales Add-Sale modal & dashboards)
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Production,Sales'])->group(function () {
@@ -283,11 +282,11 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
         Route::match(['put','patch'],'/{id}', [MaterialController::class, 'update'])->whereNumber('id')->name('update');
         Route::delete('/{id}',   [MaterialController::class, 'destroy'])->whereNumber('id')->name('destroy');
 
-        // JSON helpers with expected names
+        // JSON helpers
         Route::patch('/{material}/adjust-quantity', [MaterialController::class, 'adjustQuantity'])
-            ->whereNumber('material')->name('adjust');   // used as materials.adjust
+            ->whereNumber('material')->name('adjust');
         Route::patch('/{material}/set-quantity',    [MaterialController::class, 'setQuantity'])
-            ->whereNumber('material')->name('setqty');   // used as materials.setqty
+            ->whereNumber('material')->name('setqty');
     });
 
     Route::redirect('/materials-alias', '/materials')->name('materials');
@@ -296,9 +295,15 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
     Route::prefix('inventory')->name('inventory.')->group(function () {
         Route::get('/',          [InventoryController::class, 'index'])->name('index');
         Route::post('/',         [InventoryController::class, 'store'])->name('store');
+
+        // export routes added here before parameter routes
+        Route::get('/export/csv', [InventoryController::class, 'exportCsv'])->name('export.csv');
+        Route::get('/export/pdf', [InventoryController::class, 'exportPdf'])->name('export.pdf');
+
         Route::get('/{id}/edit', [InventoryController::class, 'edit'])->whereNumber('id')->name('edit');
         Route::match(['put','patch'],'/{id}', [InventoryController::class, 'update'])->whereNumber('id')->name('update');
     });
+
     Route::redirect('/inventory-alias', '/inventory')->name('inventory');
 
     // ===== Allocations =====
@@ -318,7 +323,7 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
 
 /*
 |--------------------------------------------------------------------------
-| Fallback (single-action controller)
+| Fallback
 |--------------------------------------------------------------------------
 */
 Route::fallback(FallbackController::class);

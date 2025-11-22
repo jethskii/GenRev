@@ -11,7 +11,9 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Response;
 use Illuminate\Validation\Rule;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class InventoryController extends Controller
 {
@@ -95,7 +97,9 @@ class InventoryController extends Controller
             ->when($q, function ($qq) use ($q, $hasNameCol) {
                 $qq->where(function ($w) use ($q, $hasNameCol) {
                     $w->where('material_name', 'like', "%{$q}%");
-                    if ($hasNameCol) $w->orWhere('name', 'like', "%{$q}%");
+                    if ($hasNameCol) {
+                        $w->orWhere('name', 'like', "%{$q}%");
+                    }
                 });
             })
             ->orderBy('quantity_kg')
@@ -142,29 +146,21 @@ class InventoryController extends Controller
 
         /* ===================== Forecast badges ==================== */
 
-        $stockForecasting = [];
-        foreach ($products as $p) {
-            $forecast = (float) ($p->forecasted_demand ?? 0);
-            $avail    = (float) ($p->available_stock_kg ?? 0);
-            if ($forecast <= 0) {
-                $stockForecasting[] = ['product_id'=>$p->id,'days_until_stockout'=>null,'forecast_status'=>'normal'];
-                continue;
-            }
-            $days = $avail / max(0.001, $forecast);
-            $stockForecasting[] = [
-                'product_id' => $p->id,
-                'days_until_stockout' => $days,
-                'forecast_status' => $days <= 3 ? 'critical' : ($days <= 7 ? 'warning' : 'normal'),
-            ];
-        }
+        $stockForecasting = $this->buildStockForecasting($products->getCollection());
 
         $categories = Product::whereNotNull('category')->distinct()->pluck('category')->sort()->values();
 
         $productionAlarms = [];
         foreach ($expiringSoon as $b) {
-            $dte = method_exists($b, 'getDaysToExpiryAttribute') ? $b->days_to_expiry : null;
-            $sev = ($dte !== null && $dte <= 3) ? 'critical' : 'warning';
+            $dte = property_exists($b, 'days_to_expiry') || isset($b->days_to_expiry)
+                ? $b->days_to_expiry
+                : (isset($b->expiration_date)
+                    ? Carbon::now()->diffInDays($b->expiration_date, false)
+                    : null);
+
+            $sev  = ($dte !== null && $dte <= 3) ? 'critical' : 'warning';
             $left = $dte !== null ? $dte : 'N/A';
+
             $productionAlarms[] = [
                 'severity' => $sev,
                 'message'  => "{$b->product?->product_name} ({$b->batch_number}) expiring in {$left} day(s).",
@@ -211,9 +207,15 @@ class InventoryController extends Controller
                 $m->save();
             } else {
                 $p = Product::lockForUpdate()->findOrFail($v['id']);
-                if (array_key_exists('set_forecasted_demand', $v) && $v['set_forecasted_demand'] !== null) $p->forecasted_demand = (float)$v['set_forecasted_demand'];
-                if (array_key_exists('set_default_price', $v)     && $v['set_default_price']     !== null) $p->default_price     = (float)$v['set_default_price'];
-                if (array_key_exists('set_unit_cost', $v)         && $v['set_unit_cost']         !== null) $p->unit_cost         = (float)$v['set_unit_cost'];
+                if (array_key_exists('set_forecasted_demand', $v) && $v['set_forecasted_demand'] !== null) {
+                    $p->forecasted_demand = (float)$v['set_forecasted_demand'];
+                }
+                if (array_key_exists('set_default_price', $v) && $v['set_default_price'] !== null) {
+                    $p->default_price = (float)$v['set_default_price'];
+                }
+                if (array_key_exists('set_unit_cost', $v) && $v['set_unit_cost'] !== null) {
+                    $p->unit_cost = (float)$v['set_unit_cost'];
+                }
                 $p->save();
             }
         });
@@ -223,9 +225,11 @@ class InventoryController extends Controller
 
     public function edit(Request $request, int $id)
     {
-        $kind = $request->get('kind', 'material');
+        $kind   = $request->get('kind', 'material');
         $record = $kind === 'product' ? Product::findOrFail($id) : Material::findOrFail($id);
-        if ($kind !== 'product') $kind = 'material';
+        if ($kind !== 'product') {
+            $kind = 'material';
+        }
         return view('inventory.edit', compact('kind','record'));
     }
 
@@ -255,5 +259,170 @@ class InventoryController extends Controller
         $m = Material::findOrFail($id);
         $m->fill(array_filter($data, static fn($v)=>$v!==null))->save();
         return redirect()->route('inventory.index')->with('success','Material updated.');
+    }
+
+    /**
+     * Export filtered products as CSV with forecasting info.
+     */
+    public function exportCsv(Request $request)
+    {
+        $q   = trim((string) $request->get('q', ''));
+        $cat = $request->get('cat');
+
+        // Base query with same filters as index
+        $productsBase = Product::query()
+            ->when($q,   fn($qq) => $qq->where('product_name', 'like', "%{$q}%"))
+            ->when($cat, fn($qq) => $qq->where('category', $cat))
+            ->orderBy('product_name');
+
+        $products   = $productsBase->get();
+        $productIds = $products->pluck('id');
+
+        // Compute available stock per product (same logic as index)
+        $batchBalances = Production::query()
+            ->whereNull('deleted_at')
+            ->whereIn('product_id', $productIds)
+            ->groupBy('product_id')
+            ->select('product_id', DB::raw('SUM(COALESCE(current_inventory,0)) as bal'))
+            ->pluck('bal', 'product_id');
+
+        $products->transform(function (Product $p) use ($batchBalances) {
+            $p->available_stock_kg = (float) ($batchBalances[$p->id] ?? 0.0);
+            return $p;
+        });
+
+        $stockForecasting = $this->buildStockForecasting($products);
+
+        // Index by product_id for quick lookup
+        $forecastMap = collect($stockForecasting)->keyBy('product_id');
+
+        $fileName = 'inventory_' . now()->format('Ymd_His') . '.csv';
+
+        $headers = [
+            'Content-Type'        => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"{$fileName}\"",
+        ];
+
+        $columns = [
+            'Product ID',
+            'Product Name',
+            'Category',
+            'Available (kg)',
+            'Forecasted Demand (kg)',
+            'Days Until Stockout',
+            'Forecast Status',
+        ];
+
+        $callback = function () use ($products, $columns, $forecastMap) {
+            $file = fopen('php://output', 'w');
+
+            // header row
+            fputcsv($file, $columns);
+
+            foreach ($products as $p) {
+                $forecast = $forecastMap->get($p->id);
+                $days     = $forecast['days_until_stockout'] ?? null;
+                $status   = $forecast['forecast_status']     ?? 'normal';
+
+                fputcsv($file, [
+                    'PROD-' . $p->id,
+                    $p->product_name,
+                    $p->category ?? '',
+                    (float)($p->available_stock_kg ?? 0),
+                    (float)($p->forecasted_demand ?? 0),
+                    $days !== null ? round($days, 2) : null,
+                    $status,
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return Response::stream($callback, 200, $headers);
+    }
+
+    /**
+     * Export filtered products as PDF (tabular inventory snapshot).
+     * View: resources/views/inventory/export_pdf.blade.php
+     */
+    public function exportPdf(Request $request)
+    {
+        $q   = trim((string) $request->get('q', ''));
+        $cat = $request->get('cat');
+
+        // Same filters as index
+        $productsBase = Product::query()
+            ->when($q,   fn($qq) => $qq->where('product_name', 'like', "%{$q}%"))
+            ->when($cat, fn($qq) => $qq->where('category', $cat))
+            ->orderBy('product_name');
+
+        $products   = $productsBase->get();
+        $productIds = $products->pluck('id');
+
+        // Available stock
+        $batchBalances = Production::query()
+            ->whereNull('deleted_at')
+            ->whereIn('product_id', $productIds)
+            ->groupBy('product_id')
+            ->select('product_id', DB::raw('SUM(COALESCE(current_inventory,0)) as bal'))
+            ->pluck('bal', 'product_id');
+
+        $products->transform(function (Product $p) use ($batchBalances) {
+            $p->available_stock_kg = (float) ($batchBalances[$p->id] ?? 0.0);
+            return $p;
+        });
+
+        $stockForecasting = $this->buildStockForecasting($products);
+        $forecastMap      = collect($stockForecasting)->keyBy('product_id');
+
+        $pdf = Pdf::loadView('inventory.export_pdf', [
+            'products'      => $products,
+            'forecastMap'   => $forecastMap,
+        ])->setPaper('a4', 'landscape');
+
+        $fileName = 'inventory_' . now()->format('Ymd_His') . '.pdf';
+
+        return $pdf->download($fileName);
+    }
+
+    /**
+     * Shared stock-forecast helper so page + exports stay consistent.
+     *
+     * @param \Illuminate\Support\Collection|\Illuminate\Contracts\Support\Arrayable $products
+     * @return array<int, array{product_id:int,days_until_stockout:float|null,forecast_status:string}>
+     */
+    protected function buildStockForecasting($products): array
+    {
+        // If paginator or arrayable, normalize to collection
+        if (method_exists($products, 'getCollection')) {
+            $products = $products->getCollection();
+        }
+        $collection = collect($products);
+
+        $result = [];
+        foreach ($collection as $p) {
+            $forecast = (float) ($p->forecasted_demand ?? 0);
+            $avail    = (float) ($p->available_stock_kg ?? 0);
+
+            if ($forecast <= 0) {
+                $result[] = [
+                    'product_id'         => $p->id,
+                    'days_until_stockout'=> null,
+                    'forecast_status'    => 'normal',
+                ];
+                continue;
+            }
+
+            // Simple days estimate = available / forecast (you can swap with your own model)
+            $days = $avail / max(0.001, $forecast);
+
+            $result[] = [
+                'product_id'         => $p->id,
+                'days_until_stockout'=> $days,
+                'forecast_status'    => $days <= 3 ? 'critical' : ($days <= 7 ? 'warning' : 'normal'),
+            ];
+        }
+
+        return $result;
     }
 }

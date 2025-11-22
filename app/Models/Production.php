@@ -9,8 +9,6 @@ use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use App\Models\Product;
-use App\Models\Sale;
 
 class Production extends Model
 {
@@ -31,6 +29,7 @@ class Production extends Model
         'batch_number',
         'forecasted_demand',
         'current_inventory',
+        'unit_cost',
         'unit_price_pack',
         'unit_price_bag',
         'available_pack',
@@ -45,7 +44,7 @@ class Production extends Model
         'image_thumb_path',
         'remarks',
         'archived_reason',
-        // 'archived_reason',
+        'purge_at',
     ];
 
     /** Casts */
@@ -56,18 +55,19 @@ class Production extends Model
         'production_date'   => 'date',
         'expiration_date'   => 'date',
         'forecasted_demand' => 'float',
+        'unit_cost'         => 'float',
         'unit_price_pack'   => 'float',
         'unit_price_bag'    => 'float',
-        'current_inventory' => 'integer',
+        'current_inventory' => 'float',
         'quantity'          => 'integer',
         'available_pack'    => 'integer',
         'available_bag'     => 'integer',
         'remarks'           => 'string',
+        'archived_reason'   => 'string',
+        'purge_at'          => 'datetime',
         'deleted_at'        => 'datetime',
         'created_at'        => 'datetime',
         'updated_at'        => 'datetime',
-        'archived_reason'  => 'string',
-        // 'archived_reason'  => 'string',
     ];
 
     /** Virtuals for UI */
@@ -81,6 +81,7 @@ class Production extends Model
         'type_keywords',
         'purge_at',
         'batch_label',
+        'archived_reason_label',
     ];
 
     /* ========================== Relationships ========================== */
@@ -146,19 +147,19 @@ class Production extends Model
 
     public function scopeSearchArchived($q, ?string $term)
     {
-        $s = trim((string)$term);
+        $s = trim((string) $term);
         if ($s === '') return $q;
 
-        return $q->where(function($qq) use ($s) {
+        return $q->where(function ($qq) use ($s) {
             $qq->where('batch_number', 'like', "%{$s}%")
                ->orWhere('product_name_snapshot', 'like', "%{$s}%")
                ->orWhere('remarks', 'like', "%{$s}%")
                ->orWhere('archived_reason', 'like', "%{$s}%")
-               ->orWhereHas('product', function($qp) use ($s){
-                    $qp->where('product_name','like',"%{$s}%");
+               ->orWhereHas('product', function ($qp) use ($s) {
+                    $qp->where('product_name', 'like', "%{$s}%");
                })
-               ->orWhereHas('parentProduct', function($qp) use ($s){
-                    $qp->where('product_name','like',"%{$s}%");
+               ->orWhereHas('parentProduct', function ($qp) use ($s) {
+                    $qp->where('product_name', 'like', "%{$s}%");
                });
         });
     }
@@ -173,7 +174,7 @@ class Production extends Model
                 return $q->orderByDesc('production_date')->orderByDesc('id');
 
             case 'product':
-                return $q->leftJoin('products','products.id','=','productions.product_id')
+                return $q->leftJoin('products', 'products.id', '=', 'productions.product_id')
                          ->orderBy('products.product_name')
                          ->orderByDesc('productions.id')
                          ->select('productions.*');
@@ -191,6 +192,24 @@ class Production extends Model
         }
     }
 
+    /**
+     * Batches that are archived and whose purge_at (or deleted_at + TTL) is in the past.
+     */
+    public function scopePurgeable($q)
+    {
+        $ttl = (int) config('app.archive_ttl_days', 7);
+        $cutoff = Carbon::now()->subDays(max(1, $ttl));
+
+        return $q->onlyTrashed()->where(function ($qq) use ($cutoff) {
+            if (Schema::hasColumn($this->getTable(), 'purge_at')) {
+                $qq->whereNotNull('purge_at')
+                   ->where('purge_at', '<=', Carbon::now());
+            } else {
+                $qq->where('deleted_at', '<=', $cutoff);
+            }
+        });
+    }
+
     /* ============================ Accessors ============================ */
 
     public function getRemainingQtyAttribute(): int
@@ -201,6 +220,7 @@ class Production extends Model
     public function getIsExpiredAttribute(): bool
     {
         if (!$this->expiration_date) return false;
+
         return Carbon::today()->greaterThan(
             Carbon::parse($this->expiration_date)->startOfDay()
         );
@@ -217,6 +237,14 @@ class Production extends Model
     }
 
     /**
+     * Helper: which disk to use for this batch's images.
+     */
+    protected function imageDisk(): string
+    {
+        return $this->image_disk ?: config('filesystems.default', 'public');
+    }
+
+    /**
      * Purge-at timestamp used by the Archived UI.
      */
     public function getPurgeAtAttribute(): ?string
@@ -224,29 +252,36 @@ class Production extends Model
         if (array_key_exists('purge_at', $this->attributes) && !empty($this->attributes['purge_at'])) {
             try {
                 return Carbon::parse($this->attributes['purge_at'])->toDateTimeString();
-            } catch (\Throwable $e) { /* ignore parse fail */ }
+            } catch (\Throwable $e) {
+                // ignore parse fail
+            }
         }
 
         if (!$this->deleted_at) return null;
 
-        $ttl = (int) config('app.archive_ttl_days', 30);
-        return Carbon::parse($this->deleted_at)
-                    ->copy()
-                    ->addDays(max(1, $ttl))
-                    ->toDateTimeString();
-    }
- /* Archived Reason label for UI */
-public function getArchivedReasonLabelAttrubute(): string
-{
-    return match ($this->archived_reason) {
-        'from_sale' => 'From Sales',
-        'manual'    => 'Manual',
-        'expired'   => 'Expired',
-        default     => 'Unknown',
-    };
-}
+        // match "may be permanently removed after seven days"
+        $ttl = (int) config('app.archive_ttl_days', 7);
 
-    /* * Prefer product’s processed card image; then batch image; else default.*/
+        return Carbon::parse($this->deleted_at)
+            ->copy()
+            ->addDays(max(1, $ttl))
+            ->toDateTimeString();
+    }
+
+    /** Archived Reason label for UI */
+    public function getArchivedReasonLabelAttribute(): string
+    {
+        return match ($this->archived_reason) {
+            'from_sale' => 'From Sales',
+            'manual'    => 'Manual',
+            'expired'   => 'Expired',
+            default     => 'Unknown',
+        };
+    }
+
+    /**
+     * Prefer product’s processed card image; then batch image; else default.
+     */
     public function getImageUrlAttribute(): string
     {
         // Prefer product-derived fields created by the controller’s image pipeline.
@@ -259,10 +294,12 @@ public function getArchivedReasonLabelAttrubute(): string
 
         // Fallback to batch-level stored paths (legacy support).
         if (!empty($this->image_path)) {
-            $disk = $this->image_disk ?: 'public';
+            $disk = $this->imageDisk();
+
             try {
                 return Storage::disk($disk)->url(ltrim($this->image_path, '/'));
             } catch (\Throwable $e) {
+                // Fallback to asset helper if disk call fails
                 return asset('storage/' . ltrim($this->image_path, '/'));
             }
         }
@@ -281,22 +318,25 @@ public function getArchivedReasonLabelAttrubute(): string
         }
 
         // Compose from batch-level stored sizes (legacy).
-        $disk = $this->image_disk ?: 'public';
+        $disk  = $this->imageDisk();
         $parts = [];
 
         $push = function (?string $path, string $size) use (&$parts, $disk) {
             if (!$path) return;
+
             try {
                 $url = Storage::disk($disk)->url(ltrim($path, '/'));
             } catch (\Throwable $e) {
                 $url = asset('storage/' . ltrim($path, '/'));
             }
+
             $parts[] = "{$url} {$size}";
         };
 
-        // Map legacy sizes to width hints; adjust if your stored sizes differ.
-        $push($this->image_thumb_path,  '150w');
-        $push($this->image_medium_path, '600w');
+        // Align with your 400/800/1200 WebP pipeline
+        $push($this->image_thumb_path,  '400w');
+        $push($this->image_medium_path, '800w');
+        $push($this->image_path,        '1200w');
 
         return $parts ? implode(', ', $parts) : null;
     }
@@ -306,14 +346,15 @@ public function getArchivedReasonLabelAttrubute(): string
      */
     public function getTypeNameAttribute(): string
     {
-        $childName  = trim((string)($this->product_name_snapshot ?: $this->product?->product_name ?: ''));
-        $parentName = trim((string)($this->parentProduct?->product_name ?: ''));
+        $childName  = trim((string) ($this->product_name_snapshot ?: $this->product?->product_name ?: ''));
+        $parentName = trim((string) ($this->parentProduct?->product_name ?: ''));
 
         if ($childName !== '') {
             if ($parentName !== '' && stripos($childName, $parentName) !== false) {
                 $type = trim(preg_replace('/\s+/', ' ', str_ireplace($parentName, '', $childName)));
                 if ($type !== '') return $type;
             }
+
             if ($parentName === '' || strcasecmp($childName, $parentName) !== 0) {
                 return $childName;
             }
@@ -328,16 +369,17 @@ public function getArchivedReasonLabelAttrubute(): string
             mb_strtolower($this->type_name),
             mb_strtolower($this->product_name_snapshot ?: $this->product?->product_name ?: ''),
             mb_strtolower($this->parentProduct?->product_name ?: ''),
-            mb_strtolower((string)($this->batch_number ?? '')),
+            mb_strtolower((string) ($this->batch_number ?? '')),
             mb_strtolower($this->remarks ?? ''),
         ];
+
         return trim(preg_replace('/\s+/', ' ', implode(' ', array_filter($parts))));
     }
 
     /** Pretty label for UI like "BATCH #5" */
     public function getBatchLabelAttribute(): string
     {
-        return 'BATCH #'.(int)($this->batch_number ?? 0);
+        return 'BATCH #' . (int) ($this->batch_number ?? 0);
     }
 
     /* ============================ Mutators ============================= */
@@ -351,11 +393,12 @@ public function getArchivedReasonLabelAttrubute(): string
             $this->attributes['batch_number'] = null;
             return;
         }
-        $raw = trim((string)$value);
+
+        $raw = trim((string) $value);
 
         // Prefer numeric extraction (controller generates pure ints now)
         if ($raw !== '' && preg_match('/(\d+)/', $raw, $m)) {
-            $this->attributes['batch_number'] = (string)((int)$m[1]);
+            $this->attributes['batch_number'] = (string) ((int) $m[1]);
             return;
         }
 
@@ -370,7 +413,8 @@ public function getArchivedReasonLabelAttrubute(): string
             $this->attributes['remarks'] = null;
             return;
         }
-        $norm = trim((string)$value);
+
+        $norm = trim((string) $value);
         $this->attributes['remarks'] = mb_substr($norm, 0, 500);
     }
 
@@ -380,23 +424,26 @@ public function getArchivedReasonLabelAttrubute(): string
     {
         static::saving(function (self $m) {
             // numeric coercions & clamps
-            $m->quantity          = is_numeric($m->quantity) ? (int)$m->quantity : 0;
-            $m->current_inventory = is_numeric($m->current_inventory) ? (int)$m->current_inventory : null;
-            $m->forecasted_demand = is_numeric($m->forecasted_demand) ? (float)$m->forecasted_demand : 0.0;
-            $m->unit_price_pack   = is_numeric($m->unit_price_pack) ? max(0.0, (float)$m->unit_price_pack) : 0.0;
-            $m->unit_price_bag    = is_numeric($m->unit_price_bag)  ? max(0.0, (float)$m->unit_price_bag)  : 0.0;
+            $m->quantity          = is_numeric($m->quantity) ? (int) $m->quantity : 0;
+            $m->current_inventory = is_numeric($m->current_inventory) ? (float) $m->current_inventory : null;
+            $m->forecasted_demand = is_numeric($m->forecasted_demand) ? (float) $m->forecasted_demand : 0.0;
+            $m->unit_cost         = is_numeric($m->unit_cost) ? max(0.0, (float) $m->unit_cost) : 0.0;
+            $m->unit_price_pack   = is_numeric($m->unit_price_pack) ? max(0.0, (float) $m->unit_price_pack) : 0.0;
+            $m->unit_price_bag    = is_numeric($m->unit_price_bag)  ? max(0.0, (float) $m->unit_price_bag)  : 0.0;
 
             // availability fields
-            $m->available_pack = is_numeric($m->available_pack) ? max(0, (int)$m->available_pack) : 0;
-            $m->available_bag  = is_numeric($m->available_bag)  ? max(0, (int)$m->available_bag)  : 0;
+            $m->available_pack = is_numeric($m->available_pack) ? max(0, (int) $m->available_pack) : 0;
+            $m->available_bag  = is_numeric($m->available_bag)  ? max(0, (int) $m->available_bag)  : 0;
 
             // defaults
             if ($m->exists === false && ($m->current_inventory === null || $m->current_inventory === '')) {
                 $m->current_inventory = (int) $m->quantity;
             }
+
             if (empty($m->image_disk)) {
                 $m->image_disk = 'public';
             }
+
             if (empty($m->production_date)) {
                 $m->production_date = Carbon::today();
             }
@@ -413,26 +460,31 @@ public function getArchivedReasonLabelAttrubute(): string
 
             // snapshot label (type)
             if (empty($m->product_name_snapshot)) {
-                $cat = null; $pname = null;
+                $cat   = null;
+                $pname = null;
+
                 if ($m->relationLoaded('product') && $m->product) {
-                    $cat   = trim((string)($m->product->category ?? ''));
-                    $pname = trim((string)($m->product->product_name ?? ''));
+                    $cat   = trim((string) ($m->product->category ?? ''));
+                    $pname = trim((string) ($m->product->product_name ?? ''));
                 } elseif (!empty($m->product_id)) {
-                    $prod  = Product::select('category','product_name')->find($m->product_id);
-                    $cat   = trim((string)($prod->category ?? ''));
-                    $pname = trim((string)($prod->product_name ?? ''));
+                    $prod  = Product::select('category', 'product_name')->find($m->product_id);
+                    $cat   = trim((string) ($prod->category ?? ''));
+                    $pname = trim((string) ($prod->product_name ?? ''));
                 }
+
                 $m->product_name_snapshot = $cat !== '' ? $cat : ($pname ?: 'Base');
             }
 
             // expiration auto-calc
             if (empty($m->expiration_date) && !empty($m->production_date)) {
                 $days = null;
+
                 if ($m->relationLoaded('product') && $m->product) {
                     $days = (int) ($m->product->shelf_life_days ?? 0);
                 } elseif (!empty($m->product_id)) {
                     $days = (int) (Product::whereKey($m->product_id)->value('shelf_life_days') ?? 0);
                 }
+
                 if ($days > 0) {
                     $m->expiration_date = Carbon::parse($m->production_date)->copy()->addDays($days);
                 }
@@ -475,7 +527,7 @@ public function getArchivedReasonLabelAttrubute(): string
             ->selectRaw('COALESCE(SUM(quantity_kg),0) + COALESCE(SUM(quantity),0) as s')
             ->value('s');
 
-        $balance  = max(0.0, $produced - $sold);
+        $balance = max(0.0, $produced - $sold);
 
         $latestProdDate = static::query()
             ->where('product_id', $productId)
@@ -497,10 +549,25 @@ public function getArchivedReasonLabelAttrubute(): string
 
     /* ============================ Convenience ============================ */
 
-    public static function archiveById(int $id): bool
+    /**
+     * Archive a batch by ID, setting archived_reason and purge_at.
+     */
+    public static function archiveById(int $id, string $reason = 'manual'): bool
     {
+        /** @var self|null $row */
         $row = static::find($id);
         if (!$row) return false;
+
+        $row->archived_reason = $reason ?: 'manual';
+
+        if (Schema::hasColumn($row->getTable(), 'purge_at')) {
+            $ttl = (int) config('app.archive_ttl_days', 7);
+            $row->purge_at = Carbon::now()->addDays(max(1, $ttl));
+        }
+
+        // save updated reason/purge_at then soft-delete
+        $row->save();
+
         return (bool) $row->delete();
     }
 
