@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Models\Product;
@@ -186,7 +188,7 @@ class ProductController extends Controller
                         $p->recipes()->delete();
                     }
 
-                    // Delete main image if present (double-safety; supports old image_path or direct URLs)
+                    // Delete main image if present (double-safety)
                     try {
                         if (!empty($p->image_path) && Storage::disk('public')->exists($p->image_path)) {
                             Storage::disk('public')->delete($p->image_path);
@@ -279,61 +281,36 @@ class ProductController extends Controller
         return back()->with('success', 'Product added.');
     }
 
-    /* ============================== MATERIALS / RECIPE ============================== */
-
-    /** BOM editor landing (materials picker + current recipe lines). */
-    public function materialsIndex(Product $product, Request $request)
-    {
-        $product->load('recipes.material');
-
-        $materials = Material::query()
-            ->select('id', 'material_name', 'unit')
-            ->addSelect(DB::raw('unit_price as default_unit_price'))
-            ->orderBy('material_name')
-            ->get();
-
-        $recipe = $product->recipes;
-
-        if ($request->ajax() || $request->wantsJson()) {
-            return response()->json([
-                'ok'        => true,
-                'product'   => $product->only(['id','product_name']),
-                'materials' => $materials,
-                'recipe'    => $recipe,
-            ]);
-        }
-
-        return view('products.materials.index', compact('product', 'materials', 'recipe'));
-    }
-
+    /* ============================== LEGACY RECIPE ENDPOINTS ============================== */
     /**
-     * Save (sync) recipe lines for a product.
-     * Accepts either LEGACY rows:
-     *   rows[*]: { ingredient_id, qty, unit_price }
-     * Or MODERN rows:
-     *   rows[*]: { material_id, quantity_per_unit, unit, wastage_pct, unit_price_snapshot }
+     * Legacy recipe store endpoint used by routes:
+     *   POST /products/{product}/recipe  -> products.recipe.store
+     *
+     * New BOM UI uses ProductRecipeController@store via:
+     *   POST /products/{product}/materials -> products.materials.store
      */
     public function recipeStore(Request $request, Product $product)
     {
         $validated = $request->validate([
-            'rows'                           => ['required','array','min:1'],
-            'rows.*.ingredient_id'           => ['nullable','integer', 'exists:materials,id'],
-            'rows.*.material_id'             => ['nullable','integer', 'exists:materials,id'],
-            'rows.*.qty'                     => ['nullable','numeric','min:0'],
-            'rows.*.quantity_per_unit'       => ['nullable','numeric','min:0'],
-            'rows.*.unit'                    => ['nullable','string','max:10'],
-            'rows.*.wastage_pct'             => ['nullable','numeric','min:0','max:100'],
-            'rows.*.unit_price'              => ['nullable','numeric','min:0'],
-            'rows.*.unit_price_snapshot'     => ['nullable','numeric','min:0'],
+            'rows'                       => ['required','array','min:1'],
+            'rows.*.ingredient_id'       => ['nullable','integer', 'exists:materials,id'],
+            'rows.*.material_id'         => ['nullable','integer', 'exists:materials,id'],
+            'rows.*.qty'                 => ['nullable','numeric','min:0'],
+            'rows.*.quantity_per_unit'   => ['nullable','numeric','min:0'],
+            'rows.*.unit'                => ['nullable','string','max:10'],
+            'rows.*.wastage_pct'         => ['nullable','numeric','min:0','max:100'],
+            'rows.*.unit_price'          => ['nullable','numeric','min:0'],
+            'rows.*.unit_price_snapshot' => ['nullable','numeric','min:0'],
         ]);
 
         DB::transaction(function () use ($product, $validated) {
             $keepMaterialIds = [];
 
             foreach ($validated['rows'] as $row) {
-                // Resolve material id and quantity from either legacy or modern keys
                 $matId = (int) (($row['material_id'] ?? 0) ?: ($row['ingredient_id'] ?? 0));
-                if ($matId <= 0) continue;
+                if ($matId <= 0) {
+                    continue;
+                }
 
                 $qty = $this->normQty($row['quantity_per_unit'] ?? $row['qty'] ?? 0);
                 $wst = $this->normPct($row['wastage_pct'] ?? 0);
@@ -343,22 +320,21 @@ class ProductController extends Controller
                     $row['unit_price_snapshot'] ?? $row['unit_price'] ?? null
                 );
 
-                // If no snapshot provided, pull current Material price
                 if ($snap === 0.0) {
                     $snap = (float) (Material::whereKey($matId)->value('unit_price') ?? 0);
                 }
 
                 $payload = [
-                    'qty'                 => $qty,                 // legacy column stays in sync
+                    'qty'                 => $qty,
                     'unit_price_snapshot' => $snap,
+                    'material_id'         => $matId,
+                    'ingredient_id'       => $matId,
+                    'quantity_per_unit'   => $qty,
+                    'wastage_pct'         => $wst,
                 ];
-
-                // Write modern columns if they exist on your table (safe even if ignored)
-                $payload['material_id']       = $matId;
-                $payload['ingredient_id']     = $matId;          // keep legacy FK
-                $payload['quantity_per_unit'] = $qty;
-                if (!is_null($unt)) $payload['unit'] = $unt;
-                $payload['wastage_pct']       = $wst;
+                if (!is_null($unt)) {
+                    $payload['unit'] = $unt;
+                }
 
                 ProductRecipe::updateOrCreate(
                     ['product_id' => (int) $product->id, 'ingredient_id' => $matId],
@@ -368,17 +344,14 @@ class ProductController extends Controller
                 $keepMaterialIds[] = $matId;
             }
 
-            // Remove any rows not present in the submitted payload (by material/ingredient id)
             if (!empty($keepMaterialIds)) {
                 ProductRecipe::where('product_id', $product->id)
                     ->whereNotIn('ingredient_id', $keepMaterialIds)
                     ->delete();
             } else {
-                // if nothing valid submitted, clear all
                 ProductRecipe::where('product_id', $product->id)->delete();
             }
 
-            // Optional: recompute product.unit_cost from recipe lines (qty_effective * snapshot)
             $totalCost = ProductRecipe::with('material:id,unit_price')
                 ->where('product_id', $product->id)
                 ->get()
@@ -399,7 +372,7 @@ class ProductController extends Controller
             : back()->with('success', 'Recipe saved.');
     }
 
-    /** Remove a single recipe line. */
+    /** Legacy single recipe-line delete. */
     public function recipeDestroy(Product $product, ProductRecipe $line, Request $request)
     {
         if ((int) $line->product_id !== (int) $product->id) {
@@ -419,7 +392,7 @@ class ProductController extends Controller
     public function updateImage(Request $request, Product $product)
     {
         $request->validate([
-            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:min_width=300,min_height=300'],
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
         ]);
 
         try {
@@ -455,10 +428,9 @@ class ProductController extends Controller
             'last_cost_date'      => ['nullable', 'date'],
             'temp_requirements'   => ['nullable', 'string', 'max:2000'],
             'line_constraints'    => ['nullable'],
-            'image'               => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:4096', 'dimensions:min_width=300,min_height=300'],
+            'image'               => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
         ];
 
-        // Only validate product_code if the column actually exists (avoids SQL error)
         if (Schema::hasColumn('products', 'product_code')) {
             $rules['product_code'] = [
                 'nullable',
@@ -491,9 +463,14 @@ class ProductController extends Controller
 
         $s = (string) $v;
         $s = preg_replace('/[₱\p{Sc}\s]+/u', '', $s);
-        if (str_contains($s, ',') && str_contains($s, '.')) $s = str_replace(',', '', $s);
-        elseif (str_contains($s, ',') && !str_contains($s, '.')) { $s = str_replace('.', '', $s); $s = str_replace(',', '.', $s); }
-        else $s = str_replace(',', '', $s);
+        if (str_contains($s, ',') && str_contains($s, '.')) {
+            $s = str_replace(',', '', $s);
+        } elseif (str_contains($s, ',') && !str_contains($s, '.')) {
+            $s = str_replace('.', '', $s);
+            $s = str_replace(',', '.', $s);
+        } else {
+            $s = str_replace(',', '', $s);
+        }
 
         return ($s === '' || !is_numeric($s)) ? 0.00 : round((float) $s, 2);
     }
@@ -505,7 +482,9 @@ class ProductController extends Controller
 
         $s = (string) $v;
         $s = preg_replace('/[\s,]+/u', '', $s);
-        if ($s !== '' && str_contains($s, ',') && !str_contains($s, '.')) $s = str_replace(',', '.', $s);
+        if ($s !== '' && str_contains($s, ',') && !str_contains($s, '.')) {
+            $s = str_replace(',', '.', $s);
+        }
         return ($s === '' || !is_numeric($s)) ? 0.000 : round((float) $s, 3);
     }
 
@@ -526,7 +505,6 @@ class ProductController extends Controller
     {
         $usedCustom = false;
 
-        // 1) Try model's own helper if present
         if (method_exists($product, 'setImageFromUpload')) {
             try {
                 $product->setImageFromUpload($file);
@@ -539,18 +517,17 @@ class ProductController extends Controller
             }
         }
 
-        // If custom helper filled card_image_url, we’re done
         if ($usedCustom && (!empty($product->card_image_url) || !empty($product->card_image_srcset))) {
             $product->save();
             return;
         }
 
-        // 2) Run our own pipeline (same style as ProductionController)
         $this->applyImageToProduct($product, $file);
     }
 
     /**
-     * Intervention-based pipeline with safe fallback store() – keeps card_image_url in sync.
+     * Intervention-based pipeline with safe fallback store()
+     * – keeps disk + paths + card_image_url in sync.
      */
     private function applyImageToProduct(Product $product, \Illuminate\Http\UploadedFile $file): void
     {
@@ -559,10 +536,12 @@ class ProductController extends Controller
                 throw new \RuntimeException('Intervention Image not installed/configured');
             }
 
+            $disk = 'public';
+
             $uuid = (string) Str::uuid();
             $base = "products/{$product->id}/{$uuid}";
 
-            $img = Image::read($file->getRealPath())->orientate();
+            $img    = Image::read($file->getRealPath())->orient();
             $master = (clone $img)->scaleDown(1600, 1600);
 
             $w1200 = (clone $master)->scaleDown(1200, 1200);
@@ -573,19 +552,25 @@ class ProductController extends Controller
             $path800  = "{$base}-800.webp";
             $path400  = "{$base}-400.webp";
 
-            Storage::disk('public')->put($path1200, (string) $w1200->toWebp(80), 'public');
-            Storage::disk('public')->put($path800,  (string) $w800->toWebp(80),  'public');
-            Storage::disk('public')->put($path400,  (string) $w400->toWebp(80),  'public');
+            Storage::disk($disk)->put($path1200, (string) $w1200->toWebp(quality: 80));
+            Storage::disk($disk)->put($path800,  (string) $w800->toWebp(quality: 80));
+            Storage::disk($disk)->put($path400,  (string) $w400->toWebp(quality: 80));
 
-            $url1200 = Storage::disk('public')->url($path1200);
-            $url800  = Storage::disk('public')->url($path800);
-            $url400  = Storage::disk('public')->url($path400);
+            $url1200 = Storage::disk($disk)->url($path1200);
+            $url800  = Storage::disk($disk)->url($path800);
+            $url400  = Storage::disk($disk)->url($path400);
 
             $srcset  = "{$url400} 400w, {$url800} 800w, {$url1200} 1200w";
+
+            $product->image_disk        = $disk;
+            $product->image_path        = $path1200;
+            $product->image_medium_path = $path800;
+            $product->image_thumb_path  = $path400;
 
             $product->image_url         = $url1200;
             $product->card_image_url    = $url800;
             $product->card_image_srcset = $srcset;
+
             $product->save();
         } catch (\Throwable $e) {
             Log::warning('applyImageToProduct failed, using simple store()', [
@@ -593,14 +578,19 @@ class ProductController extends Controller
                 'error'      => $e->getMessage(),
             ]);
 
-            // Fallback: simple store of original file
             try {
                 $path = $file->store('products', 'public');
                 $url  = Storage::disk('public')->url($path);
 
+                $product->image_disk        = 'public';
+                $product->image_path        = $path;
+                $product->image_medium_path = null;
+                $product->image_thumb_path  = null;
+
                 $product->image_url         = $url;
                 $product->card_image_url    = $url;
                 $product->card_image_srcset = null;
+
                 $product->save();
             } catch (\Throwable $e2) {
                 Log::error('Fallback store() for product image failed', [

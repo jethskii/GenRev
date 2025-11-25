@@ -81,12 +81,22 @@ class SalesController extends Controller
     {
         [$sales, $filters] = $this->filteredSalesQueryForProduct($product->id, $request);
 
+        // 🔮 Per-product forecasts per unit type
+        $forecastKg   = $this->forecastForProductUnit($product->id, 'kg');
+        $forecastPack = $this->forecastForProductUnit($product->id, 'pack');
+        $forecastBag  = $this->forecastForProductUnit($product->id, 'bag');
+
         return view('sales.by-product', [
             'product'         => $product,
             'sales'           => $sales,
             'filters'         => $filters,
             'statusOptions'   => ['Pending','Completed','Cancelled','Paid'],
             'unitTypeOptions' => ['kg','pack','bag'],
+
+            // forecast data for UI cards
+            'forecastKg'      => $forecastKg,
+            'forecastPack'    => $forecastPack,
+            'forecastBag'     => $forecastBag,
         ]);
     }
 
@@ -198,7 +208,7 @@ class SalesController extends Controller
             Log::warning('invoice_sequences unavailable; using MAX()-based fallback', ['error' => $e->getMessage()]);
             $prefix = 'INV-' . $ymd . '-';
             $max = Sale::where('invoice_number', 'like', $prefix.'%')->max('invoice_number');
-            $seq = $max ? ((int) substr($max, strlen($prefix)) + 1) : 1;
+            $seq = $max ? ((int) substr($max, strlen($prefix))) + 1 : 1;
             return $prefix . str_pad((string)$seq, 3, '0', STR_PAD_LEFT);
         }
     }
@@ -395,6 +405,7 @@ class SalesController extends Controller
             ->orderByDesc('production_date')->orderByDesc('id')
             ->get(['id','batch_number','production_date','expiration_date','unit_price_pack','unit_price_bag','product_name_snapshot']);
 
+
         $productionDate = $sale->production_date ?: ($sale->production->production_date ?? null);
         $expirationDate = $sale->expiration_date ?: ($sale->production->expiration_date ?? null);
 
@@ -556,31 +567,31 @@ class SalesController extends Controller
      */
     public function destroy(Sale $sale)
     {
-    $productId     = (int) $sale->product_id;
-    $productionId  = (int) ($sale->production_id ?? 0);
+        $productId     = (int) $sale->product_id;
+        $productionId  = (int) ($sale->production_id ?? 0);
 
-    DB::transaction(function () use ($sale, $productionId) {
-        // soft delete sale
-        $sale->delete();
+        DB::transaction(function () use ($sale, $productionId) {
+            // soft delete sale
+            $sale->delete();
 
-        // also send its batch to Production archive (if not already archived)
-        if ($productionId > 0) {
-            $batch = Production::withTrashed()->find($productionId);
-            if ($batch && is_null($batch->deleted_at)) {
-                // ✅ Mark that this batch was archived because of a sale delete
-                $batch->archived_reason = 'from_sale';
-                $batch->save();
+            // also send its batch to Production archive (if not already archived)
+            if ($productionId > 0) {
+                $batch = Production::withTrashed()->find($productionId);
+                if ($batch && is_null($batch->deleted_at)) {
+                    // ✅ Mark that this batch was archived because of a sale delete
+                    $batch->archived_reason = 'from_sale';
+                    $batch->save();
 
-                $batch->delete();  // soft delete → archived
+                    $batch->delete();  // soft delete → archived
+                }
             }
-        }
-    });
+        });
 
-    $this->recomputeProductBalance($productId);
+        $this->recomputeProductBalance($productId);
 
-    return redirect()
-        ->route('production.archived')
-        ->with('success', 'Sale archived and related batch moved to Production archive.');
+        return redirect()
+            ->route('production.archived')
+            ->with('success', 'Sale archived and related batch moved to Production archive.');
     }
 
     /* ============================== Sales Archive (Trash) ============================== */
@@ -910,6 +921,72 @@ class SalesController extends Controller
         $top = array_slice($bucket, 0, 6, true);
 
         return [array_keys($top), array_map('floatval', array_values($top))];
+    }
+
+    /**
+     * Very simple demand forecast per product + unit_type.
+     * - unit_type: 'kg' | 'pack' | 'bag'
+     * - Returns ['status' => 'no-data|ok|no-unit-column', 'value' => float, 'label' => string]
+     */
+    protected function forecastForProductUnit(int $productId, string $unitType): array
+    {
+        $unitType = strtolower(trim($unitType));
+        if (!in_array($unitType, ['kg','pack','bag'], true)) {
+            return [
+                'status' => 'invalid-unit',
+                'value'  => 0.0,
+                'label'  => 'Invalid unit',
+            ];
+        }
+
+        $unitColName = $this->unitTypeColumn();
+        if (!$unitColName) {
+            return [
+                'status' => 'no-unit-column',
+                'value'  => 0.0,
+                'label'  => 'unit_type column missing',
+            ];
+        }
+
+        $query = Sale::where('product_id', $productId)
+            ->where($unitColName, $unitType);
+
+        $count = $query->count();
+
+        // ✅ No data yet for this product + unit_type
+        if ($count === 0) {
+            return [
+                'status' => 'no-data',
+                'value'  => 0.0,
+                'label'  => 'No data yet',
+            ];
+        }
+
+        // Use the last N sales for a simple moving average
+        $N = 10;
+
+        [$dateExprForWhere, $ymExpr, $orderExpr] = $this->dateExpressions();
+
+        $rows = $query
+            ->orderByDesc(DB::raw($orderExpr))
+            ->orderByDesc('id')
+            ->take($N)
+            ->get();
+
+        $cols   = $this->salesNumericColumns();
+        $qtyCol = $cols['qty']; // 'quantity_kg' or 'quantity'
+
+        $avg = $rows->avg(function ($sale) use ($qtyCol) {
+            return $qtyCol ? (float) ($sale->{$qtyCol} ?? 0) : 0.0;
+        });
+
+        $avg = round($avg, 2);
+
+        return [
+            'status' => 'ok',
+            'value'  => $avg,
+            'label'  => $avg . ' ' . $unitType,
+        ];
     }
 
     /* ----------------------------- Unit / Pricing helpers ----------------------------- */

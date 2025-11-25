@@ -10,7 +10,7 @@
     overflow: hidden;
   }
   .production-shell::before {
-    content:'';
+    content:''; 
     position:absolute;
     inset:-40%;
     background:
@@ -37,7 +37,7 @@
     padding-left:.5rem;
   }
   .prod-header-title::before {
-    content:'';
+    content:''; 
     position:absolute;
     left:0; top:50%;
     transform:translateY(-50%);
@@ -60,7 +60,7 @@
     transition:transform .14s ease-out, box-shadow .14s ease-out, filter .14s ease-out;
   }
   .btn-hero::before {
-    content:'';
+    content:''; 
     position:absolute;
     inset:0;
     background:radial-gradient(circle at 0 0, rgba(255,255,255,.45), transparent 55%);
@@ -91,7 +91,7 @@
       color .18s ease-out;
   }
   .category-btn::before {
-    content:'';
+    content:''; 
     position:absolute;
     inset:-40%;
     background:radial-gradient(circle at 0 0, rgba(59,130,246,.15), transparent 55%);
@@ -130,7 +130,7 @@
     animation:metricIn .26s ease-out forwards;
   }
   .metric-card::before {
-    content:'';
+    content:''; 
     position:absolute;
     inset:-40%;
     background:conic-gradient(from 200deg,
@@ -173,7 +173,7 @@
     justify-content:center;
   }
   #addModal::before {
-    content:'';
+    content:''; 
     position:absolute;
     inset:0;
     background:radial-gradient(circle at top, rgba(15,23,42,.55), transparent 60%);
@@ -371,7 +371,7 @@
           </div>
 
           <div>
-            <label class="block text-sm text-gray-600 mb-1" for="category">Type of Product</label>
+            <label class="block text-sm text-gray-600 mb-1" for="category">Variant</label>
             <input type="text" id="category" name="category" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2" placeholder="e.g., Pork, Beef" autocomplete="off">
           </div>
         </div>
@@ -400,14 +400,6 @@
           <div>
             <label class="block text-sm text-gray-600 mb-1" for="expiration_date">Expiration (optional)</label>
             <input type="date" id="expiration_date" name="expiration_date" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
-          </div>
-        </div>
-
-        {{-- Forecast only --}}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div>
-            <label class="block text-sm text-gray-600 mb-1" for="forecasted_demand">Forecasted Demand</label>
-            <input type="number" step="0.01" min="0" id="forecasted_demand" name="forecasted_demand" class="w-full rounded-xl bg-white border border-gray-300 px-3 py-2">
           </div>
         </div>
 
@@ -564,7 +556,7 @@
     // image elements
     const imageInput   = document.getElementById('image');
     const previewWrap  = document.getElementById('imagePreview');
-    const previewImg   = document.getElementById('imagePreviewImg');
+       const previewImg   = document.getElementById('imagePreviewImg');
     const imageMeta    = document.getElementById('imageMeta');
     const clearBtn     = document.getElementById('clearImageBtn');
 

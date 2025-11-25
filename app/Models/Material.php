@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Schema;
 
 class Material extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     /** Table & PK */
     protected $table = 'materials';
@@ -16,6 +18,19 @@ class Material extends Model
     public $incrementing = true;
     protected $keyType = 'int';
     public $timestamps = true;
+
+    /** Allowed units (keep in sync with controller + DB) */
+    public const ALLOWED_UNITS = [
+        'kg','g','lbs','pcs','pkg','box','bag','roll','tray','lt','ml','m3',
+    ];
+
+    /** Allowed storage types (for dropdowns + validation) */
+    public const STORAGE_TYPES = [
+        'chiller',
+        'freezer',
+        'dry',
+        'ambient',
+    ];
 
     /** Mass-assignable fields */
     protected $fillable = [
@@ -26,25 +41,39 @@ class Material extends Model
         'unit_price',
         'quantity_kg',
         'min_stock_kg',
-        'stock_status',   // ← present in your DB screenshot
+        'stock_status',
+
+        // NEW FIELDS
+        'supplier_name',
+        'batch_code',
+        'storage_type',
+        'manufactured_at',
+        'received_at',
+        'expires_at',
+        'notes',
     ];
 
     /** Casts (note: decimal casts return strings; accessors coerce to float) */
     protected $casts = [
-        'unit_price'   => 'decimal:2',
-        'quantity_kg'  => 'decimal:3',
-        'min_stock_kg' => 'decimal:3',
-        'created_at'   => 'datetime',
-        'updated_at'   => 'datetime',
+        'unit_price'    => 'decimal:2',
+        'quantity_kg'   => 'decimal:3',
+        'min_stock_kg'  => 'decimal:3',
+        'manufactured_at' => 'date',
+        'received_at'     => 'date',
+        'expires_at'      => 'date',
+        'created_at'    => 'datetime',
+        'updated_at'    => 'datetime',
+        'deleted_at'    => 'datetime',
     ];
 
     /** Defaults to avoid null math */
     protected $attributes = [
-        'unit_price'   => 0.00,
-        'quantity_kg'  => 0.000,
-        'min_stock_kg' => null,
-        'unit'         => 'kg',
-        'stock_status' => null, // recomputed on saving if column exists
+        'unit_price'    => 0.00,
+        'quantity_kg'   => 0.000,
+        'min_stock_kg'  => null,
+        'unit'          => 'kg',
+        'stock_status'  => null,  // recomputed on saving
+        'storage_type'  => null,
     ];
 
     /** Append computed fields to arrays/JSON */
@@ -52,10 +81,9 @@ class Material extends Model
         'inventory_value',
         'unit_label',
         'is_low_stock',
+        'days_until_expiry',
+        'expiry_status',
     ];
-
-    /** Allowed units (keep in sync with controller + DB) */
-    public const ALLOWED_UNITS = ['kg','g','lbs','pcs','pkg','box','bag','roll','tray','lt','ml','m3'];
 
     /* -----------------------------------------------------------------
      | Model events
@@ -67,15 +95,24 @@ class Material extends Model
             if (Schema::hasColumn($m->getTable(), 'stock_status')) {
                 $q   = (float) ($m->attributes['quantity_kg']  ?? 0);
                 $min = (float) ($m->attributes['min_stock_kg'] ?? 0);
-                $m->attributes['stock_status'] =
-                    ($min > 0 && $q <= $min) ? 'low' : 'in_stock';
+                $m->attributes['stock_status'] = self::computeStockStatus($q, $min);
+            }
+
+            // Normalize storage_type if column exists
+            if (Schema::hasColumn($m->getTable(), 'storage_type')) {
+                $st = $m->attributes['storage_type'] ?? null;
+                if ($st !== null) {
+                    $st = strtolower(trim((string) $st));
+                    $m->attributes['storage_type'] = in_array($st, self::STORAGE_TYPES, true) ? $st : null;
+                }
             }
         });
     }
 
     /* -----------------------------------------------------------------
-     | ACCESSORS (ensure API returns floats)
+     | ACCESSORS (ensure API returns floats + helper fields)
      * -----------------------------------------------------------------*/
+
     public function getUnitPriceAttribute($value): float
     {
         return is_null($value) ? 0.0 : (float) $value;
@@ -120,9 +157,49 @@ class Material extends Model
         return $min > 0 && $q <= $min;
     }
 
+    /** Days until expiry (negative if already expired, null if no expiry set) */
+    public function getDaysUntilExpiryAttribute(): ?int
+    {
+        if (! $this->expires_at) {
+            return null;
+        }
+
+        return now()->startOfDay()->diffInDays(
+            $this->expires_at->startOfDay(),
+            false // negative when expired
+        );
+    }
+
+    /**
+     * Expiry status for UI badges:
+     * - null     : no expiry tracking
+     * - expired  : expired (days < 0)
+     * - near     : 0–7 days left
+     * - fresh    : > 7 days left
+     */
+    public function getExpiryStatusAttribute(): ?string
+    {
+        if (! $this->expires_at) {
+            return null;
+        }
+
+        $days = $this->days_until_expiry;
+
+        if ($days < 0) {
+            return 'expired';
+        }
+
+        if ($days <= 7) {
+            return 'near';
+        }
+
+        return 'fresh';
+    }
+
     /* -----------------------------------------------------------------
      | MUTATORS (normalize incoming values)
      * -----------------------------------------------------------------*/
+
     public function setUnitAttribute($value): void
     {
         $v = strtolower(trim((string) $value));
@@ -137,7 +214,6 @@ class Material extends Model
     public function setCategoryAttribute($value): void
     {
         $v = $this->cleanText($value);
-        // If DB has no category column, Eloquent will ignore it; we still keep null consistency
         $this->attributes['category'] = ($v === '') ? null : $v;
     }
 
@@ -168,13 +244,30 @@ class Material extends Model
     public function setStockStatusAttribute($value): void
     {
         // Normalize to known states if manually set
+        if ($value === null) {
+            $this->attributes['stock_status'] = null;
+            return;
+        }
+
         $v = strtolower(trim((string) $value));
         $this->attributes['stock_status'] = in_array($v, ['low','in_stock'], true) ? $v : null;
+    }
+
+    public function setStorageTypeAttribute($value): void
+    {
+        if ($value === null || $value === '') {
+            $this->attributes['storage_type'] = null;
+            return;
+        }
+
+        $v = strtolower(trim((string) $value));
+        $this->attributes['storage_type'] = in_array($v, self::STORAGE_TYPES, true) ? $v : null;
     }
 
     /* -----------------------------------------------------------------
      | SCOPES
      * -----------------------------------------------------------------*/
+
     public function scopeSearch($query, ?string $term)
     {
         $term = trim((string) $term);
@@ -188,7 +281,6 @@ class Material extends Model
 
     public function scopeLowStock($query)
     {
-        // Works even if min_stock_kg is null (treated as not low)
         return $query->whereNotNull('min_stock_kg')
                      ->whereColumn('quantity_kg', '<=', 'min_stock_kg');
     }
@@ -209,16 +301,70 @@ class Material extends Model
         return $query->orderBy($col, $dir);
     }
 
+    /** Expired materials: expires_at < today */
+    public function scopeExpired($query)
+    {
+        return $query->whereNotNull('expires_at')
+                     ->whereDate('expires_at', '<', now()->toDateString());
+    }
+
+    /** Expiring soon: expires_at between today and +N days (default 7) */
+    public function scopeExpiringSoon($query, int $days = 7)
+    {
+        $today = now()->toDateString();
+        $limit = now()->addDays($days)->toDateString();
+
+        return $query->whereNotNull('expires_at')
+                     ->whereBetween('expires_at', [$today, $limit]);
+    }
+
+    /** Fresh: expires_at > (today + N days) */
+    public function scopeFresh($query, int $days = 7)
+    {
+        $limit = now()->addDays($days)->toDateString();
+
+        return $query->whereNotNull('expires_at')
+                     ->whereDate('expires_at', '>', $limit);
+    }
+
     /* -----------------------------------------------------------------
      | RELATIONSHIPS (optional, if you use recipes)
      * -----------------------------------------------------------------*/
-    // If your ProductRecipe table references materials in different columns:
-    // public function recipesAsMaterial()  { return $this->hasMany(ProductRecipe::class, 'material_id'); }
-    // public function recipesAsIngredient(){ return $this->hasMany(ProductRecipe::class, 'ingredient_id'); }
+
+    // public function recipesAsMaterial()
+    // {
+    //     return $this->hasMany(ProductRecipe::class, 'material_id');
+    // }
+
+    // public function recipesAsIngredient()
+    // {
+    //     return $this->hasMany(ProductRecipe::class, 'ingredient_id');
+    // }
 
     /* -----------------------------------------------------------------
      | HELPERS
      * -----------------------------------------------------------------*/
+
+    /** Shared stock status logic (also used in controller) */
+    public static function computeStockStatus(float $qty, float $min): string
+    {
+        if ($min <= 0) {
+            return 'in_stock';
+        }
+
+        return $qty <= $min ? 'low' : 'in_stock';
+    }
+
+    /** Batch code generator (used in controller store/update) */
+    public static function generateBatchCode(array $data = []): string
+    {
+        $prefix = 'MAT';
+        $date   = now()->format('Ymd');
+        $rand   = strtoupper(str_pad((string) random_int(1, 999), 3, '0', STR_PAD_LEFT));
+
+        return "{$prefix}-{$date}-{$rand}";
+    }
+
     private function cleanText($v): string
     {
         $v = (string) $v;

@@ -14,7 +14,7 @@
     $monthlyRevenue = $monthlyRevenue ?? (end($chartTotals) ?: 0);
     $orderCount     = $orderCount     ?? ($sales->count() ?? 0);
 
-    // Variant-aware donut (last 90 days)
+    // Variant-aware donut (last 90 days) – uses actual sales only, no forecasting.
     $cutoff = \Carbon\Carbon::now()->subDays(90);
     $byVariant = [];
     foreach ($sales as $s) {
@@ -344,7 +344,7 @@
                   $typeLabel = '—';
                 }
 
-                // Batch prices from eager-loaded production
+                // Batch prices from eager-loaded production (used for pack/bag only – no kg forecast).
                 $packPrice = optional($row->production)->unit_price_pack;
                 $bagPrice  = optional($row->production)->unit_price_bag;
                 $hasPack = is_numeric($packPrice);
@@ -660,7 +660,7 @@ document.addEventListener('DOMContentLoaded', function () {
       console.error('Bar chart error:', e);
     }
 
-    // DONUT (Top Products by Type)
+    // DONUT (Top Products by Type – actual revenue, no forecast)
     try {
       const donutEl = document.querySelector('#topProductsDonut');
       const labels = @json($donutLabels);

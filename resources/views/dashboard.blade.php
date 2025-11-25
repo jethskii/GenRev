@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
   <meta name="theme-color" content="#E11D48" />
-  <title>GenRev Admin Dashboard · Neon</title>
+  <title>GenRev Meat Production Dashboard · Neon</title>
 
   <!-- Tailwind CDN (pinned major) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -132,7 +132,7 @@
           <div class="h-10 w-10 rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden flex items-center justify-center">
             <img src="{{ asset('images/GENREV_FINAL.png') }}" alt="GenRev" loading="lazy" decoding="async" class="h-full w-full object-contain" onerror="this.closest('div').innerHTML='<span class=&quot;sr-only&quot;>GenRev</span>';">
           </div>
-          <span class="text-2xl font-bold tracking-wide brand-title">GenRev</span>
+          <span class="text-2xl font-bold tracking-wide brand-title">GenRev Meat Production</span>
         </a>
         <button id="sidebarClose" class="lg:hidden text-xl font-bold" aria-label="Close sidebar" aria-controls="sidebar">&times;</button>
       </div>
@@ -154,7 +154,7 @@
         </div>
       </div>
 
-      <!-- Nav (role-aware) -->
+      <!-- Nav (role aware) -->
       <nav class="flex-1 mt-4 space-y-1 text-sm font-medium" role="navigation" aria-label="Primary navigation">
         @php
           $modules = [];
@@ -172,15 +172,15 @@
             $modules = $fallback[$role] ?? ['dashboard','settings'];
           }
           $menu = [
-            'dashboard'  => ['label'=>'Dashboard',  'route'=>'dashboard',           'active'=>['dashboard*']],
-            'production' => ['label'=>'Production', 'route'=>'production.index',    'active'=>['production.*']],
-            'sales'      => ['label'=>'Sales',      'route'=>'sales',               'active'=>['sales*','sales.*']],
-            'inventory'  => ['label'=>'Inventory',  'route'=>'inventory',           'active'=>['inventory*','inventory.*']],
-            'materials'  => ['label'=>'Materials',  'route'=>'materials',           'active'=>['materials*','materials.*','products.materials.*']],
-            'products'   => ['label'=>'Products',   'route'=>'products.index',      'active'=>['products*','products.*']],
-            'reports'    => ['label'=>'Reports',    'route'=>'reports.index',       'active'=>['reports*','reports.*']],
-            'employee'   => ['label'=>'Employee',   'route'=>'employees.index',     'active'=>['employees*','employees.*']],
-            'settings'   => ['label'=>'Settings',   'route'=>'settings.index',      'active'=>['settings*','settings.*']],
+            'dashboard'  => ['label'=>'Dashboard',  'route'=>'dashboard',           'active'=>['dashboard*'] ],
+            'production' => ['label'=>'Production', 'route'=>'production.index',    'active'=>['production.*'] ],
+            'sales'      => ['label'=>'Sales',      'route'=>'sales',               'active'=>['sales*','sales.*'] ],
+            'inventory'  => ['label'=>'Inventory',  'route'=>'inventory',           'active'=>['inventory*','inventory.*'] ],
+            'materials'  => ['label'=>'Materials',  'route'=>'materials',           'active'=>['materials*','materials.*','products.materials.*'] ],
+            'products'   => ['label'=>'Products',   'route'=>'products.index',      'active'=>['products*','products.*'] ],
+            'reports'    => ['label'=>'Reports',    'route'=>'reports.index',       'active'=>['reports*','reports.*'] ],
+            'employee'   => ['label'=>'Employee',   'route'=>'employees.index',     'active'=>['employees*','employees.*'] ],
+            'settings'   => ['label'=>'Settings',   'route'=>'settings.index',      'active'=>['settings*','settings.*'] ],
           ];
           $isActive = fn(array $patterns) => collect($patterns)->some(fn($p) => request()->routeIs($p));
         @endphp
@@ -201,7 +201,7 @@
         @endforeach
       </nav>
 
-      <div class="p-6 text-xs muted border-t border-[var(--line)]">© {{ now()->year }} GenRev</div>
+      <div class="p-6 text-xs muted border-t border-[var(--line)]">© {{ now()->year }} GenRev Meat Production</div>
     </aside>
 
     <!-- Main -->
@@ -218,7 +218,7 @@
             <input id="toggle3D" type="checkbox" checked class="sr-only" aria-controls="productionChart salesChart expiryChart">
             <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">
               <span class="inline-block align-middle mr-1" id="dot3d"></span>
-              3D ON/OFF
+              3D view
             </span>
           </label>
 
@@ -244,10 +244,10 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" aria-live="polite">
             @php
               $metrics = [
-                ['label' => 'Total Products',        'value' => $totalProducts,                          'note' => 'Based on weekly production', 'icon' => '📦'],
-                ['label' => 'Total Materials (kg)',  'value' => number_format($totalMaterialsWeight, 2), 'note' => 'Weekly materials on hand',   'icon' => '⚖️'],
-                ['label' => 'Total Revenue',         'value' => '₱' . number_format($totalRevenue, 2),   'note' => 'Weekly product sales',      'icon' => '💰'],
-                ['label' => 'Sales Transactions',    'value' => $totalSales,                             'note' => 'Weekly transactions',       'icon' => '📈'],
+                ['label' => 'Finished Products',      'value' => $totalProducts,                          'note' => 'Meat items tracked in packs and bags', 'icon' => '🥩'],
+                ['label' => 'Materials On Hand (kg)', 'value' => number_format($totalMaterialsWeight, 2), 'note' => 'Raw meat and ingredients',             'icon' => '⚖️'],
+                ['label' => 'Total Revenue',          'value' => '₱' . number_format($totalRevenue, 2),   'note' => 'All recorded product sales',          'icon' => '💰'],
+                ['label' => 'Sales Transactions',     'value' => $totalSales,                             'note' => 'Total sales entries logged',          'icon' => '📈'],
               ];
             @endphp
             @foreach ($metrics as $metric)
@@ -269,7 +269,7 @@
             <div class="flex items-center justify-between mb-4">
               <div>
                 <h2 class="text-lg font-semibold mb-1">📈 Sales Report</h2>
-                <p class="text-xs muted">Real time sales analytics</p>
+                <p class="text-xs muted">Meat product sales in finished units (packs and bags)</p>
               </div>
               <select id="salesRange" class="input w-40 py-1" aria-label="Sales range">
                 <option value="today">Today</option>
@@ -283,11 +283,13 @@
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               @php
                 $avgPrice = $totalSales > 0 ? ($totalRevenue / max($totalSales,1)) : 0;
+                $biggest = $biggestSalesDay ?? null;
+                $biggestLabel = $biggest ? $biggest : 'No data yet';
                 $salesStats = [
-                  ['label' => 'Total Revenue', 'value' => '₱' . number_format($totalRevenue, 2), 'icon' => '💰', 'color' => 'text-[var(--brand-red)]'],
-                  ['label' => 'Units Sold',    'value' => number_format($totalSales, 0),         'icon' => '📦', 'color' => 'text-[var(--blue)]'],
-                  ['label' => 'Avg Price/Unit','value' => '₱' . number_format($avgPrice, 2),     'icon' => '📊', 'color' => 'text-[var(--green)]'],
-                  ['label' => 'Biggest Day',   'value' => 'N/A',                                 'icon' => '🔥', 'color' => 'text-[var(--yellow)]'],
+                  ['label' => 'Total Revenue',      'value' => '₱' . number_format($totalRevenue, 2), 'icon' => '💰', 'color' => 'text-[var(--brand-red)]'],
+                  ['label' => 'Sales Count',        'value' => number_format($totalSales, 0),         'icon' => '📦', 'color' => 'text-[var(--blue)]'],
+                  ['label' => 'Average Price Unit', 'value' => '₱' . number_format($avgPrice, 2),     'icon' => '📊', 'color' => 'text-[var(--green)]'],
+                  ['label' => 'Strongest Sales Day','value' => $biggestLabel,                         'icon' => '🔥', 'color' => 'text-[var(--yellow)]'],
                 ];
               @endphp
               @foreach($salesStats as $stat)
@@ -300,7 +302,7 @@
             </div>
 
             <div class="h-36 relative">
-              <p id="salesTrendsDesc" class="sr-only">Glassy neon ridge of revenue over the selected period.</p>
+              <p id="salesTrendsDesc" class="sr-only">Glassy neon ridge of revenue per day for finished meat products sold as packs and bags.</p>
               <canvas id="salesTrendsChart" aria-label="Sales trend chart" aria-describedby="salesTrendsDesc"></canvas>
             </div>
           </div>
@@ -309,36 +311,49 @@
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-4">
               <div>
-                <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Products and Variant</h2>
-                <p class="text-xs muted">Top 5 Product Variant combinations by revenue</p>
+                <h2 class="text-lg font-semibold mb-1">🏆 Most Sold Meat Products and Variants</h2>
+                <p class="text-xs muted">Top five product and variant combinations by revenue in units (packs and bags)</p>
               </div>
               @if(\Illuminate\Support\Facades\Route::has('sales'))
-                <a href="{{ route('sales') }}" class="btn btn-green text-xs">View all</a>
+                <a href="{{ route('sales') }}" class="btn btn-green text-xs">View all sales</a>
               @endif
             </div>
 
             @if(($topProducts ?? collect())->isEmpty())
               <div class="text-center py-8">
                 <div class="text-4xl mb-2" aria-hidden="true">📊</div>
-                <div class="text-sm muted">No sales data available</div>
-                <div class="text-xs muted mt-1">Start recording sales to see top product Variant combinations</div>
+                <div class="text-sm muted">No sales data available yet</div>
+                <div class="text-xs muted mt-1">Start recording finished meat product sales in packs and bags to see best sellers.</div>
               </div>
             @else
               <div class="space-y-3">
                 @foreach($topProducts as $index => $product)
+                  @php
+                    $unitRaw = strtolower((string)($product->unit_type ?? 'pack'));
+                    if (!in_array($unitRaw, ['kg','pack','bag'], true)) {
+                        $unitRaw = 'pack';
+                    }
+                    $unitLabel = $unitRaw === 'bag'
+                        ? 'Bag'
+                        : ($unitRaw === 'kg' ? 'Kg' : 'Pack');
+                    $displayLabel = $product->display_label ?? ($product->product_name ?? 'Product');
+                  @endphp
                   <div class="flex items-center gap-3 p-3 rounded-lg bg-[#fafafa] hover:bg-[#f3f4f6] transition">
                     <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white" style="background:var(--brand-red);" aria-label="Rank {{ $index + 1 }}">{{ $index + 1 }}</div>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center justify-between mb-1">
-                        <div class="font-medium truncate">{{ $product->product_name ?? 'Product' }}</div>
+                        <div class="font-medium truncate">{{ $displayLabel }}</div>
                         <div class="text-sm font-semibold" style="color:var(--brand-red)">₱{{ number_format($product->revenue ?? 0, 2) }}</div>
                       </div>
-                      <div class="mb-1">
-                        <span class="chip">{{ $product->sale_type ?? 'N/A' }}</span>
+                      <div class="mb-1 flex flex-wrap gap-1">
+                        @if(!empty($product->sale_type))
+                          <span class="chip">{{ $product->sale_type }}</span>
+                        @endif
+                        <span class="chip">{{ $unitLabel }}</span>
                       </div>
                       <div class="flex items-center justify-between text-xs muted">
-                        <span>{{ number_format($product->quantity ?? 0, 2) }} sold</span>
-                        <span>{{ number_format($product->revenue_share ?? 0, 1) }}% of week</span>
+                        <span>{{ number_format($product->quantity ?? 0, 2) }} unit(s) sold</span>
+                        <span>{{ number_format($product->revenue_share ?? 0, 1) }}% of week revenue</span>
                       </div>
                       <div class="w-full bg-[var(--line)]/40 rounded-full h-1.5 mt-2" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ min(($product->revenue_share ?? 0), 100) }}">
                         <div class="h-1.5 rounded-full" style="width: {{ min(($product->revenue_share ?? 0), 100) }}%; background:linear-gradient(90deg,var(--brand-red),var(--brand-yellow));"></div>
@@ -354,44 +369,62 @@
           <div class="card p-5 rounded-2xl overflow-auto">
             <div class="flex items-center justify-between">
               <div>
-                <h2 class="text-base font-semibold mb-1">Recent Sales</h2>
-                <p class="text-xs muted mb-3">Latest from <strong>weekly product sales</strong></p>
+                <h2 class="text-base font-semibold mb-1">Recent Meat Sales</h2>
+                <p class="text-xs muted mb-3">Latest finished meat packs and bags sold</p>
               </div>
               @if(\Illuminate\Support\Facades\Route::has('sales'))
-                <a href="{{ route('sales') }}" class="btn btn-blue text-xs">View all</a>
+                <a href="{{ route('sales') }}" class="btn btn-blue text-xs">View all sales</a>
               @endif
             </div>
-
             <table class="text-sm text-left">
               <thead class="uppercase">
                 <tr>
                   <th scope="col" class="py-2 px-3">Product</th>
                   <th scope="col" class="py-2 px-3">Variant</th>
+                  <th scope="col" class="py-2 px-3 text-center">Unit</th>
                   <th scope="col" class="py-2 px-3 text-right">Qty</th>
-                  <th scope="col" class="py-2 px-3 text-right">Price</th>
+                  <th scope="col" class="py-2 px-3 text-right">Price per unit</th>
                   <th scope="col" class="py-2 px-3">Date</th>
                 </tr>
               </thead>
               <tbody>
                 @forelse ($recentSales as $sale)
+                  @php
+                    $utRaw = strtolower((string) ($sale->unit_type ?? 'pack'));
+                    if (!in_array($utRaw, ['kg','pack','bag'], true)) {
+                        $utRaw = 'pack';
+                    }
+                    $unitLabel = $utRaw === 'bag'
+                        ? 'Bag'
+                        : ($utRaw === 'kg' ? 'Kg' : 'Pack');
+                  @endphp
                   <tr class="border-t">
                     <td class="py-2 px-3">{{ $sale->product_name }}</td>
-                    <td class="py-2 px-3"><span class="chip">{{ $sale->sale_type ?? 'N/A' }}</span></td>
-                    <td class="py-2 px-3 text-right">{{ number_format($sale->quantity, 3) }}</td>
-                    <td class="py-2 px-3 text-right">₱{{ number_format($sale->unit_price, 2) }}</td>
-                    <td class="py-2 px-3">{{ \Carbon\Carbon::parse($sale->date)->timezone('Asia/Manila')->format('M d, Y') }}</td>
+                    <td class="py-2 px-3">
+                      <span class="chip">{{ $sale->sale_type ?? 'N/A' }}</span>
+                    </td>
+                    <td class="py-2 px-3 text-center">{{ $unitLabel }}</td>
+                    <td class="py-2 px-3 text-right">
+                      {{ number_format($sale->quantity, 3) }}
+                    </td>
+                    <td class="py-2 px-3 text-right">
+                      ₱{{ number_format($sale->unit_price, 2) }} / {{ strtolower($unitLabel) }}
+                    </td>
+                    <td class="py-2 px-3">
+                      {{ \Carbon\Carbon::parse($sale->date)->timezone('Asia/Manila')->format('M d, Y') }}
+                    </td>
                   </tr>
                 @empty
-                  <tr><td colspan="5" class="py-3 text-center muted">No sales found.</td></tr>
+                  <tr><td colspan="6" class="py-3 text-center muted">No sales found.</td></tr>
                 @endforelse
               </tbody>
             </table>
           </div>
 
-          <!-- Materials Snapshot -->
+          <!-- Materials Snapshot (raw ingredients stay in kg) -->
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
-              <h2 class="text-base font-semibold">Materials Logged (This Week)</h2>
+              <h2 class="text-base font-semibold">Materials Logged This Week</h2>
               <span class="text-xs muted">On hand: {{ number_format($totalMaterialsWeight, 2) }} kg</span>
             </div>
             @php $recentMaterials = $recentMaterials ?? collect(); @endphp
@@ -420,7 +453,7 @@
           </div>
 
           @php
-            // Expiry quick stats (packs or bags)
+            // Expiry quick stats for finished meat units
             $expiryStats      = $expiryStats ?? [];
             $totalExpiring    = $expiryStats['total_expiring'] ?? 0;
             $criticalExpiring = $expiryStats['critical'] ?? 0;
@@ -437,47 +470,47 @@
               <div>
                 <h2 class="text-base font-semibold">Expiration Risk and Actions</h2>
                 <p class="text-[11px] muted">
-                  Shows packs and bags that are closest to expiry and what to prioritize.
+                  Finished meat packs and bags that are closest to expiry and what to move first.
                 </p>
               </div>
               <div class="flex flex-col items-end gap-1 text-[11px]">
                 <div class="flex items-center gap-2">
                   <span class="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-100 text-[10px] font-semibold">
-                    Total at risk
+                    Packs or bags at risk
                   </span>
                   <span class="font-semibold tabular-nums">{{ number_format($totalExpiring, 0) }}</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <span class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(248,113,113,.9)]"></span>
-                  <span class="muted">Critical (0 to 2 days):</span>
+                  <span class="muted">Critical (0 to 2 days)</span>
                   <span class="font-semibold text-red-600 tabular-nums">{{ number_format($criticalExpiring, 0) }}</span>
                 </div>
                 <div class="flex items-center gap-2">
                   <span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,.9)]"></span>
-                  <span class="muted">High (3 to 5 days):</span>
+                  <span class="muted">High (3 to 5 days)</span>
                   <span class="font-semibold text-amber-600 tabular-nums">{{ number_format($highExpiring, 0) }}</span>
                 </div>
               </div>
             </div>
             <div class="h-56 relative">
               <p id="expiryDesc" class="sr-only">
-                3D bar chart of packs and bags expiring this week by day, with color coded urgency.
+                Three dimensional bar chart of finished meat packs and bags that will expire in the next seven days by calendar day.
               </p>
               <canvas id="expiryChart" aria-label="Expiry chart" aria-describedby="expiryDesc"></canvas>
               <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted text-center px-4">
-                No expiries this week. You are safe from spoilage based on current data.
+                No expiries this week. Meat inventory is safe based on current data.
               </div>
             </div>
 
             <p class="text-[11px] muted mt-2">
-              Bars represent expiring packs and bags per day. The higher the bar, the more aggressive you should be with promos, dispatch or slowing new production for that item.
+              Bars represent expiring packs and bags per day. Taller bars signal where promos, priority dispatch or slower production may be needed.
             </p>
 
             <div class="border-t border-[var(--line)] mt-3 pt-3">
               <div class="flex items-center justify-between mb-2">
-                <p class="text-xs font-semibold uppercase muted">Priority to sell or move first</p>
+                <p class="text-xs font-semibold uppercase muted">Batches to move first</p>
                 <p class="text-[11px] muted hidden sm:block">
-                  Auto suggestions based on days left before expiry.
+                  Suggestions based on days left before expiry.
                 </p>
               </div>
 
@@ -538,7 +571,7 @@
                       </div>
                       @if($action)
                         <div class="text-right text-[11px]">
-                          <div class="muted">Suggested move:</div>
+                          <div class="muted">Suggested move</div>
                           <div class="font-semibold">
                             {{ $action }}
                           </div>
@@ -549,25 +582,23 @@
                 </div>
               @else
                 <p class="text-xs muted">
-                  Once expiry risk is detected, this section will list which batches to push first,
-                  how many packs or bags are at risk, and what operational move makes sense
-                  such as promo, priority dispatch, stock rotation or pausing production.
+                  When expiry risk appears, this list will show which meat batches to push first, how many packs or bags are at risk and the suggested operational move.
                 </p>
               @endif
             </div>
           </div>
 
-          <!-- Weekly Production -->
+          <!-- Weekly Production (units) -->
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
-              <h2 class="text-base font-semibold">Weekly Production</h2>
+              <h2 class="text-base font-semibold">Weekly Production in Finished Units</h2>
               <label class="text-xs flex items-center gap-2">
                 <input id="toggleProduction" type="checkbox" checked class="sr-only">
-                <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D</span>
+                <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D view</span>
               </label>
             </div>
             <div class="h-56 relative">
-              <p id="prodDesc" class="sr-only">Bar chart of weekly units produced.</p>
+              <p id="prodDesc" class="sr-only">Bar chart of weekly finished meat units produced, combined view of packs and bags.</p>
               <canvas id="productionChart" aria-label="Production chart" aria-describedby="prodDesc"></canvas>
               <div id="prodEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
@@ -576,31 +607,34 @@
           <!-- Weekly Sales with AI forecast -->
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
-              <h2 class="text-base font-semibold">Weekly Sales</h2>
+              <h2 class="text-base font-semibold">Weekly Sales in Finished Units</h2>
               <div class="flex items-center gap-3">
                 <select id="weeklySalesMode" class="input w-48 py-1 text-xs" aria-label="Weekly sales view mode">
-                  <option value="quantity" selected>Qty + Revenue</option>
-                  <option value="profit">Revenue + Profit</option>
-                  <option value="forecast">Next Week Forecast (AI)</option>
+                  <option value="quantity" selected>Quantity and revenue</option>
+                  <option value="profit">Revenue and profit</option>
+                  <option value="forecast">Next week forecast AI</option>
                 </select>
                 <label class="text-xs flex items-center gap-2">
                   <input id="toggleSales" type="checkbox" checked class="sr-only">
-                  <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D (Qty)</span>
+                  <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D view</span>
                 </label>
               </div>
             </div>
             <div class="h-56 relative">
-              <p id="salesDesc" class="sr-only">Combo chart showing quantity sold, revenue, estimated profit, and AI forecast.</p>
+              <p id="salesDesc" class="sr-only">
+                Combined chart of quantity sold in units for finished meat products, revenue, estimated profit and AI forecast.
+              </p>
               <canvas id="salesChart" aria-label="Sales chart" aria-describedby="salesDesc"></canvas>
               <div id="salesEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
             </div>
-            <p id="weeklySalesInsight" class="text-[11px] muted mt-2">
+            <p id="weeklySalesSummary" class="text-[11px] muted mt-2">
               This week you recorded ₱{{ number_format($weekRevenue ?? 0, 2) }} in revenue.
               Estimated profit is ₱{{ number_format($estimatedWeekProfit ?? 0, 2) }}
               @if(!is_null($estimatedGrossMarginPct ?? null))
                 with about {{ $estimatedGrossMarginPct }}% gross margin.
               @endif
             </p>
+            <p id="weeklySalesInsights" class="text-[11px] muted mt-1"></p>
           </div>
 
           <!-- Predictive Analytics · Production Planning Assistant -->
@@ -611,7 +645,9 @@
             $globalStockoutLabel   = $globalStockoutDateRaw
                 ? \Carbon\Carbon::parse($globalStockoutDateRaw)->timezone('Asia/Manila')->format('M d, Y')
                 : 'No projected stockout';
-            $globalRecommendedProd = $forecastSummary['total_recommended_production'] ?? null;
+
+            $globalRecommendedProdUnits = $forecastSummary['total_recommended_production'] ?? null;
+
             $forecastTopProducts   = $forecastTopProducts ?? collect();
             $productForecast       = $productForecast ?? collect();
 
@@ -622,7 +658,7 @@
             $soonestDaysToStockout = null;
             if ($forecastTopProducts instanceof \Illuminate\Support\Collection) {
                 foreach ($forecastTopProducts as $row) {
-                    $d = $row->days_to_stockout ?? $row['days_to_stockout'] ?? null;
+                    $d = $row['days_to_stockout'] ?? null;
                     if (!is_null($d)) {
                         $d = (int) $d;
                         if (is_null($soonestDaysToStockout) || $d < $soonestDaysToStockout) {
@@ -637,22 +673,30 @@
             <div class="flex items-center justify-between mb-3">
               <div>
                 <h2 class="text-base font-semibold">🔮 Production Planning Assistant</h2>
-                <p class="text-xs muted">What to produce next in the next {{ $forecastHorizonDays }} days</p>
+                <p class="text-xs muted">Suggested production in finished units for the next {{ $forecastHorizonDays }} days</p>
               </div>
-              <div class="text-right text-xs space-y-1">
-                <div class="muted">Global stockout:</div>
-                <div class="font-semibold">{{ $globalStockoutLabel }}</div>
+              <div class="flex flex-col items-end gap-1 text-xs">
+                <button type="button"
+                        class="model-info-trigger text-[11px] underline text-blue-600 hover:text-blue-700"
+                        data-context="Production Planning Model">
+                  Model info
+                </button>
+                <div>
+                  <div class="muted">Global stockout</div>
+                  <div class="font-semibold">{{ $globalStockoutLabel }}</div>
+                </div>
 
-                @if(!is_null($globalRecommendedProd))
+                @if(!is_null($globalRecommendedProdUnits))
                   <div class="text-[10px] muted">
-                    Suggested total production:<br>
-                    <span class="font-semibold">{{ number_format($globalRecommendedProd, 2) }} kg</span>
+                    Suggested total production in units<br>
+                    <span class="font-semibold">{{ number_format($globalRecommendedProdUnits, 0) }} unit(s)</span>
+                    <span class="muted block">(combined packs and bags)</span>
                   </div>
                 @endif
 
                 @if($atRiskCount > 0)
                   <div class="text-[10px] muted">
-                    Items at risk: <span class="font-semibold">{{ $atRiskCount }}</span>
+                    Products to watch: <span class="font-semibold">{{ $atRiskCount }}</span>
                   </div>
                 @endif
 
@@ -670,30 +714,33 @@
 
             <div class="glass-chart-wrap mb-2 relative">
               <p id="forecastDesc" class="sr-only">
-                Bar chart of expected daily orders and remaining stock for the upcoming days.
+                Bar chart of expected daily orders in units for finished meat products and remaining stock if production is not increased.
               </p>
               <canvas id="forecastChart" aria-label="Forecast chart" aria-describedby="forecastDesc"></canvas>
               <div id="forecastEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted text-center px-4">
-                Not enough historical data yet to generate a forecast. Keep recording production and sales to unlock production planning suggestions.
+                Not enough historical data yet to generate a forecast. Keep recording production and sales to unlock planning suggestions.
               </div>
             </div>
 
-            <p class="text-[11px] muted mb-3">
-              Bars show expected daily orders and estimated remaining stock if you do not add new production.
+            <p class="text-[11px] muted mb-1">
+              Bars show expected daily orders and estimated stock in finished units. Use this to slot production runs for meat products.
             </p>
+            <p id="forecastInsights" class="text-[11px] muted mb-3"></p>
 
             <div class="border-t border-[var(--line)] pt-3 mt-1">
               <div class="flex items-center justify-between mb-2">
-                <p class="text-xs font-semibold uppercase muted">What to produce next</p>
+                <p class="text-xs font-semibold uppercase muted">What to produce next in units</p>
               </div>
               @if($forecastTopProducts instanceof \Illuminate\Support\Collection && $forecastTopProducts->isNotEmpty())
                 <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
                   @foreach($forecastTopProducts as $row)
                     @php
-                      $name      = $row->name ?? $row['name'] ?? 'Product';
-                      $daily     = $row->daily_demand ?? $row['daily_demand'] ?? 0;
-                      $daysLeft  = $row->days_to_stockout ?? $row['days_to_stockout'] ?? null;
-                      $rec       = $row->recommended_production ?? $row['recommended_production'] ?? null;
+                      $name       = $row['name'] ?? 'Product';
+                      $dailyUnits = $row['daily_demand'] ?? 0;
+                      $recUnits   = $row['recommended_production'] ?? null;
+                      $daysLeft   = $row['days_to_stockout'] ?? null;
+                      $unitType   = $row['unit_type'] ?? 'pack';
+                      $label      = $row['label'] ?? ($name . ' (' . $unitType . ')');
 
                       $badgeLabel = 'Planned';
                       $badgeClass = 'text-green-700 bg-emerald-50 border border-emerald-100';
@@ -716,13 +763,13 @@
                     <div class="flex items-center justify-between text-xs gap-3">
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 mb-0.5">
-                          <div class="font-medium truncate">{{ $name }}</div>
+                          <div class="font-medium truncate">{{ $label }}</div>
                           <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $badgeClass }}">
                             {{ $badgeLabel }}
                           </span>
                         </div>
                         <div class="muted text-[11px]">
-                          Daily demand about {{ number_format($daily, 2) }} kg
+                          AI daily demand about {{ number_format($dailyUnits, 0) }} unit(s) in {{ $unitType }} form
                         </div>
                       </div>
                       <div class="text-right ml-3">
@@ -731,10 +778,10 @@
                             {{ $daysLeft <= 0 ? 'No days left' : $daysLeft . ' days left' }}
                           </div>
                         @endif
-                        @if(!is_null($rec) && $rec > 0)
+                        @if(!is_null($recUnits) && $recUnits > 0)
                           <div class="text-[11px] muted">
                             Produce
-                            <span class="font-semibold">{{ number_format($rec, 1) }} kg</span>
+                            <span class="font-semibold">{{ number_format($recUnits, 0) }} unit(s)</span>
                             in the next
                             <span class="font-semibold">{{ $targetWindow }}</span>
                             {{ $targetWindow === 1 ? 'day' : 'days' }}
@@ -746,25 +793,29 @@
                 </div>
               @else
                 <p class="text-xs muted">
-                  Once enough sales history exists, this section will list which products you should produce next,
-                  how much, and how urgent they are.
+                  As soon as the system has enough history, it will suggest which finished meat items to produce next, how many units and how urgent they are.
                 </p>
               @endif
             </div>
           </div>
 
-          <!-- NEW: Top 5 Products to Produce This Week (AI) -->
+          <!-- Top 5 Products to Produce This Week (AI) -->
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-3">
               <div>
-                <h2 class="text-base font-semibold">🚀 Top 5 Products to Produce This Week (AI)</h2>
+                <h2 class="text-base font-semibold">🚀 Top Five Products To Produce This Week</h2>
                 <p class="text-xs muted">
-                  Based on recent demand, inventory, and a {{ $productForecast->isNotEmpty() ? '7-day' : 'short' }} forecast horizon.
+                  Based on recent demand, inventory and a short horizon forecast in finished units for packs and bags.
                 </p>
               </div>
               <div class="text-right text-xs muted hidden sm:block">
-                <p>Uses AI-smoothed daily demand</p>
-                <p>to estimate how much to produce.</p>
+                <p>Uses smoothed daily demand</p>
+                <p>to estimate production in units.</p>
+                <button type="button"
+                        class="model-info-trigger mt-1 text-[11px] underline text-blue-600 hover:text-blue-700"
+                        data-context="AI Top Five Recommendation Model">
+                  Model info
+                </button>
               </div>
             </div>
 
@@ -775,12 +826,12 @@
               <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
                 @foreach($topToProduce as $row)
                   @php
-                    $pName       = $row['product_name'] ?? 'Product';
-                    $avgDemand   = $row['avg_daily_demand'] ?? 0;
-                    $forecastTot = $row['forecast_total'] ?? 0;
-                    $stock       = $row['current_inventory'] ?? 0;
-                    $daysLeft    = $row['days_to_stockout'] ?? null;
-                    $suggested   = $row['suggested_production'] ?? 0;
+                    $pName              = $row['product_name'] ?? 'Product';
+                    $avgDemandUnits     = $row['avg_daily_demand'] ?? 0;
+                    $forecastTotalUnits = $row['forecast_total'] ?? 0;
+                    $stockUnits         = $row['current_inventory'] ?? 0;
+                    $suggestedUnits     = $row['suggested_production'] ?? 0;
+                    $daysLeft           = $row['days_to_stockout'] ?? null;
 
                     $badgeLabel = 'Planned';
                     $badgeClass = 'text-emerald-700 bg-emerald-50 border border-emerald-100';
@@ -808,11 +859,14 @@
                         </span>
                       </div>
                       <div class="muted text-[11px]">
-                        AI daily demand: <span class="font-semibold">{{ number_format($avgDemand, 2) }} kg</span>
-                        • Week demand: <span class="font-semibold">{{ number_format($forecastTot, 1) }} kg</span>
+                        AI daily demand
+                        <span class="font-semibold">{{ number_format($avgDemandUnits, 0) }} unit(s)</span>
+                        • Week demand
+                        <span class="font-semibold">{{ number_format($forecastTotalUnits, 0) }} unit(s)</span>
                       </div>
                       <div class="muted text-[11px]">
-                        Current inventory: <span class="font-semibold">{{ number_format($stock, 1) }} kg</span>
+                        Current inventory
+                        <span class="font-semibold">{{ number_format($stockUnits, 0) }} unit(s)</span>
                         @if(!is_null($daysLeft))
                           •
                           @if($daysLeft <= 0)
@@ -827,10 +881,10 @@
                     </div>
                     <div class="text-right">
                       <div class="text-[11px] muted">
-                        Suggested this week:
+                        Suggested this week
                       </div>
                       <div class="font-semibold text-[13px]">
-                        {{ number_format($suggested, 1) }} kg
+                        {{ number_format($suggestedUnits, 0) }} unit(s)
                       </div>
                     </div>
                   </div>
@@ -838,8 +892,7 @@
               </div>
             @else
               <p class="text-xs muted">
-                Once enough sales and production history exist, this panel will highlight the top 5 products
-                you should prioritize this week with suggested production quantities in kg.
+                Once the plant has enough sales and production history, this panel will highlight the top five finished meat products to prioritize with suggested production in units.
               </p>
             @endif
           </div>
@@ -849,16 +902,16 @@
     </div>
   </div>
 
-  <!-- Materials Used (full-width) -->
+  <!-- Materials Used (full width, raw ingredients in kg) -->
   <div class="mx-8 my-6 card p-5 rounded-2xl">
     <div class="flex items-center justify-between mb-2">
       <div>
-        <h2 class="text-base font-semibold">Materials Used (This Week)</h2>
-        <p class="text-xs muted">Based on production times recipe</p>
+        <h2 class="text-base font-semibold">Materials Used This Week</h2>
+        <p class="text-xs muted">Raw meat and ingredients based on production recipes</p>
       </div>
       <div class="text-right text-xs muted">
-        <div>Total Qty: {{ number_format($materialsUsageTotals['qty'] ?? 0, 3) }}</div>
-        <div>Total Cost: ₱{{ number_format($materialsUsageTotals['cost'] ?? 0, 2) }}</div>
+        <div>Total quantity: {{ number_format($materialsUsageTotals['qty'] ?? 0, 3) }}</div>
+        <div>Total cost: ₱{{ number_format($materialsUsageTotals['cost'] ?? 0, 2) }}</div>
       </div>
     </div>
 
@@ -889,12 +942,39 @@
     @endif
   </div>
 
+  <!-- Model Info Modal (shared for planning and top five AI) -->
+  <div id="modelInfoModal"
+       class="fixed inset-0 bg-black/40 z-40 hidden items-center justify-center"
+       data-modal-overlay="true">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 p-5 relative">
+      <div class="flex items-center justify-between mb-2">
+        <h3 id="modelInfoTitle" class="text-sm font-semibold">Model information</h3>
+        <button type="button"
+                class="text-xs px-2 py-1 rounded-full border border-gray-200 hover:bg-gray-100"
+                data-close-model="true">
+          ✕
+        </button>
+      </div>
+      <p class="text-xs muted mb-2">
+        These details describe how the AI forecast behind this panel was configured.
+      </p>
+      <ul class="text-xs muted space-y-1">
+        <li>Model used: <span class="font-semibold">[to fill]</span></li>
+        <li>Training range: <span class="font-semibold">[to fill]</span></li>
+        <li>Error metric MAPE: <span class="font-semibold">[to fill]%</span></li>
+      </ul>
+      <p class="text-[11px] muted mt-3">
+        For capstone defense, be ready to explain how this model was selected, how it was validated and how often it will be retrained on fresh production and sales data.
+      </p>
+    </div>
+  </div>
+
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 
-  <!-- Simple Bar “3D” faces plugin -->
+  <!-- Simple Bar 3D faces plugin -->
   <script>
-/* ---------- 3D faces plugin (safe) ---------- */
+/* 3D faces plugin */
 const Bar3DPlugin = {
   id: 'bar3d',
   afterDatasetDraw(chart, args, opts) {
@@ -951,7 +1031,7 @@ const Bar3DPlugin = {
         poly(side, sideFill, sideStroke);
       });
     } catch(e) {
-      // fail silently to avoid breaking the chart
+      // silent fail to protect charts
     }
   }
 };
@@ -965,40 +1045,59 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   Chart.register(Bar3DPlugin);
 
-  // 2) Data from server (fallback to zeros so axes always show)
   const labels = @json($labels ?? []) || ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const expiryLabelsRaw = @json($expiryLabels ?? []);
+  const expiryLabels = Array.isArray(expiryLabelsRaw) && expiryLabelsRaw.length ? expiryLabelsRaw : labels;
+
+  // Weekly production and sales quantities are finished units
   const prod   = (@json($weeklyProductionSeries ?? []) || []).map(v=>Number(v)||0);
   const qty    = (@json($weeklySalesQtySeries ?? []) || []).map(v=>Number(v)||0);
+
   const rev    = (@json($weeklySalesRevenueSeries ?? []) || []).map(v=>Number(v)||0);
   const profit = (@json($weeklySalesProfitSeries ?? []) || []).map(v=>Number(v)||0);
 
-  // AI forecast series for weekly sales (next week, aligned by weekday)
+  // AI forecast for weekly sales
   const qtyForecast    = (@json($weeklySalesForecastQtySeries ?? []) || []).map(v=>Number(v)||0);
   const revForecast    = (@json($weeklySalesForecastRevenueSeries ?? []) || []).map(v=>Number(v)||0);
   const profitForecast = (@json($weeklySalesForecastProfitSeries ?? []) || []).map(v=>Number(v)||0);
 
+  // Expiry data already represents packs and bags at risk (per day)
   const exp    = (@json($weeklyExpirySeries ?? []) || []).map(v=>Number(v)||0);
 
-  // weekly summaries for insights
   const weekRevenueJS         = Number(@json($weekRevenue ?? 0));
   const estimatedWeekProfitJS = Number(@json($estimatedWeekProfit ?? 0));
   const estimatedMarginJS     = Number(@json($estimatedGrossMarginPct ?? 0));
-  const forecastTopProductsJS = @json($forecastTopProducts ?? []);
 
-  // Forecast data (next N days) for production planning
-  const forecastLabelsRaw   = @json($forecastLabels ?? []);
-  const forecastDemandRaw   = @json($forecastDemandSeries ?? []);
-  const forecastInventoryRaw= @json($forecastInventorySeries ?? []);
-  const forecastLabels      = Array.isArray(forecastLabelsRaw) ? forecastLabelsRaw : [];
-  const forecastDemand      = (forecastDemandRaw || []).map(v => Number(v) || 0);
-  const forecastInventory   = (forecastInventoryRaw || []).map(v => Number(v) || 0);
+  // Forecast data for production planning in units
+  const forecastLabelsRaw    = @json($forecastLabels ?? []);
+  const forecastDemandRaw    = @json($forecastDemandSeries ?? []);
+  const forecastInventoryRaw = @json($forecastInventorySeries ?? []);
+  const forecastLabels       = Array.isArray(forecastLabelsRaw) ? forecastLabelsRaw : [];
+  const forecastDemand       = (forecastDemandRaw || []).map(v => Number(v) || 0);
+  const forecastInventory    = (forecastInventoryRaw || []).map(v => Number(v) || 0);
 
-  // 3) Colors
   const C_RED='rgba(239,68,68,1)',     C_RED_30='rgba(239,68,68,.3)';
   const C_GREEN='rgba(16,185,129,1)',  C_GREEN_30='rgba(16,185,129,.3)';
   const C_BLUE='rgba(37,99,235,1)',    C_BLUE_30='rgba(37,99,235,1,.3)';
   const C_YELLOW='rgba(245,158,11,1)', C_YELLOW_30='rgba(245,158,11,.3)';
   const gridColor='rgba(107,114,128,.25)', tickColor='#0f172a', barRadius=6;
+
+  // THEME-BASED COLOR PALETTE FOR COLORFUL BARS
+  const THEME_BAR_COLORS = [
+    'rgba(177,18,26,1)',   // brand red
+    'rgba(37,99,235,1)',   // blue
+    'rgba(16,185,129,1)',  // green
+    'rgba(245,158,11,1)',  // amber
+    'rgba(236,72,153,1)',  // pink
+    'rgba(139,92,246,1)',  // violet
+    'rgba(103,232,249,1)', // cyan
+    'rgba(251,191,36,1)',  // neon amber
+  ];
+  const barFillByIndex = (dataIndex) => {
+    const idx = typeof dataIndex === 'number' ? dataIndex : 0;
+    const safe = ((idx % THEME_BAR_COLORS.length) + THEME_BAR_COLORS.length) % THEME_BAR_COLORS.length;
+    return THEME_BAR_COLORS[safe];
+  };
 
   const prefersReduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   const toggle3D = document.getElementById('toggle3D');
@@ -1009,34 +1108,52 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!el) return;
     const empty = !arr.length || arr.every(v => Number(v) === 0);
     el.classList.toggle('hidden', !empty);
-    el.classList.add('flex');
+    el.classList.toggle('flex', empty);
   };
 
   const sumArray = (arr = []) => arr.reduce((a,b)=>a+(Number(b)||0),0);
 
-  // 4) Create charts
+  const maxIndex = (arr = []) => {
+    if (!arr.length) return -1;
+    let m = -Infinity, idx = -1;
+    arr.forEach((v,i) => {
+      const val = Number(v) || 0;
+      if (val > m) { m = val; idx = i; }
+    });
+    return idx;
+  };
+
   const mk = (id, config) => {
     const c = document.getElementById(id);
     return c ? new Chart(c.getContext('2d'), config) : null;
   };
 
-  // Production chart (3D bar)
+  // Production chart (theme-colored bars)
   setEmptyBanner(prod, 'prodEmpty');
   const productionChart = mk('productionChart', {
     type: 'bar',
     data: { labels, datasets: [{
-      label: 'Units Produced', data: prod,
-      backgroundColor: C_GREEN_30, borderColor: C_GREEN, borderWidth: 2, borderRadius: barRadius,
-      topFaceColor:'rgba(16,185,129,.45)', sideFaceColor:'rgba(16,185,129,.25)'
+      label: 'Units produced (packs and bags)', data: prod,
+      backgroundColor: (ctx) => barFillByIndex(ctx.dataIndex),
+      borderColor: 'rgba(15,23,42,1)',
+      borderWidth: 1.5,
+      borderRadius: barRadius
     }]},
     options: {
       responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color: tickColor } }, title:{ display:true, text:'Weekly Production', color:'#0f172a' }, bar3d:{ enabled:true, depth:10, lift:-6 } },
-      scales:{ x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } }, y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } } }
+      plugins:{
+        legend:{ labels:{ color: tickColor } },
+        title:{ display:true, text:'Weekly production in finished units', color:'#0f172a' },
+        bar3d:{ enabled:true, depth:10, lift:-6 }
+      },
+      scales:{
+        x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
+        y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor }, title:{ display:true, text:'Units', color:tickColor } }
+      }
     }
   });
 
-  // Weekly sales chart with AI forecast datasets (more animated + creative)
+  // Weekly sales chart (theme-colored quantity bars + forecast bars)
   setEmptyBanner([...qty, ...rev], 'salesEmpty');
   const salesChart = mk('salesChart', {
     data: {
@@ -1045,24 +1162,13 @@ document.addEventListener('DOMContentLoaded', () => {
         {
           key:'qtyActual',
           type:'bar',
-          label:'Qty Sold',
+          label:'Quantity sold in units',
           data: qty,
           yAxisID:'y',
-          backgroundColor:(ctx) => {
-            const chart = ctx.chart;
-            const {ctx: c, chartArea} = chart;
-            if (!chartArea) return C_BLUE_30;
-            const g = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-            g.addColorStop(0, 'rgba(37,99,235,.12)');
-            g.addColorStop(0.5, 'rgba(59,130,246,.45)');
-            g.addColorStop(1, 'rgba(191,219,254,.95)');
-            return g;
-          },
-          borderColor:C_BLUE,
-          borderWidth:2,
-          borderRadius:barRadius,
-          topFaceColor:'rgba(37,99,235,.55)',
-          sideFaceColor:'rgba(30,64,175,.35)'
+          backgroundColor:(ctx) => barFillByIndex(ctx.dataIndex),
+          borderColor:'rgba(15,23,42,1)',
+          borderWidth:1.5,
+          borderRadius:barRadius
         },
         {
           key:'revActual',
@@ -1091,7 +1197,7 @@ document.addEventListener('DOMContentLoaded', () => {
         {
           key:'profitActual',
           type:'line',
-          label:'Estimated Profit',
+          label:'Estimated profit',
           data: profit,
           yAxisID:'y1',
           borderColor:'rgba(16,185,129,.9)',
@@ -1106,22 +1212,20 @@ document.addEventListener('DOMContentLoaded', () => {
         {
           key:'qtyForecast',
           type:'bar',
-          label:'Predicted Qty (AI)',
+          label:'Predicted quantity in units AI',
           data: qtyForecast,
           yAxisID:'y',
-          backgroundColor:'rgba(37,99,235,.15)',
-          borderColor:'rgba(37,99,235,.6)',
-          borderWidth:2,
+          backgroundColor:(ctx) => barFillByIndex(ctx.dataIndex),
+          borderColor:'rgba(15,23,42,1)',
+          borderWidth:1.5,
           borderRadius:barRadius,
-          topFaceColor:'rgba(59,130,246,.35)',
-          sideFaceColor:'rgba(30,64,175,.25)',
           borderDash:[4,3],
           hidden:true
         },
         {
           key:'revForecast',
           type:'line',
-          label:'Predicted Revenue (AI)',
+          label:'Predicted revenue AI',
           data: revForecast,
           yAxisID:'y1',
           borderColor:'rgba(239,68,68,.6)',
@@ -1137,7 +1241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         {
           key:'profitForecast',
           type:'line',
-          label:'Predicted Profit (AI)',
+          label:'Predicted profit AI',
           data: profitForecast,
           yAxisID:'y1',
           borderColor:'rgba(16,185,129,.5)',
@@ -1157,7 +1261,7 @@ document.addEventListener('DOMContentLoaded', () => {
       maintainAspectRatio:false,
       plugins:{
         legend:{ labels:{ color: tickColor } },
-        title:{ display:true, text:'Weekly Sales', color:'#0f172a' },
+        title:{ display:true, text:'Weekly sales in units and revenue', color:'#0f172a' },
         tooltip:{
           backgroundColor:'rgba(15,23,42,.96)',
           borderColor:'rgba(148,163,184,.7)',
@@ -1168,18 +1272,20 @@ document.addEventListener('DOMContentLoaded', () => {
             label:(ctx)=>{
               const label  = ctx.dataset.label || '';
               const val    = Number(ctx.parsed.y);
+              const valueFormatted = val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 });
+
               if (label.toLowerCase().includes('revenue')) {
                 const tag = label.toLowerCase().includes('predicted') ? 'Predicted revenue' : 'Revenue';
-                return `${tag}: ₱${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+                return `${tag}: ₱${valueFormatted}`;
               }
               if (label.toLowerCase().includes('profit')) {
                 const tag = label.toLowerCase().includes('predicted') ? 'Predicted profit' : 'Estimated profit';
-                return `${tag}: ₱${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+                return `${tag}: ₱${valueFormatted}`;
               }
-              if (label.toLowerCase().includes('predicted qty')) {
-                return `Predicted qty: ${val.toLocaleString()}`;
+              if (label.toLowerCase().includes('predicted quantity')) {
+                return `Predicted quantity: ${val.toLocaleString()} unit(s)`;
               }
-              return `Qty: ${val.toLocaleString()}`;
+              return `Quantity: ${val.toLocaleString()} unit(s)`;
             }
           }
         },
@@ -1223,13 +1329,13 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       scales:{
         x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
-        y:{ position:'left', beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } },
-        y1:{ position:'right', beginAtZero:true, ticks:{ color: tickColor }, grid:{ drawOnChartArea:false } }
+        y:{ position:'left', beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor }, title:{ display:true, text:'Units', color:tickColor } },
+        y1:{ position:'right', beginAtZero:true, ticks:{ color: tickColor }, grid:{ drawOnChartArea:false }, title:{ display:true, text:'₱', color:tickColor } }
       }
     }
   });
 
-  // Sparkline (simple animated line)
+  // Sparkline for revenue
   const spark = mk('salesTrendsChart', {
     type:'line',
     data:{ labels, datasets:[{
@@ -1250,28 +1356,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Expiry chart (3D bar, neon gradient, bouncy)
+  // Expiry chart (theme-colored bars)
   setEmptyBanner(exp, 'expEmpty');
   const expiryChart = mk('expiryChart', {
     type:'bar',
-    data:{ labels, datasets:[{
-      label:'Packs or bags expiring', data: exp,
-      backgroundColor:(ctx) => {
-        const chart = ctx.chart;
-        const {ctx: c, chartArea} = chart;
-        if (!chartArea) return C_YELLOW_30;
-        const g = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-        g.addColorStop(0, 'rgba(250,204,21,.12)');
-        g.addColorStop(0.5,'rgba(245,158,11,.5)');
-        g.addColorStop(1, 'rgba(255,251,235,.95)');
-        return g;
-      },
-      borderColor:C_YELLOW,
-      borderWidth:2,
-      borderRadius: barRadius,
-      topFaceColor:'rgba(245,158,11,.55)',
-      sideFaceColor:'rgba(202,138,4,.35)'
-    }]},
+    data:{
+      labels: expiryLabels,
+      datasets:[{
+        label:'Packs or bags expiring',
+        data: exp,
+        backgroundColor:(ctx) => barFillByIndex(ctx.dataIndex),
+        borderColor:'rgba(15,23,42,1)',
+        borderWidth:1.5,
+        borderRadius: barRadius
+      }]
+    },
     options:{
       responsive:true,
       maintainAspectRatio:false,
@@ -1314,7 +1413,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Predictive Analytics chart as glassy neon 3D bar graph
+  // Production planning chart (keeps dual-color theme by metric)
   setEmptyBanner([...forecastDemand, ...forecastInventory], 'forecastEmpty');
 
   const forecastChart = mk('forecastChart', {
@@ -1324,7 +1423,7 @@ document.addEventListener('DOMContentLoaded', () => {
       datasets: [
         {
           type: 'bar',
-          label: 'Expected Daily Orders',
+          label: 'Expected daily orders (units)',
           data: forecastDemand,
           yAxisID: 'y',
           borderColor: 'rgba(239,68,68,1)',
@@ -1346,7 +1445,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         {
           type: 'bar',
-          label: 'Estimated Remaining Stock',
+          label: 'Estimated remaining stock (units)',
           data: forecastInventory,
           yAxisID: 'y',
           borderColor: 'rgba(34,197,94,1)',
@@ -1384,7 +1483,7 @@ document.addEventListener('DOMContentLoaded', () => {
             label: (ctx) => {
               const val = Number(ctx.parsed.y);
               const ds  = ctx.dataset.label || '';
-              return `${ds}: ${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })} kg`;
+              return `${ds}: ${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })} unit(s)`;
             }
           }
         },
@@ -1408,15 +1507,20 @@ document.addEventListener('DOMContentLoaded', () => {
       },
       scales: {
         x: { ticks: { color: tickColor }, grid: { color: 'rgba(148,163,184,.12)', drawBorder: false } },
-        y: { beginAtZero: true, ticks: { color: tickColor }, grid: { color: 'rgba(148,163,184,.22)', drawBorder: false } }
+        y: {
+          beginAtZero: true,
+          ticks: { color: tickColor },
+          grid: { color: 'rgba(148,163,184,.22)', drawBorder: false },
+          title:{ display:true, text:'Units', color:tickColor }
+        }
       }
     }
   });
 
-  // 5) Master 3D toggles
+  // 3D controls
   const toggleProduction = document.getElementById('toggleProduction');
   const toggleSales = document.getElementById('toggleSales');
-  const toggleExpiry = document.getElementById('toggleExpiry');
+  const toggleExpiry = null;
   const depthRange = document.getElementById('depthRange');
   const liftRange = document.getElementById('liftRange');
   const depthVal = document.getElementById('depthVal');
@@ -1441,11 +1545,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const lift  = Number(liftRange?.value ?? -6);
     if (depthVal) depthVal.textContent = depth;
     if (liftVal)  liftVal.textContent  = lift;
-    if (dot3d) dot3d.style.background = (toggle3D?.checked ? 'var(--green)' : 'var(--red)');
+    if (dot3d) dot3d.style.background = (toggle3D?.checked ? 'var(--green)' : 'var(--brand-red)');
 
     set3D(productionChart, toggleProduction ? toggleProduction.checked : true, depth, lift);
     set3D(salesChart,      toggleSales ? toggleSales.checked : true,      depth, lift);
-    set3D(expiryChart,     toggleExpiry ? toggleExpiry.checked : true,   depth, lift);
+    set3D(expiryChart,     toggleExpiry ? toggleExpiry.checked : true,    depth, lift);
     set3D(forecastChart,   true,                                          depth, lift);
   };
 
@@ -1454,101 +1558,235 @@ document.addEventListener('DOMContentLoaded', () => {
 
   apply3D();
 
-  // Weekly Sales mode logic
-  const weeklySalesMode    = document.getElementById('weeklySalesMode');
-  const weeklySalesInsight = document.getElementById('weeklySalesInsight');
+  // Weekly sales mode and insights
+  const weeklySalesMode     = document.getElementById('weeklySalesMode');
+  const weeklySalesInsights = document.getElementById('weeklySalesInsights');
 
   function findDs(key) {
     if (!salesChart) return null;
     return salesChart.data.datasets.find(d => d.key === key) || null;
   }
 
-  function updateWeeklySalesMode() {
-    if (!salesChart || !weeklySalesMode) return;
-    const mode         = weeklySalesMode.value;
-    const dsQty        = findDs('qtyActual');
-    const dsRev        = findDs('revActual');
-    const dsProfit     = findDs('profitActual');
-    const dsQtyF       = findDs('qtyForecast');
-    const dsRevF       = findDs('revForecast');
-    const dsProfitF    = findDs('profitForecast');
+  function buildWeeklySalesInsights(mode) {
+    if (!weeklySalesInsights) return;
+    const insights = [];
+
+    const totalQty      = sumArray(qty);
+    const totalRevenue  = weekRevenueJS || sumArray(rev);
+    const totalProfit   = estimatedWeekProfitJS || sumArray(profit);
+    const margin        = isFinite(estimatedMarginJS) && estimatedMarginJS > 0 ? estimatedMarginJS : null;
+
+    const bestIdx       = maxIndex(qty);
+    const bestDayLabel  = bestIdx >= 0 && labels[bestIdx] !== undefined ? labels[bestIdx] : null;
+    const bestDayQty    = bestIdx >= 0 ? qty[bestIdx] : 0;
 
     if (mode === 'quantity') {
-      if (dsQty)     dsQty.hidden     = false;
-      if (dsRev)     dsRev.hidden     = false;
-      if (dsProfit)  dsProfit.hidden  = true;
-      if (dsQtyF)    dsQtyF.hidden    = true;
-      if (dsRevF)    dsRevF.hidden    = true;
-      if (dsProfitF) dsProfitF.hidden = true;
-
-      salesChart.options.plugins.title.text = 'Weekly Sales: Quantity and Revenue';
-
-      if (weeklySalesInsight) {
-        weeklySalesInsight.textContent =
-          `This week you recorded ₱${weekRevenueJS.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})} in revenue. ` +
-          `Estimated profit is ₱${estimatedWeekProfitJS.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})}` +
-          (estimatedMarginJS ? ` with about ${estimatedMarginJS}% gross margin.` : '.');
+      if (totalQty > 0) {
+        insights.push(
+          `You sold about ${Math.round(totalQty).toLocaleString()} finished unit(s) in packs and bags this week.`
+        );
+      }
+      if (bestDayLabel && bestDayQty > 0) {
+        insights.push(
+          `${bestDayLabel} was the strongest day with about ${Math.round(bestDayQty).toLocaleString()} unit(s) sold.`
+        );
+      }
+      if (totalRevenue > 0) {
+        insights.push(
+          `Total recorded revenue for the week is around ₱${totalRevenue.toLocaleString(undefined,{maximumFractionDigits:2})}.`
+        );
       }
     } else if (mode === 'profit') {
-      if (dsQty)     dsQty.hidden     = true;
-      if (dsRev)     dsRev.hidden     = false;
-      if (dsProfit)  dsProfit.hidden  = false;
-      if (dsQtyF)    dsQtyF.hidden    = true;
-      if (dsRevF)    dsRevF.hidden    = true;
-      if (dsProfitF) dsProfitF.hidden = true;
-
-      salesChart.options.plugins.title.text = 'Weekly Sales: Revenue and Estimated Profit';
-
-      if (weeklySalesInsight) {
-        weeklySalesInsight.textContent =
-          'Each point shows how much of your revenue is likely turning into profit this week based on materials cost. Use spikes to time promos and production pushes.';
+      if (totalRevenue > 0) {
+        insights.push(
+          `This week generated about ₱${totalRevenue.toLocaleString(undefined,{maximumFractionDigits:2})} in revenue.`
+        );
+      }
+      if (totalProfit > 0) {
+        insights.push(
+          `Estimated profit is around ₱${totalProfit.toLocaleString(undefined,{maximumFractionDigits:2})}.`
+        );
+      }
+      if (margin !== null) {
+        insights.push(
+          `Gross margin is approximately ${margin.toFixed(1)}%.`
+        );
+      } else {
+        insights.push(
+          `As cost data improves, the gross margin estimate will become more accurate.`
+        );
       }
     } else if (mode === 'forecast') {
-      const hasForecast =
-        (qtyForecast && qtyForecast.some(v => v > 0)) ||
-        (revForecast && revForecast.some(v => v > 0)) ||
-        (profitForecast && profitForecast.some(v => v > 0));
+      const totalForecastQty   = sumArray(qtyForecast);
+      const totalForecastRev   = sumArray(revForecast);
+      const hasForecastData    = totalForecastQty > 0 || totalForecastRev > 0;
 
-      if (dsQty)     dsQty.hidden     = false; // keep as context
-      if (dsRev)     dsRev.hidden     = false;
-      if (dsProfit)  dsProfit.hidden  = true;
-      if (dsQtyF)    dsQtyF.hidden    = !hasForecast;
-      if (dsRevF)    dsRevF.hidden    = !hasForecast;
-      if (dsProfitF) dsProfitF.hidden = !hasForecast;
-
-      salesChart.options.plugins.title.text = 'Weekly Sales: Next Week Forecast (AI)';
-
-      if (weeklySalesInsight) {
-        if (hasForecast) {
-          const totalQtyF     = sumArray(qtyForecast);
-          const totalRevenueF = sumArray(revForecast);
-          const totalProfitF  = sumArray(profitForecast);
-
-          let text = `AI forecast suggests around ${totalQtyF.toLocaleString()} unit(s) next week `;
-          text    += `with about ₱${totalRevenueF.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})} in revenue`;
-
-          if (totalProfitF > 0) {
-            text += ` and roughly ₱${totalProfitF.toLocaleString(undefined,{minimumFractionDigits:2, maximumFractionDigits:2})} in profit.`;
-          } else {
-            text += '.';
-          }
-
-          text += ' Use this as a guide for stock, staffing, and promos.';
-          weeklySalesInsight.textContent = text;
-        } else {
-          weeklySalesInsight.textContent =
-            'Once enough history is available, this view will show AI predicted quantity, revenue, and profit for next week on top of your current week performance.';
+      if (!hasForecastData) {
+        insights.push(
+          'Not enough historical data yet to show a forecast. Keep recording production and sales to unlock next week predictions.'
+        );
+      } else {
+        insights.push(
+          `Next week the AI expects about ${Math.round(totalForecastQty).toLocaleString()} finished unit(s) to be sold in packs and bags.`
+        );
+        if (totalForecastRev > 0) {
+          insights.push(
+            `Forecast revenue for the same period is around ₱${totalForecastRev.toLocaleString(undefined,{maximumFractionDigits:2})}.`
+          );
+        }
+        if (bestDayLabel && bestDayQty > 0) {
+          insights.push(
+            `Use this to schedule staffing and production around the busier days like ${bestDayLabel}.`
+          );
         }
       }
     }
 
+    if (!insights.length) {
+      insights.push(
+        'When more data is recorded, this section will summarize which days are strongest and how current results compare to the forecast.'
+      );
+    }
+
+    weeklySalesInsights.textContent = insights.join(' ');
+  }
+
+  function updateWeeklySalesMode() {
+    if (!salesChart) return;
+    const mode = weeklySalesMode?.value || 'quantity';
+
+    const dsQty       = findDs('qtyActual');
+    const dsRev       = findDs('revActual');
+    const dsProfit    = findDs('profitActual');
+    const dsQtyF      = findDs('qtyForecast');
+    const dsRevF      = findDs('revForecast');
+    const dsProfitF   = findDs('profitForecast');
+
+    const setHidden = (ds, hidden) => { if (ds) ds.hidden = hidden; };
+
+    const hasForecast = sumArray(qtyForecast) > 0 || sumArray(revForecast) > 0 || sumArray(profitForecast) > 0;
+
+    if (mode === 'quantity') {
+      setHidden(dsQty, false);
+      setHidden(dsRev, false);
+      setHidden(dsProfit, true);
+      setHidden(dsQtyF, true);
+      setHidden(dsRevF, true);
+      setHidden(dsProfitF, true);
+      salesChart.options.plugins.title.text = 'Weekly sales in units and revenue';
+    } else if (mode === 'profit') {
+      setHidden(dsQty, true);
+      setHidden(dsRev, false);
+      setHidden(dsProfit, false);
+      setHidden(dsQtyF, true);
+      setHidden(dsRevF, true);
+      setHidden(dsProfitF, true);
+      salesChart.options.plugins.title.text = 'Weekly revenue and profit';
+    } else if (mode === 'forecast') {
+      // Focus on forecast but keep actual revenue as reference
+      setHidden(dsQty, true);
+      setHidden(dsRev, false);
+      setHidden(dsProfit, true);
+
+      setHidden(dsQtyF, !hasForecast);
+      setHidden(dsRevF, !hasForecast);
+      setHidden(dsProfitF, !hasForecast);
+
+      salesChart.options.plugins.title.text = 'Weekly sales next week forecast AI';
+    }
+
     salesChart.update();
+    buildWeeklySalesInsights(mode);
   }
 
   weeklySalesMode?.addEventListener('change', updateWeeklySalesMode);
   updateWeeklySalesMode();
 
-  // For quick debugging
+  // Forecast insights text
+  const forecastInsightsEl = document.getElementById('forecastInsights');
+  function updateForecastInsights() {
+    if (!forecastInsightsEl) return;
+
+    const totalDemand = sumArray(forecastDemand);
+    if (!forecastDemand.length || totalDemand === 0) {
+      forecastInsightsEl.textContent =
+        'When forecast data is available, this will highlight the busiest day and the day with the lowest projected stock in finished units.';
+      return;
+    }
+
+    const bestIdx = maxIndex(forecastDemand);
+    const bestLabel = bestIdx >= 0 && forecastLabels[bestIdx] !== undefined ? forecastLabels[bestIdx] : 'Day';
+    const bestVal   = bestIdx >= 0 ? forecastDemand[bestIdx] : 0;
+
+    const minStockIdx = maxIndex(forecastInventory.map(v => v === 0 ? -Infinity : -v));
+    const minStockLabel = minStockIdx >= 0 && forecastLabels[minStockIdx] !== undefined ? forecastLabels[minStockIdx] : null;
+    const minStockVal   = minStockIdx >= 0 ? forecastInventory[minStockIdx] : null;
+
+    const lines = [];
+    lines.push(
+      `Busiest expected orders day is ${bestLabel} with about ${Math.round(bestVal).toLocaleString()} unit(s).`
+    );
+    lines.push(
+      `Total expected demand over the forecast window is about ${Math.round(totalDemand).toLocaleString()} unit(s).`
+    );
+    if (minStockLabel !== null && minStockVal !== null) {
+      lines.push(
+        `Lowest projected remaining stock is about ${Math.round(minStockVal).toLocaleString()} unit(s) on ${minStockLabel}.`
+      );
+    }
+
+    forecastInsightsEl.textContent = lines.join(' ');
+  }
+  updateForecastInsights();
+
+  // Model info modal
+  const modelInfoModal  = document.getElementById('modelInfoModal');
+  const modelInfoTitle  = document.getElementById('modelInfoTitle');
+
+  function openModelInfo(contextLabel) {
+    if (!modelInfoModal) return;
+    if (modelInfoTitle && contextLabel) {
+      modelInfoTitle.textContent = contextLabel;
+    }
+    modelInfoModal.classList.remove('hidden');
+    modelInfoModal.classList.add('flex');
+  }
+
+  function closeModelInfo() {
+    if (!modelInfoModal) return;
+    modelInfoModal.classList.add('hidden');
+    modelInfoModal.classList.remove('flex');
+  }
+
+  document.querySelectorAll('.model-info-trigger').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const label = btn.getAttribute('data-context') || 'Model information';
+      openModelInfo(label);
+    });
+  });
+
+  modelInfoModal?.querySelectorAll('[data-close-model]').forEach(btn => {
+    btn.addEventListener('click', closeModelInfo);
+  });
+
+  modelInfoModal?.addEventListener('click', (e) => {
+    if (e.target === modelInfoModal || e.target.dataset.modalOverlay === 'true') {
+      closeModelInfo();
+    }
+  });
+
+  // Sidebar toggle
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const sidebarClose = document.getElementById('sidebarClose');
+
+  sidebarToggle?.addEventListener('click', () => {
+    sidebar?.classList.add('open');
+  });
+  sidebarClose?.addEventListener('click', () => {
+    sidebar?.classList.remove('open');
+  });
+
   window.GenRevDashboard = { productionChart, salesChart, expiryChart, spark, forecastChart, apply3D };
 });
   </script>

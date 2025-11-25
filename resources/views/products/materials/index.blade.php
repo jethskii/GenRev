@@ -85,6 +85,16 @@
     </div>
   </div>
 
+  {{-- Defaults loaded banner (hidden until JS shows it) --}}
+  <div id="defaultsBanner" class="card mb-4" style="display:none;">
+    <div class="text-sm text-slate-700">
+      Defaults loaded from:
+      <a id="defaultsBannerLink" href="#" class="font-semibold text-blue-600 hover:underline">
+        <span id="defaultsBannerName"></span>
+      </a>
+    </div>
+  </div>
+
   {{-- Flash + Errors --}}
   @if(session('success'))
     <div class="card" role="status">{{ session('success') }}</div>
@@ -106,6 +116,11 @@
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold">Add Materials</h2>
         <div class="flex gap-2">
+          @if(Route::has('products.materials.defaults'))
+            <button type="button" id="load-defaults-btn" class="btn btn-muted">
+              Load defaults
+            </button>
+          @endif
           <button type="button" id="add-row-btn" class="btn btn-ghost">+ Add Row</button>
           <button type="submit" class="btn btn-primary">Save Lines</button>
         </div>
@@ -134,7 +149,10 @@
         </table>
       </div>
 
-      <p class="help mt-2">Tip: choose a material to auto-fill unit and default price. You can edit the price snapshot before saving.</p>
+      <p class="help mt-2">
+        Tip: choose a material to auto-fill unit and default price.
+        If this product has similar type or variant, you can use “Load defaults” to pull its usual raw materials.
+      </p>
     </form>
   </div>
 
@@ -181,7 +199,7 @@
             $mat   = $line->material;
             $unit  = $mat->unit ?? ($line->unit ?? '');
             $snap  = (float)($line->unit_price_snapshot ?? $line->unit_price ?? 0);
-            $qty   = (float)($line->qty ?? $line->quantity ?? 0);
+            $qty   = (float)($line->quantity_per_unit ?? $line->qty ?? 0);
             $total = $qty * $snap;
             $grand += $total;
           @endphp
@@ -208,7 +226,7 @@
           </tr>
         @empty
           <tr>
-            <td colspan="7" class="p-4 text-gray-600">No lines yet. Add one above.</td>
+            <td colspan="7" class="p-4 text-gray-600">No lines yet. Add one above or load defaults.</td>
           </tr>
         @endforelse
         </tbody>
@@ -227,7 +245,6 @@
 
 @section('scripts')
 @php
-  // Build a clean array for JS
   $materialsPayload = $materials->map(function($m){
       return [
           'id'    => $m->id,
@@ -236,20 +253,31 @@
           'price' => (float)($m->default_unit_price ?? 0),
       ];
   })->values();
+
+  $defaultsRoute = \Illuminate\Support\Facades\Route::has('products.materials.defaults')
+      ? route('products.materials.defaults', $product)
+      : null;
+
+  $hasExistingLines = $recipe->isNotEmpty();
 @endphp
 
-{{-- PDF libs for Export Selected --}}
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script>
 (() => {
   const materials = @json($materialsPayload);
+  const defaultsUrl = @json($defaultsRoute);
+  const hasExistingLines = @json($hasExistingLines);
 
   const typesEl = document.getElementById('typeChips');
   const typesUrl = typesEl ? typesEl.getAttribute('data-types-url') : null;
 
-  // load discovered types from ProductionController@suggestTypes
+  // Defaults banner elements
+  const defaultsBanner = document.getElementById('defaultsBanner');
+  const defaultsBannerName = document.getElementById('defaultsBannerName');
+  const defaultsBannerLink = document.getElementById('defaultsBannerLink');
+
   async function loadTypes(){
     if(!typesEl || !typesUrl) return;
     try{
@@ -280,6 +308,7 @@
   const body = document.getElementById('entry-body');
   const newGrandEl = document.getElementById('new-grand');
   const addBtn = document.getElementById('add-row-btn');
+  const loadDefaultsBtn = document.getElementById('load-defaults-btn');
 
   let rowIdx = 0;
 
@@ -296,7 +325,7 @@
     newGrandEl.textContent = money(g);
   }
 
-  function createMaterialSelect(nameAttr, unitInput, priceInput){
+  function createMaterialSelect(nameAttr, unitInput, priceInput, initialId = null, initialPrice = null){
     const sel = document.createElement('select');
     sel.className = 'select mat';
     sel.name = nameAttr;
@@ -313,6 +342,9 @@
       o.textContent = m.name;
       o.dataset.unit = m.unit || '';
       o.dataset.price = (m.price != null ? m.price : 0);
+      if (initialId !== null && Number(initialId) === Number(m.id)) {
+        o.selected = true;
+      }
       sel.appendChild(o);
     }
 
@@ -320,14 +352,34 @@
       const opt = sel.options[sel.selectedIndex];
       if(!opt) return;
       unitInput.value = opt.dataset.unit || '';
-      priceInput.value = (opt.dataset.price || 0);
+      if (!priceInput.value || Number(priceInput.value) === 0) {
+        priceInput.value = (opt.dataset.price || 0);
+      }
       recalcGrand();
     });
+
+    if (initialId !== null) {
+      const opt = Array.from(sel.options).find(o => Number(o.value) === Number(initialId));
+      if (opt) {
+        sel.value = String(initialId);
+        unitInput.value = opt.dataset.unit || unitInput.value;
+        if (initialPrice === null || Number(initialPrice) === 0) {
+          priceInput.value = opt.dataset.price || priceInput.value || 0;
+        }
+      }
+    }
 
     return sel;
   }
 
-  function addRow(){
+  function addRow(cfg = {}){
+    const config = {
+      material_id: cfg.material_id ?? null,
+      qty: cfg.qty ?? 1,
+      unit: cfg.unit ?? '',
+      unit_price: cfg.unit_price ?? null,
+    };
+
     const tr = document.createElement('tr');
 
     const cMat   = document.createElement('td'); cMat.className = 'p-2';
@@ -340,20 +392,29 @@
     const unitHidden = document.createElement('input');
     unitHidden.type = 'hidden';
     unitHidden.name = 'rows['+rowIdx+'][unit]';
+    unitHidden.value = config.unit || '';
 
     const qty = document.createElement('input');
-    qty.type = 'number'; qty.step='0.001'; qty.min='0'; qty.value='1';
+    qty.type = 'number'; qty.step='0.001'; qty.min='0';
+    qty.value = String(config.qty);
     qty.className = 'input qty w-110';
     qty.name = 'rows['+rowIdx+'][qty]'; qty.required = true;
     qty.addEventListener('input', recalcGrand);
 
     const price = document.createElement('input');
-    price.type='number'; price.step='0.01'; price.min='0'; price.value='0';
+    price.type='number'; price.step='0.01'; price.min='0';
+    price.value = config.unit_price !== null ? String(config.unit_price) : '0';
     price.className='input price w-110';
     price.name = 'rows['+rowIdx+'][unit_price]'; price.required = true;
     price.addEventListener('input', recalcGrand);
 
-    const sel = createMaterialSelect('rows['+rowIdx+'][material_id]', unitHidden, price);
+    const sel = createMaterialSelect(
+      'rows['+rowIdx+'][material_id]',
+      unitHidden,
+      price,
+      config.material_id,
+      config.unit_price
+    );
 
     const rm = document.createElement('button');
     rm.type='button'; rm.className='btn btn-muted'; rm.textContent='Remove';
@@ -364,7 +425,7 @@
     cUnit.appendChild(document.createTextNode(''));
     cUnit.appendChild(unitHidden);
     cPrice.appendChild(price);
-    cTotal.textContent = money(0);
+    cTotal.textContent = money((config.qty || 0) * (config.unit_price || 0));
     cAct.appendChild(rm);
 
     tr.appendChild(cMat);
@@ -376,14 +437,73 @@
 
     body.appendChild(tr);
     rowIdx++;
+    recalcGrand();
+  }
+
+  async function loadDefaultsIntoForm(){
+    if (!defaultsUrl) return;
+    try{
+      const res = await fetch(defaultsUrl, { headers: {'X-Requested-With':'XMLHttpRequest'} });
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      const json = await res.json();
+
+      // Show "defaults loaded from" banner if we know the base product
+      const from = json.from || null;
+      if (from && defaultsBanner && defaultsBannerName && defaultsBannerLink) {
+        defaultsBanner.style.display = 'block';
+        defaultsBannerName.textContent = from.name || ('Product #'+from.id);
+        defaultsBannerLink.href = '/products/' + from.id;
+      }
+
+      let rows = [];
+      if (Array.isArray(json)) {
+        rows = json;
+      } else if (Array.isArray(json.rows)) {
+        rows = json.rows;
+      } else if (Array.isArray(json.data)) {
+        rows = json.data;
+      }
+
+      if (!rows.length) {
+        if (!body.querySelector('tr')) addRow();
+        return;
+      }
+
+      body.innerHTML = '';
+      rowIdx = 0;
+
+      rows.forEach(r => {
+        addRow({
+          material_id: r.material_id ?? r.ingredient_id ?? null,
+          qty: r.quantity_per_unit ?? r.qty ?? r.quantity ?? 0,
+          unit: r.unit ?? '',
+          unit_price: r.unit_price_snapshot ?? r.unit_price ?? r.default_unit_price ?? 0,
+        });
+      });
+
+      recalcGrand();
+    } catch (e){
+      console.error(e);
+      alert('Could not load defaults for this product. You can still add lines manually.');
+      if (!body.querySelector('tr')) addRow();
+    }
   }
 
   // initializers
-  addRow();
-  addBtn && addBtn.addEventListener('click', addRow);
+  if (!hasExistingLines && defaultsUrl) {
+    // Auto-load defaults for new products of a known type/variant
+    loadDefaultsIntoForm();
+  } else {
+    addRow();
+  }
+
+  addBtn && addBtn.addEventListener('click', () => addRow());
+  loadDefaultsBtn && loadDefaultsBtn.addEventListener('click', () => {
+    loadDefaultsIntoForm();
+  });
+
   loadTypes();
 
-  // ensure every row has a unit on submit
   const form = document.getElementById('add-lines-form');
   form && form.addEventListener('submit', (e) => {
     const rows = body.querySelectorAll('tr');
@@ -419,11 +539,12 @@
     bulkBar.classList.toggle('active', count > 0);
     const boxes = rowCheckboxes();
     const allChecked = boxes.length > 0 && boxes.every(cb => cb.checked);
-    selectAll.checked = allChecked;
-    selectAll.indeterminate = count > 0 && !allChecked;
+    if (selectAll) {
+      selectAll.checked = allChecked;
+      selectAll.indeterminate = count > 0 && !allChecked;
+    }
   }
 
-  // Header select all
   selectAll?.addEventListener('change', () => {
     rowCheckboxes().forEach(cb => {
       cb.checked = selectAll.checked;
@@ -433,7 +554,6 @@
     updateBulkUI();
   });
 
-  // Per row check
   tbodyCurrent?.addEventListener('change', (e) => {
     if (!e.target.matches('.row-select')) return;
     const id = e.target.dataset.lineId;
@@ -442,7 +562,6 @@
     updateBulkUI();
   });
 
-  // Bulk delete: reuse existing forms for CSRF and policies
   bulkDelete?.addEventListener('click', async () => {
     if (selected.size === 0) return;
     if (!confirm(`Delete ${selected.size} selected line(s)?`)) return;
@@ -456,12 +575,10 @@
     }
   });
 
-  // Export Selected to PDF
   bulkExportPdf?.addEventListener('click', async () => {
     if (selected.size === 0) return;
     try{
       const ids = Array.from(selected);
-      // Build minimal table with chosen lines
       const table = document.createElement('table');
       table.style.width = '100%';
       table.style.borderCollapse = 'collapse';
@@ -490,7 +607,6 @@
         const unit = get(3);
         const price = get(4);
         const total = get(5);
-        // accumulate total by stripping currency and commas
         const num = parseFloat((total || '0').replace(/[^\d.]/g,''));
         grand += isNaN(num) ? 0 : num;
 
@@ -529,7 +645,6 @@
       if (imgHeight + 40 <= pdf.internal.pageSize.getHeight()){
         pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 20, 20, imgWidth, imgHeight, undefined, 'FAST');
       } else {
-        // slice into pages
         const pageHeight = pdf.internal.pageSize.getHeight() - 40;
         const sliceHeightPx = (pageHeight * canvas.width) / imgWidth;
         let top = 0, page = 0;

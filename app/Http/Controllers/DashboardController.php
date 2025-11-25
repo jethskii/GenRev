@@ -14,6 +14,24 @@ class DashboardController extends Controller
 {
     /** ---------------------------- Helpers ---------------------------- */
 
+    /**
+     * TODO: real conversion from kg to packs per product.
+     *
+     * IMPORTANT:
+     * - All finished goods on the dashboard are expressed in units (packs/bags).
+     * - Many legacy calculations still use kg or mixed units internally.
+     * - To avoid dangerous unit confusion, every product-facing quantity that may
+     *   be kg goes through this helper before it hits charts / cards.
+     *
+     * When you have per-product pack-size metadata, replace this with proper logic,
+     * e.g. $kg / $packWeightForProduct.
+     */
+    private function convertKgToPacks(float $kgOrUnits, ?int $productId = null): float
+    {
+        // TODO: real conversion from kg to packs per product
+        return $kgOrUnits;
+    }
+
     /** Build week-start (Monday) buckets from oldest → newest */
     private function makeWeekBuckets(Carbon $end, int $weeks = 12): array
     {
@@ -83,6 +101,10 @@ class DashboardController extends Controller
     /**
      * Build simple global + per-product forecast series from historical sales
      * and current inventory.
+     *
+     * NOTE:
+     * - This function still works in the internal "base unit" (kg or units),
+     *   and the mapping to packs happens in index()/data() via convertKgToPacks().
      */
     private function buildForecast(int $lookbackDays = 60, int $horizonDays = 30): array
     {
@@ -154,6 +176,15 @@ class DashboardController extends Controller
 
         $productNames = Product::pluck('product_name', 'id');
 
+        // ---------- 2b) Default unit type per product from sales (pack / bag) ----------
+        $unitTypeMap = Sale::selectRaw("
+                product_id,
+                COALESCE(NULLIF(TRIM(unit_type), ''), 'pack') as unit_type
+            ")
+            ->whereIn('product_id', array_keys($productStats))
+            ->groupBy('product_id', 'unit_type')
+            ->pluck('unit_type', 'product_id');
+
         // ---------- 3) Average daily demand + risk metrics ----------
         $avgDailyPerProduct   = [];
         $riskProductsRaw      = [];
@@ -179,9 +210,12 @@ class DashboardController extends Controller
             $daysToStockout = $stock / max(0.0001, $avgDaily);
             $recProduction  = max(0.0, $avgDaily * $safetyHorizonDays - $stock);
 
+            $unitType = $unitTypeMap[$pid] ?? 'pack';
+
             $riskProductsRaw[] = [
                 'product_id'             => $pid,
                 'name'                   => (string) ($productNames[$pid] ?? 'Product #' . $pid),
+                'unit_type'              => $unitType,
                 'daily_demand'           => $avgDaily,
                 'days_to_stockout'       => (int) floor($daysToStockout),
                 'recommended_production' => $recProduction,
@@ -255,6 +289,8 @@ class DashboardController extends Controller
         $expiryStart = $today->copy();
         $expiryEnd   = $today->copy()->addDays(6);
 
+        // For finished goods: QTY is still potentially kg internally.
+        // We will convert to packs when mapping to charts / summaries.
         $QTY   = 'COALESCE(sales.quantity_kg, sales.quantity, 0)';
         $UNIT  = 'COALESCE(sales.unit_price, sales.price, 0)';
         $REVEX = "$QTY * $UNIT";
@@ -262,7 +298,7 @@ class DashboardController extends Controller
 
         /* ======================== KPI cards ======================== */
         $totalProducts        = (int) Product::count();
-        $totalMaterialsWeight = (float) (Material::sum('quantity_kg') ?? 0);
+        $totalMaterialsWeight = (float) (Material::sum('quantity_kg') ?? 0); // raw materials stay in kg
         $totalRevenue         = (float) (Sale::selectRaw("SUM($REVEX) as rev")->value('rev') ?? 0);
         $totalSales           = (int) Sale::count();
 
@@ -274,8 +310,10 @@ class DashboardController extends Controller
             ->get([
                 DB::raw("COALESCE(p.product_name, sales.product, 'Product') as product_name"),
                 DB::raw("$TYPEX as sale_type"),
-                DB::raw("$QTY  as quantity"),
-                DB::raw("$UNIT as unit_price"),
+                DB::raw("$QTY  as quantity"),       // numeric quantity (kg or units)
+                DB::raw("$UNIT as unit_price"),     // numeric price
+                // 👇 pass unit_type so Blade can show Pack vs Bag
+                DB::raw("COALESCE(NULLIF(TRIM(sales.unit_type), ''), 'pack') as unit_type"),
                 DB::raw("DATE(sales.date) as date"),
             ]);
 
@@ -287,7 +325,7 @@ class DashboardController extends Controller
             $p->addDay();
         }
 
-        /* =================== Weekly Production (current week) ====================== */
+        /* =================== Weekly Production (current week, units) ====================== */
         $prodDaily = Production::whereBetween('production_date', [$start->toDateString(), $end->toDateString()])
             ->selectRaw('production_date as d, SUM(quantity) as qty')
             ->groupBy('d')
@@ -297,7 +335,9 @@ class DashboardController extends Controller
         $weeklyProductionSeries = [];
         $cursor = $start->copy();
         while ($cursor->lte($end)) {
-            $weeklyProductionSeries[] = (float) ($prodDaily[$cursor->toDateString()] ?? 0);
+            $rawQty = (float) ($prodDaily[$cursor->toDateString()] ?? 0);
+            // Treat production quantity as finished-good units (packs/bags) on the dashboard.
+            $weeklyProductionSeries[] = $this->convertKgToPacks($rawQty);
             $cursor->addDay();
         }
 
@@ -312,8 +352,9 @@ class DashboardController extends Controller
         $weeklySalesRevenueSeries = [];
         $cursor = $start->copy();
         while ($cursor->lte($end)) {
-            $key = $cursor->toDateString();
-            $weeklySalesQtySeries[]     = (float) ($salesDaily[$key]->qty ?? 0);
+            $key          = $cursor->toDateString();
+            $rawQtyUnits  = (float) ($salesDaily[$key]->qty ?? 0);
+            $weeklySalesQtySeries[]     = $this->convertKgToPacks($rawQtyUnits); // units on the dashboard
             $weeklySalesRevenueSeries[] = (float) ($salesDaily[$key]->rev ?? 0);
             $cursor->addDay();
         }
@@ -330,6 +371,7 @@ class DashboardController extends Controller
         }
 
         /* ================= Materials Used (This Week) ================ */
+        // All of this remains kg-based because it is raw materials / ingredients.
         $materialsUsage = DB::table('productions as p')
             ->join('products as pr', 'pr.id', '=', 'p.product_id')
             ->join('product_recipes as r', 'r.product_id', '=', 'pr.id')
@@ -368,7 +410,6 @@ class DashboardController extends Controller
                 $weeklySalesProfitSeries[] = (float) $revDay * $profitFactor;
             }
         } else {
-            // no meaningful cost data, keep zeros
             foreach ($weeklySalesRevenueSeries as $revDay) {
                 $weeklySalesProfitSeries[] = 0.0;
             }
@@ -379,7 +420,7 @@ class DashboardController extends Controller
             ->take(8)
             ->get();
 
-        /* =================== Expiration Trend (rolling 7 days, per pack/bag + type) =================== */
+        /* =================== Expiration Trend (rolling 7 days, units) =================== */
 
         $expiryBuckets = [];
         $expiryLabels  = [];
@@ -477,19 +518,18 @@ class DashboardController extends Controller
             ->values()
             ->take(10);
 
-        /* ============== Most Sold Products & Types (this week) ============== */
-        // $weekRevenue already computed from daily series above
-
+        /* ============== Most Sold Products & Variants (this week) ============== */
         $topProducts = Sale::join('products as p', 'p.id', '=', 'sales.product_id')
             ->whereBetween(DB::raw('DATE(sales.date)'), [$start->toDateString(), $end->toDateString()])
             ->selectRaw("
                 sales.product_id,
                 p.product_name,
                 $TYPEX as sale_type,
+                COALESCE(NULLIF(TRIM(sales.unit_type), ''), 'pack') as unit_type,
                 SUM($QTY)   as quantity,
                 SUM($REVEX) as revenue
             ")
-            ->groupByRaw('sales.product_id, p.product_name, sale_type')
+            ->groupByRaw('sales.product_id, p.product_name, sale_type, unit_type')
             ->orderByDesc('revenue')
             ->limit(5)
             ->get()
@@ -497,10 +537,20 @@ class DashboardController extends Controller
                 $row->revenue_share = $weekRevenue > 0
                     ? round(($row->revenue / $weekRevenue) * 100, 1)
                     : 0.0;
+
+                // Convert quantity to units (packs/bags) for dashboard display
+                $row->quantity = $this->convertKgToPacks((float) $row->quantity, (int) $row->product_id);
+
+                // Human-friendly label for charts / tables
+                $unit    = strtolower($row->unit_type ?? 'pack');       // "pack" or "bag"
+                $variant = trim($row->sale_type ?? '');
+                $base    = trim($row->product_name . ' ' . $variant);    // e.g. "Pork Tapa 250g"
+                $row->display_label = $base . ' (' . $unit . ')';        // e.g. "Pork Tapa 250g (pack)"
+
                 return $row;
             });
 
-        /* =================== 12-week Production Trend =================== */
+        /* =================== 12-week Production Trend (units) =================== */
         $trendEnd    = Carbon::now();
         $weekBuckets = $this->makeWeekBuckets($trendEnd, 12);
         $windowStart = Carbon::parse(array_key_first($weekBuckets));
@@ -525,15 +575,54 @@ class DashboardController extends Controller
         $productionTrendSeries = [];
         foreach ($weekBuckets as $weekStartYmd => $sumQty) {
             $productionTrendLabels[] = $this->humanWeekLabel($weekStartYmd);
-            $productionTrendSeries[] = (float) $sumQty;
+            // Production trend is for finished goods → make sure it is units.
+            $productionTrendSeries[] = $this->convertKgToPacks((float) $sumQty);
         }
 
         /* =================== Predictive Analytics =================== */
         $forecast        = $this->buildForecast(60, 30);
         $productForecast = $demandForecastService->perProductForecast(7, 60);
 
-        // ---------- AI-style Weekly Sales forecast (next 7 days) ----------
-        $globalDemandSeries = $forecast['demandSeries'] ?? [];
+        // Map global forecast series (base units) into packs/units for the dashboard
+        $forecastDemandSeriesBase    = $forecast['demandSeries']    ?? [];
+        $forecastInventorySeriesBase = $forecast['inventorySeries'] ?? [];
+        $forecastDemandSeries        = array_map(
+            fn ($v) => $this->convertKgToPacks((float) $v),
+            $forecastDemandSeriesBase
+        );
+        $forecastInventorySeries     = array_map(
+            fn ($v) => $this->convertKgToPacks((float) $v),
+            $forecastInventorySeriesBase
+        );
+
+        // Summary: convert recommended production to units for UI
+        $forecastSummary = $forecast['summary'] ?? [];
+        if (!empty($forecastSummary['total_recommended_production'])) {
+            $forecastSummary['total_recommended_production'] = $this->convertKgToPacks(
+                (float) $forecastSummary['total_recommended_production']
+            );
+        }
+
+        // Per-product "what to produce next" (convert to units + label per pack/bag)
+        $forecastTopProducts = $forecast['topProducts'] ?? collect();
+        if ($forecastTopProducts instanceof \Illuminate\Support\Collection) {
+            $forecastTopProducts = $forecastTopProducts->map(function (array $row) {
+                $productId = $row['product_id'] ?? null;
+
+                $row['daily_demand']           = $this->convertKgToPacks((float) ($row['daily_demand'] ?? 0.0), $productId);
+                $row['recommended_production'] = $this->convertKgToPacks((float) ($row['recommended_production'] ?? 0.0), $productId);
+
+                $unit = strtolower($row['unit_type'] ?? 'pack');
+                $name = $row['name'] ?? 'Product';
+                // label for Production Planning Assistant graph
+                $row['label'] = $name . ' (' . $unit . ')';
+
+                return $row;
+            });
+        }
+
+        // ---------- AI-style Weekly Sales forecast (next 7 days, units) ----------
+        $globalDemandSeriesBase = $forecast['demandSeries'] ?? [];
 
         // average unit price based on all-time totals
         $avgUnitPriceGlobal = $totalSales > 0
@@ -549,15 +638,42 @@ class DashboardController extends Controller
         $weeklySalesForecastProfitSeries    = [];
 
         for ($i = 0; $i < 7; $i++) {
-            $demand = (float) ($globalDemandSeries[$i] ?? 0.0); // overall kg/units demand
-            $weeklySalesForecastQtySeries[] = $demand;
+            $demandBase = (float) ($globalDemandSeriesBase[$i] ?? 0.0); // base unit
+            $demandUnits = $this->convertKgToPacks($demandBase);        // UI uses units
 
-            $forecastRev = $demand * $avgUnitPriceGlobal;
+            $weeklySalesForecastQtySeries[] = $demandUnits;
+
+            $forecastRev = $demandUnits * $avgUnitPriceGlobal;
             $weeklySalesForecastRevenueSeries[] = $forecastRev;
 
             $weeklySalesForecastProfitSeries[] = $marginRatio > 0
                 ? $forecastRev * $marginRatio
                 : 0.0;
+        }
+
+        // ---------- AI per-product weekly plan (units) ----------
+        if ($productForecast instanceof \Illuminate\Support\Collection) {
+            $productForecast = $productForecast->map(function ($row) {
+                // Support both array and stdClass
+                if (is_array($row)) {
+                    $row['avg_daily_demand']     = $this->convertKgToPacks((float) ($row['avg_daily_demand'] ?? 0.0), $row['product_id'] ?? null);
+                    $row['forecast_total']       = $this->convertKgToPacks((float) ($row['forecast_total'] ?? 0.0), $row['product_id'] ?? null);
+                    $row['current_inventory']    = $this->convertKgToPacks((float) ($row['current_inventory'] ?? 0.0), $row['product_id'] ?? null);
+                    $row['suggested_production'] = $this->convertKgToPacks((float) ($row['suggested_production'] ?? 0.0), $row['product_id'] ?? null);
+                    return $row;
+                }
+
+                if (is_object($row)) {
+                    $productId = $row->product_id ?? null;
+                    $row->avg_daily_demand     = $this->convertKgToPacks((float) ($row->avg_daily_demand ?? 0.0), $productId);
+                    $row->forecast_total       = $this->convertKgToPacks((float) ($row->forecast_total ?? 0.0), $productId);
+                    $row->current_inventory    = $this->convertKgToPacks((float) ($row->current_inventory ?? 0.0), $productId);
+                    $row->suggested_production = $this->convertKgToPacks((float) ($row->suggested_production ?? 0.0), $productId);
+                    return $row;
+                }
+
+                return $row;
+            });
         }
 
         return view('dashboard', [
@@ -574,8 +690,8 @@ class DashboardController extends Controller
             'biggestSalesDay'          => $biggestSalesDay,
 
             'labels'                   => $labels,
-            'weeklyProductionSeries'   => $weeklyProductionSeries,
-            'weeklySalesQtySeries'     => $weeklySalesQtySeries,
+            'weeklyProductionSeries'   => $weeklyProductionSeries,      // units
+            'weeklySalesQtySeries'     => $weeklySalesQtySeries,        // units
             'weeklySalesRevenueSeries' => $weeklySalesRevenueSeries,
             'weeklySalesProfitSeries'  => $weeklySalesProfitSeries,
 
@@ -583,25 +699,25 @@ class DashboardController extends Controller
             'estimatedWeekProfit'      => $estimatedWeekProfit,
             'estimatedGrossMarginPct'  => $estimatedGrossMarginPct,
 
-            'weeklySalesForecastQtySeries'       => $weeklySalesForecastQtySeries,
+            'weeklySalesForecastQtySeries'       => $weeklySalesForecastQtySeries,     // units
             'weeklySalesForecastRevenueSeries'   => $weeklySalesForecastRevenueSeries,
             'weeklySalesForecastProfitSeries'    => $weeklySalesForecastProfitSeries,
 
             'expiryLabels'             => $expiryLabels,
-            'weeklyExpirySeries'       => $weeklyExpirySeries,
+            'weeklyExpirySeries'       => $weeklyExpirySeries,          // units at risk
             'expiryStats'              => $expiryStats,
             'expiryPriority'           => $expiryPriority,
 
             'productionTrendLabels'    => $productionTrendLabels,
-            'productionTrendSeries'    => $productionTrendSeries,
+            'productionTrendSeries'    => $productionTrendSeries,       // units
 
             'forecastLabels'           => $forecast['labels'],
-            'forecastDemandSeries'     => $forecast['demandSeries'],
-            'forecastInventorySeries'  => $forecast['inventorySeries'],
-            'forecastSummary'          => $forecast['summary'],
-            'forecastTopProducts'      => $forecast['topProducts'],
+            'forecastDemandSeries'     => $forecastDemandSeries,        // units
+            'forecastInventorySeries'  => $forecastInventorySeries,     // units
+            'forecastSummary'          => $forecastSummary,
+            'forecastTopProducts'      => $forecastTopProducts,         // units + unit_type + label
 
-            'productForecast'          => $productForecast,
+            'productForecast'          => $productForecast,             // per-product AI plan in units
         ]);
     }
 
@@ -615,6 +731,7 @@ class DashboardController extends Controller
         $expiryStart = $today->copy();
         $expiryEnd   = $today->copy()->addDays(6);
 
+        // Finished goods: still potentially kg internally, converted to units for JSON.
         $QTY   = 'COALESCE(sales.quantity_kg, sales.quantity, 0)';
         $UNIT  = 'COALESCE(sales.unit_price, sales.price, 0)';
         $REVEX = "$QTY * $UNIT";
@@ -627,7 +744,7 @@ class DashboardController extends Controller
             $p->addDay();
         }
 
-        // Production (current week)
+        // Production (current week → units)
         $prodDaily = Production::whereBetween('production_date', [$start->toDateString(), $end->toDateString()])
             ->selectRaw('production_date as d, SUM(quantity) as qty')
             ->groupBy('d')
@@ -637,11 +754,12 @@ class DashboardController extends Controller
         $weeklyProductionSeries = [];
         $cursor = $start->copy();
         while ($cursor->lte($end)) {
-            $weeklyProductionSeries[] = (float) ($prodDaily[$cursor->toDateString()] ?? 0);
+            $rawQty = (float) ($prodDaily[$cursor->toDateString()] ?? 0);
+            $weeklyProductionSeries[] = $this->convertKgToPacks($rawQty);
             $cursor->addDay();
         }
 
-        // Sales (current week)
+        // Sales (current week → units + revenue)
         $salesDaily = Sale::whereBetween(DB::raw('DATE(date)'), [$start->toDateString(), $end->toDateString()])
             ->selectRaw("DATE(date) as d, SUM($QTY) as qty, SUM($REVEX) as rev")
             ->groupBy('d')
@@ -652,8 +770,9 @@ class DashboardController extends Controller
         $weeklySalesRevenueSeries = [];
         $cursor = $start->copy();
         while ($cursor->lte($end)) {
-            $key = $cursor->toDateString();
-            $weeklySalesQtySeries[]     = (float) ($salesDaily[$key]->qty ?? 0);
+            $key                        = $cursor->toDateString();
+            $rawQty                     = (float) ($salesDaily[$key]->qty ?? 0);
+            $weeklySalesQtySeries[]     = $this->convertKgToPacks($rawQty);
             $weeklySalesRevenueSeries[] = (float) ($salesDaily[$key]->rev ?? 0);
             $cursor->addDay();
         }
@@ -763,7 +882,7 @@ class DashboardController extends Controller
             ->values()
             ->take(10);
 
-        /* 12-week production trend */
+        /* 12-week production trend → units */
         $trendEnd    = Carbon::now();
         $weekBuckets = $this->makeWeekBuckets($trendEnd, 12);
         $windowStart = Carbon::parse(array_key_first($weekBuckets));
@@ -788,13 +907,49 @@ class DashboardController extends Controller
         $productionTrendSeries = [];
         foreach ($weekBuckets as $weekStartYmd => $sumQty) {
             $productionTrendLabels[] = $this->humanWeekLabel($weekStartYmd);
-            $productionTrendSeries[] = (float) $sumQty;
+            $productionTrendSeries[] = $this->convertKgToPacks((float) $sumQty);
         }
 
         $forecast = $this->buildForecast(60, 30);
 
+        // Map global forecast to units for JSON
+        $forecastDemandSeriesBase    = $forecast['demandSeries']    ?? [];
+        $forecastInventorySeriesBase = $forecast['inventorySeries'] ?? [];
+        $forecastDemandSeries        = array_map(
+            fn ($v) => $this->convertKgToPacks((float) $v),
+            $forecastDemandSeriesBase
+        );
+        $forecastInventorySeries     = array_map(
+            fn ($v) => $this->convertKgToPacks((float) $v),
+            $forecastInventorySeriesBase
+        );
+
+        $forecastSummary = $forecast['summary'] ?? [];
+        if (!empty($forecastSummary['total_recommended_production'])) {
+            $forecastSummary['total_recommended_production'] = $this->convertKgToPacks(
+                (float) $forecastSummary['total_recommended_production']
+            );
+        }
+
+        // Per-product forecast "watch list" for JSON (with labels by unit_type)
+        $forecastTopProducts = $forecast['topProducts'] ?? collect();
+        if ($forecastTopProducts instanceof \Illuminate\Support\Collection) {
+            $forecastTopProducts = $forecastTopProducts->map(function (array $row) {
+                $productId = $row['product_id'] ?? null;
+
+                $row['daily_demand']           = $this->convertKgToPacks((float) ($row['daily_demand'] ?? 0.0), $productId);
+                $row['recommended_production'] = $this->convertKgToPacks((float) ($row['recommended_production'] ?? 0.0), $productId);
+
+                $unit = strtolower($row['unit_type'] ?? 'pack');
+                $name = $row['name'] ?? 'Product';
+                $row['label'] = $name . ' (' . $unit . ')';
+
+                return $row;
+            });
+        }
+
         // Simple AI-style weekly forecast for JSON (using avg price + fixed margin)
-        $globalDemandSeries = $forecast['demandSeries'] ?? [];
+        $globalDemandSeriesBase = $forecast['demandSeries'] ?? [];
 
         $totalRevenue = (float) (Sale::selectRaw("SUM($REVEX) as rev")->value('rev') ?? 0);
         $totalSales   = (int) Sale::count();
@@ -807,37 +962,39 @@ class DashboardController extends Controller
         $weeklySalesForecastProfitSeries    = [];
 
         for ($i = 0; $i < 7; $i++) {
-            $demand = (float) ($globalDemandSeries[$i] ?? 0.0);
-            $weeklySalesForecastQtySeries[]     = $demand;
-            $forecastRev                        = $demand * $avgUnitPrice;
+            $demandBase  = (float) ($globalDemandSeriesBase[$i] ?? 0.0);
+            $demandUnits = $this->convertKgToPacks($demandBase);
+
+            $weeklySalesForecastQtySeries[]     = $demandUnits;
+            $forecastRev                        = $demandUnits * $avgUnitPrice;
             $weeklySalesForecastRevenueSeries[] = $forecastRev;
             $weeklySalesForecastProfitSeries[]  = $forecastRev * $marginRatio;
         }
 
         return response()->json([
             'labels'                   => $labels,
-            'weeklyProductionSeries'   => $weeklyProductionSeries,
-            'weeklySalesQtySeries'     => $weeklySalesQtySeries,
+            'weeklyProductionSeries'   => $weeklyProductionSeries,      // units
+            'weeklySalesQtySeries'     => $weeklySalesQtySeries,        // units
             'weeklySalesRevenueSeries' => $weeklySalesRevenueSeries,
             'weeklySalesProfitSeries'  => $weeklySalesProfitSeries,
 
-            'weeklySalesForecastQtySeries'       => $weeklySalesForecastQtySeries,
+            'weeklySalesForecastQtySeries'       => $weeklySalesForecastQtySeries,     // units
             'weeklySalesForecastRevenueSeries'   => $weeklySalesForecastRevenueSeries,
             'weeklySalesForecastProfitSeries'    => $weeklySalesForecastProfitSeries,
 
             'expiryLabels'             => $expiryLabels,
-            'weeklyExpirySeries'       => $weeklyExpirySeries,
+            'weeklyExpirySeries'       => $weeklyExpirySeries,          // units at risk
             'expiryStats'              => $expiryStats,
             'expiryPriority'           => $expiryPriority,
 
             'productionTrendLabels'    => $productionTrendLabels,
-            'productionTrendSeries'    => $productionTrendSeries,
+            'productionTrendSeries'    => $productionTrendSeries,       // units
 
             'forecastLabels'           => $forecast['labels'],
-            'forecastDemandSeries'     => $forecast['demandSeries'],
-            'forecastInventorySeries'  => $forecast['inventorySeries'],
-            'forecastSummary'          => $forecast['summary'],
-            'forecastTopProducts'      => $forecast['topProducts'],
+            'forecastDemandSeries'     => $forecastDemandSeries,        // units
+            'forecastInventorySeries'  => $forecastInventorySeries,     // units
+            'forecastSummary'          => $forecastSummary,
+            'forecastTopProducts'      => $forecastTopProducts,         // units + unit_type + label
         ]);
     }
 }

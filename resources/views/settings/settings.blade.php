@@ -162,69 +162,6 @@
       </div>
     </a>
 
-    {{-- User Management (admin-facing) --}}
-    <div class="surface ring-gradient p-5 rounded-2xl transition fade-in">
-      <div class="flex items-start gap-4">
-        <div class="icon-chip">🧑‍🤝‍🧑</div>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2">
-            <h2 class="text-lg font-semibold">User Management</h2>
-            <span class="soft-pill">Admin</span>
-          </div>
-          <p class="text-sm text-gray-600 mt-1">
-            Create, edit, and deactivate system users.
-          </p>
-
-          <div class="mt-4 flex flex-wrap items-center gap-2">
-            <a href="{{ route('users.index') }}" class="btn btn-blue">
-              View users
-            </a>
-            <a href="{{ route('users.index', ['open' => 'create']) }}" class="btn btn-red">
-              Add user
-            </a>
-            <a href="{{ route('users.export.csv') }}" class="btn btn-green">
-              Export CSV
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {{-- Notifications --}}
-    <div class="surface ring-gradient p-5 rounded-2xl transition fade-in">
-      <div class="flex items-start gap-4">
-        <div class="icon-chip">🔔</div>
-        <div class="flex-1">
-          <div class="flex items-center gap-2">
-            <h2 class="text-lg font-semibold">Notifications</h2>
-            <span class="soft-pill">Preferences</span>
-          </div>
-          <p class="text-sm text-gray-600 mt-1">
-            Set preferences for email and in-app alerts.
-          </p>
-
-          <form class="mt-4 space-y-3">
-            <label class="flex items-center justify-between text-sm">
-              <span>Email summaries</span>
-              <input type="checkbox"
-                     class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-            </label>
-            <label class="flex items-center justify-between text-sm">
-              <span>Critical alerts</span>
-              <input type="checkbox"
-                     class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-            </label>
-            <div class="pt-1 flex items-center gap-2">
-              <button type="button" class="btn btn-red">Save</button>
-              <a href="{{ route('notifications.index') }}" class="btn btn-green">
-                Open inbox
-              </a>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
     {{-- Appearance --}}
     <a href="{{ route('settings.appearance') }}"
        class="surface ring-gradient p-5 rounded-2xl transition fade-in md:col-span-2 xl:col-span-1 group block cursor-pointer">
@@ -250,26 +187,6 @@
         </div>
       </div>
     </a>
-
-    {{-- Security --}}
-    <div class="surface ring-gradient p-5 rounded-2xl transition fade-in">
-      <div class="flex items-start gap-4">
-        <div class="icon-chip">🔒</div>
-        <div class="flex-1">
-          <div class="flex items-center gap-2">
-            <h2 class="text-lg font-semibold">Security</h2>
-            <span class="soft-pill">2FA</span>
-          </div>
-          <p class="text-sm text-gray-600 mt-1">
-            Manage password, sessions, and two-factor authentication.
-          </p>
-          <div class="mt-4 flex flex-wrap gap-2">
-            <button type="button" class="btn btn-red">Enable 2FA</button>
-            <button type="button" class="btn btn-blue">Active sessions</button>
-          </div>
-        </div>
-      </div>
-    </div>
 
     {{-- 🔎 Login Activity / Log Book --}}
     <a href="{{ route('settings.login-activity') }}"

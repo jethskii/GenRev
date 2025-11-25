@@ -29,12 +29,12 @@
 
       <div class="flex gap-2">
         @if(Route::has('products.materials.defaults'))
-          <button id="btnLoadDefaults" class="pixel-btn pixel-btn-secondary">
+          <button id="btnLoadDefaults" type="button" class="pixel-btn pixel-btn-secondary">
             <span class="pixel-btn-label">Load Defaults</span>
           </button>
         @endif
 
-        <button id="btnAddRow" class="pixel-btn pixel-btn-primary">
+        <button id="btnAddRow" type="button" class="pixel-btn pixel-btn-primary">
           <span class="pixel-btn-label">+ Add Row</span>
         </button>
       </div>
@@ -43,6 +43,16 @@
     @if(session('success'))
       <div class="pixel-alert pixel-alert-success mb-3">
         {{ session('success') }}
+      </div>
+    @endif
+
+    @if($errors->any())
+      <div class="pixel-alert mb-3" style="background:#fee2e2;">
+        <ul class="list-disc pl-4 space-y-0.5">
+          @foreach($errors->all() as $err)
+            <li>{{ $err }}</li>
+          @endforeach
+        </ul>
       </div>
     @endif
 
@@ -69,6 +79,7 @@
                 <th>Material</th>
                 <th class="w-24">Unit</th>
                 <th class="w-32">Qty / 1 {{ $product->unit ?? 'kg' }}</th>
+                <th class="w-28 text-center">Wastage %</th>
                 <th class="w-40">Unit Price</th>
                 <th class="w-40 text-right">Line Total</th>
                 <th class="w-20 text-center">Actions</th>
@@ -78,7 +89,11 @@
             <tbody id="recipeBody">
               @foreach($recipe as $line)
                 @php
-                  $lineTotal = (float)($line->qty ?? 0) * (float)($line->unit_price_snapshot ?? 0);
+                  $qtyBase     = (float)($line->quantity_per_unit ?? $line->qty ?? 0);
+                  $wastagePct  = (float)($line->wastage_pct ?? 0);
+                  $unitPrice   = (float)($line->unit_price_snapshot ?? $line->unit_price ?? 0);
+                  $effectiveQty = $qtyBase * (1 + ($wastagePct / 100));
+                  $lineTotal   = $effectiveQty * $unitPrice;
                 @endphp
                 <tr>
                   <td class="row-number text-center"></td>
@@ -89,28 +104,35 @@
                         <option value="{{ $m->id }}"
                           data-unit="{{ $m->unit }}"
                           data-price="{{ $m->default_unit_price }}"
-                          @selected($m->id === $line->material_id)
+                          @selected($m->id === $line->material_id || $m->id === $line->ingredient_id)
                         >{{ $m->material_name }}</option>
                       @endforeach
                     </select>
-                    <input type="hidden" name="rows[][ingredient_id]" value="{{ $line->material_id }}">
+                    <input type="hidden" name="rows[][ingredient_id]" value="{{ $line->material_id ?? $line->ingredient_id }}">
                   </td>
 
                   <td class="unit-cell text-center">
-                    {{ $line->material->unit ?? '—' }}
+                    {{ $line->unit ?? optional($line->material)->unit ?? '—' }}
                   </td>
 
                   <td>
                     <input type="number" step="0.001" min="0"
-                      name="rows[][qty]"
-                      value="{{ $line->qty }}"
+                      name="rows[][quantity_per_unit]"
+                      value="{{ $qtyBase }}"
                       class="pixel-input w-full text-right qty-input">
                   </td>
 
                   <td>
                     <input type="number" step="0.01" min="0"
-                      name="rows[][unit_price]"
-                      value="{{ $line->unit_price_snapshot }}"
+                      name="rows[][wastage_pct]"
+                      value="{{ $wastagePct }}"
+                      class="pixel-input w-full text-right wastage-input">
+                  </td>
+
+                  <td>
+                    <input type="number" step="0.01" min="0"
+                      name="rows[][unit_price_snapshot]"
+                      value="{{ $unitPrice }}"
                       class="pixel-input w-full text-right price-input">
                   </td>
 
@@ -119,6 +141,7 @@
                   </td>
 
                   <td class="text-center">
+                    {{-- keep separate route for delete; this form will still work fine --}}
                     <form method="POST" action="{{ route('products.recipe.destroy', [$product, $line]) }}"
                           onsubmit="return confirm('Remove this material from recipe?');">
                       @csrf @method('DELETE')
@@ -133,10 +156,16 @@
 
             <tfoot>
               @php
-                $grand = (float)($recipe->sum(fn($l) => (float)($l->qty ?? 0) * (float)($l->unit_price_snapshot ?? 0)));
+                $grand = (float)$recipe->sum(function($l){
+                  $qtyBase    = (float)($l->quantity_per_unit ?? $l->qty ?? 0);
+                  $wastagePct = (float)($l->wastage_pct ?? 0);
+                  $unitPrice  = (float)($l->unit_price_snapshot ?? $l->unit_price ?? 0);
+                  $effective  = $qtyBase * (1 + ($wastagePct / 100));
+                  return $effective * $unitPrice;
+                });
               @endphp
               <tr>
-                <td colspan="5" class="text-right">Total Unit Material Cost</td>
+                <td colspan="6" class="text-right">Total Unit Material Cost</td>
                 <td class="text-right" id="grandTotal">
                   {{ number_format($grand, 2) }}
                 </td>
@@ -380,7 +409,9 @@
   const body  = document.getElementById('recipeBody');
   const grand = document.getElementById('grandTotal');
 
-  function money(n){ return (Math.round(n * 100)/100).toFixed(2); }
+  function money(n){
+    return (Math.round(n * 100)/100).toFixed(2);
+  }
 
   function renumberRows(){
     document.querySelectorAll('#recipeBody tr').forEach((tr,i)=>{
@@ -391,16 +422,26 @@
 
   function recalcRow(tr){
     const qty   = parseFloat(tr.querySelector('.qty-input')?.value || 0);
+    const wast  = parseFloat(tr.querySelector('.wastage-input')?.value || 0);
     const price = parseFloat(tr.querySelector('.price-input')?.value || 0);
+
+    const factor = isNaN(wast) ? 1 : (1 + wast / 100);
+    const effQty = qty * factor;
+
     const cell  = tr.querySelector('.line-total');
-    if (cell) cell.textContent = money(qty * price);
+    if (cell) cell.textContent = money(effQty * price);
   }
 
   function recalcAll(){
     let total = 0;
     document.querySelectorAll('#recipeBody tr').forEach(tr => {
       recalcRow(tr);
-      total += parseFloat(tr.querySelector('.line-total')?.textContent || 0);
+      const cell = tr.querySelector('.line-total');
+      if (cell){
+        const raw = (cell.textContent || '0').replace(/,/g,'');
+        const val = parseFloat(raw) || 0;
+        total += val;
+      }
     });
     if (grand) grand.textContent = money(total);
     renumberRows();
@@ -422,16 +463,34 @@
     return select;
   }
 
-  function addRow({material_id=null, unit='', qty=0, unit_price=0} = {}){
+  function addRow({material_id=null, unit='', qty=0, wastage_pct=0, unit_price=0} = {}){
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="row-number text-center"></td>
       <td></td>
       <td class="unit-cell text-center">${unit || ''}</td>
-      <td><input type="number" step="0.001" min="0" name="rows[][qty]" value="${qty}" class="pixel-input w-full text-right qty-input"></td>
-      <td><input type="number" step="0.01" min="0" name="rows[][unit_price]" value="${unit_price}" class="pixel-input w-full text-right price-input"></td>
+      <td>
+        <input type="number" step="0.001" min="0"
+          name="rows[][quantity_per_unit]"
+          value="${qty}"
+          class="pixel-input w-full text-right qty-input">
+      </td>
+      <td>
+        <input type="number" step="0.01" min="0"
+          name="rows[][wastage_pct]"
+          value="${wastage_pct}"
+          class="pixel-input w-full text-right wastage-input">
+      </td>
+      <td>
+        <input type="number" step="0.01" min="0"
+          name="rows[][unit_price_snapshot]"
+          value="${unit_price}"
+          class="pixel-input w-full text-right price-input">
+      </td>
       <td class="text-right line-total">0.00</td>
-      <td class="text-center"><button type="button" class="pixel-link pixel-link-danger btnRemoveRow">Delete</button></td>
+      <td class="text-center">
+        <button type="button" class="pixel-link pixel-link-danger btnRemoveRow">Delete</button>
+      </td>
     `;
 
     const cell   = tr.children[1];
@@ -440,6 +499,7 @@
     hidden.type = 'hidden';
     hidden.name = 'rows[][ingredient_id]';
     hidden.value = material_id || (select.value ?? '');
+
     cell.appendChild(select);
     cell.appendChild(hidden);
 
@@ -454,6 +514,7 @@
       recalcAll();
     });
     tr.querySelector('.qty-input').addEventListener('input', recalcAll);
+    tr.querySelector('.wastage-input').addEventListener('input', recalcAll);
     tr.querySelector('.price-input').addEventListener('input', recalcAll);
     tr.querySelector('.btnRemoveRow').addEventListener('click', () => { tr.remove(); recalcAll(); });
 
@@ -484,6 +545,7 @@
       });
     }
     tr.querySelector('.qty-input')?.addEventListener('input', recalcAll);
+    tr.querySelector('.wastage-input')?.addEventListener('input', recalcAll);
     tr.querySelector('.price-input')?.addEventListener('input', recalcAll);
   });
 
@@ -494,10 +556,11 @@
     const res  = await fetch(`{{ route('products.materials.defaults', $product) }}`);
     const rows = await res.json();
     rows.forEach(r => addRow({
-      material_id: r.ingredient_id,
+      material_id: r.ingredient_id ?? r.material_id,
       unit: r.unit,
-      qty: r.qty,
-      unit_price: r.unit_price
+      qty: r.quantity_per_unit ?? r.qty ?? 0,
+      wastage_pct: r.wastage_pct ?? 0,
+      unit_price: r.unit_price_snapshot ?? r.unit_price ?? r.default_unit_price ?? 0
     }));
     recalcAll();
   });

@@ -9,10 +9,48 @@
     'Fillers & Binders','Sugars','Water / Ice','Smoke Materials','Casings',
     'Packaging Films & Bags','Labels & Cartons','Cleaning & Sanitation (Non-food)',
   ];
-  $unitOptions = [
-    'kg'=>'Kilograms','g'=>'Grams','lbs'=>'Pounds','pcs'=>'Pieces','pkg'=>'Package',
-    'box'=>'Box','bag'=>'Bag','roll'=>'Roll','tray'=>'Tray','lt'=>'Liters','ml'=>'Milliliters','m3'=>'Cubic Meter',
-  ];
+
+  // If controller passes $units / $storageTypes, we honor them; otherwise fall back to defaults.
+  $unitOptions = [];
+  if (!empty($units ?? null)) {
+      foreach ($units as $u) {
+          $unitOptions[$u] = match ($u) {
+              'kg'  => 'Kilograms',
+              'g'   => 'Grams',
+              'lbs' => 'Pounds',
+              'pcs' => 'Pieces',
+              'pkg' => 'Package',
+              'box' => 'Box',
+              'bag' => 'Bag',
+              'roll'=> 'Roll',
+              'tray'=> 'Tray',
+              'lt'  => 'Liters',
+              'ml'  => 'Milliliters',
+              'm3'  => 'Cubic Meter',
+              default => strtoupper($u),
+          };
+      }
+  } else {
+      $unitOptions = [
+        'kg'=>'Kilograms','g'=>'Grams','lbs'=>'Pounds','pcs'=>'Pieces','pkg'=>'Package',
+        'box'=>'Box','bag'=>'Bag','roll'=>'Roll','tray'=>'Tray','lt'=>'Liters','ml'=>'Milliliters','m3'=>'Cubic Meter',
+      ];
+  }
+
+  $storageOptions = [];
+  if (!empty($storageTypes ?? null)) {
+      foreach ($storageTypes as $s) {
+          $storageOptions[$s] = ucwords(str_replace('_',' ', $s));
+      }
+  } else {
+      $storageOptions = [
+          'chiller' => 'Chiller',
+          'freezer' => 'Freezer',
+          'dry'     => 'Dry Storage',
+          'ambient' => 'Ambient / Room',
+      ];
+  }
+
   $oldUnit = old('unit', 'kg'); // default to kg
 @endphp
 
@@ -169,7 +207,7 @@
                 Add Material
               </h3>
               <p class="mt-1 text-xs md:text-sm text-slate-400">
-                Define units, pricing, and stock thresholds so production never stalls due to missing ingredients.
+                Define units, pricing, storage, and stock thresholds so production never stalls due to missing ingredients.
               </p>
             </div>
             <button
@@ -279,7 +317,6 @@
                   min="0" step="0.01"
                   class="input-dark w-full pl-7"
                   value="{{ old('unit_price', 0) }}"
-                  required
                 />
               </div>
               <p class="mt-1 text-[11px] text-slate-500">Per selected unit (kg, pcs, etc.).</p>
@@ -295,7 +332,6 @@
                 step="0.001"
                 class="input-dark w-full"
                 value="{{ old('quantity_kg', 0) }}"
-                required
               />
               <p class="mt-1 text-[11px] text-slate-500">Initial on-hand quantity for this material.</p>
             </div>
@@ -315,6 +351,77 @@
                 value="{{ old('min_stock_kg') }}"
               />
               <p class="mt-1 text-[11px] text-slate-500">Alerts trigger when stock drops below this level.</p>
+            </div>
+
+            {{-- Section: Supplier & Batch --}}
+            <div>
+              <label class="label-dark">Supplier Name</label>
+              <input
+                name="supplier_name"
+                class="input-dark w-full"
+                value="{{ old('supplier_name') }}"
+                placeholder="e.g., GenRev Farms, ABC Meat Trading"
+              />
+              <p class="mt-1 text-[11px] text-slate-500">Optional supplier reference for traceability.</p>
+            </div>
+
+            <div>
+              <label class="label-dark">Batch Code (optional)</label>
+              <input
+                name="batch_code"
+                class="input-dark w-full font-mono text-xs"
+                value="{{ old('batch_code') }}"
+                placeholder="Leave blank to auto-generate"
+              />
+              <p class="mt-1 text-[11px] text-slate-500">
+                If empty, the system will generate a batch code for you.
+              </p>
+            </div>
+
+            {{-- Section: Storage --}}
+            <div>
+              <label class="label-dark">Storage Type</label>
+              <select name="storage_type" class="input-dark w-full">
+                <option value="">Select storage</option>
+                @foreach($storageOptions as $value => $label)
+                  <option value="{{ $value }}" @selected(old('storage_type') === $value)>{{ $label }}</option>
+                @endforeach
+              </select>
+              <p class="mt-1 text-[11px] text-slate-500">Helps with expiry logic & inventory grouping.</p>
+            </div>
+
+            {{-- Section: Dates --}}
+            <div>
+              <label class="label-dark">Manufactured Date</label>
+              <input
+                type="date"
+                name="manufactured_at"
+                class="input-dark w-full"
+                value="{{ old('manufactured_at') }}"
+              />
+              <p class="mt-1 text-[11px] text-slate-500">Optional. Must not be in the future.</p>
+            </div>
+
+            <div>
+              <label class="label-dark">Received Date</label>
+              <input
+                type="date"
+                name="received_at"
+                class="input-dark w-full"
+                value="{{ old('received_at') }}"
+              />
+              <p class="mt-1 text-[11px] text-slate-500">Optional receiving date for this lot.</p>
+            </div>
+
+            <div>
+              <label class="label-dark">Expiry Date</label>
+              <input
+                type="date"
+                name="expires_at"
+                class="input-dark w-full"
+                value="{{ old('expires_at') }}"
+              />
+              <p class="mt-1 text-[11px] text-slate-500">Used for expired / nearing expiry filters.</p>
             </div>
 
             {{-- Section: SKU --}}
@@ -348,6 +455,17 @@
               <p class="text-[11px] text-slate-500 mt-1">
                 Tip: Use a readable pattern like <code>CAT-ITEM-VARIANT</code> (e.g., <code>PKG-VACBAG-300x400</code>).
               </p>
+            </div>
+
+            {{-- Notes --}}
+            <div class="md:col-span-2">
+              <label class="label-dark">Notes (optional)</label>
+              <textarea
+                name="notes"
+                rows="3"
+                class="input-dark w-full min-h-[80px] resize-y"
+                placeholder="Internal notes about quality, supplier agreements, fat content, or handling instructions."
+              >{{ old('notes') }}</textarea>
             </div>
 
             {{-- Action row --}}

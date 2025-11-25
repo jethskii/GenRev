@@ -37,11 +37,13 @@ class Production extends Model
         'production_date',
         'expiration_date',
         'quantity',
-        // Optional per-batch media (kept for backward-compat)
+
+        // Optional per-batch media (kept for backward compatibility)
         'image_disk',
         'image_path',
         'image_medium_path',
         'image_thumb_path',
+
         'remarks',
         'archived_reason',
         'purge_at',
@@ -52,8 +54,10 @@ class Production extends Model
         'id'                => 'integer',
         'parent_product_id' => 'integer',
         'product_id'        => 'integer',
+
         'production_date'   => 'date',
         'expiration_date'   => 'date',
+
         'forecasted_demand' => 'float',
         'unit_cost'         => 'float',
         'unit_price_pack'   => 'float',
@@ -62,9 +66,11 @@ class Production extends Model
         'quantity'          => 'integer',
         'available_pack'    => 'integer',
         'available_bag'     => 'integer',
+
         'remarks'           => 'string',
         'archived_reason'   => 'string',
         'purge_at'          => 'datetime',
+
         'deleted_at'        => 'datetime',
         'created_at'        => 'datetime',
         'updated_at'        => 'datetime',
@@ -79,7 +85,7 @@ class Production extends Model
         'image_srcset',
         'type_name',
         'type_keywords',
-        'purge_at',
+        'purge_at',              // computed TTL if not set
         'batch_label',
         'archived_reason_label',
     ];
@@ -110,7 +116,7 @@ class Production extends Model
 
     public function scopeVisible($q)
     {
-        $table = $this->getTable();
+        $table = (new static)->getTable();
         return $q->whereNull("$table.deleted_at");
     }
 
@@ -148,7 +154,9 @@ class Production extends Model
     public function scopeSearchArchived($q, ?string $term)
     {
         $s = trim((string) $term);
-        if ($s === '') return $q;
+        if ($s === '') {
+            return $q;
+        }
 
         return $q->where(function ($qq) use ($s) {
             $qq->where('batch_number', 'like', "%{$s}%")
@@ -180,7 +188,7 @@ class Production extends Model
                          ->select('productions.*');
 
             case 'batch':
-                // Numeric-friendly order: puts 2 before 10
+                // Numeric-friendly ordering, so "2" comes before "10"
                 return $q->orderBy(DB::raw('CAST(batch_number AS UNSIGNED)'))->orderBy('id');
 
             case 'qty':
@@ -197,11 +205,12 @@ class Production extends Model
      */
     public function scopePurgeable($q)
     {
-        $ttl = (int) config('app.archive_ttl_days', 7);
+        $ttl    = (int) config('app.archive_ttl_days', 7);
         $cutoff = Carbon::now()->subDays(max(1, $ttl));
+        $table  = (new static)->getTable();
 
-        return $q->onlyTrashed()->where(function ($qq) use ($cutoff) {
-            if (Schema::hasColumn($this->getTable(), 'purge_at')) {
+        return $q->onlyTrashed()->where(function ($qq) use ($cutoff, $table) {
+            if (Schema::hasColumn($table, 'purge_at')) {
                 $qq->whereNotNull('purge_at')
                    ->where('purge_at', '<=', Carbon::now());
             } else {
@@ -219,7 +228,9 @@ class Production extends Model
 
     public function getIsExpiredAttribute(): bool
     {
-        if (!$this->expiration_date) return false;
+        if (! $this->expiration_date) {
+            return false;
+        }
 
         return Carbon::today()->greaterThan(
             Carbon::parse($this->expiration_date)->startOfDay()
@@ -228,11 +239,13 @@ class Production extends Model
 
     public function getDaysToExpiryAttribute(): ?int
     {
-        if (!$this->expiration_date) return null;
+        if (! $this->expiration_date) {
+            return null;
+        }
 
         return Carbon::today()->startOfDay()->diffInDays(
             Carbon::parse($this->expiration_date)->startOfDay(),
-            false // negative if past
+            false // negative if already expired
         );
     }
 
@@ -246,20 +259,22 @@ class Production extends Model
 
     /**
      * Purge-at timestamp used by the Archived UI.
+     * If no explicit purge_at stored, compute deleted_at + TTL days.
      */
     public function getPurgeAtAttribute(): ?string
     {
-        if (array_key_exists('purge_at', $this->attributes) && !empty($this->attributes['purge_at'])) {
+        if (array_key_exists('purge_at', $this->attributes) && ! empty($this->attributes['purge_at'])) {
             try {
                 return Carbon::parse($this->attributes['purge_at'])->toDateTimeString();
             } catch (\Throwable $e) {
-                // ignore parse fail
+                // ignore parse failure
             }
         }
 
-        if (!$this->deleted_at) return null;
+        if (! $this->deleted_at) {
+            return null;
+        }
 
-        // match "may be permanently removed after seven days"
         $ttl = (int) config('app.archive_ttl_days', 7);
 
         return Carbon::parse($this->deleted_at)
@@ -268,7 +283,7 @@ class Production extends Model
             ->toDateTimeString();
     }
 
-    /** Archived Reason label for UI */
+    /** Archived reason label for UI */
     public function getArchivedReasonLabelAttribute(): string
     {
         return match ($this->archived_reason) {
@@ -287,19 +302,18 @@ class Production extends Model
         // Prefer product-derived fields created by the controller’s image pipeline.
         if ($this->product) {
             $primary = $this->product->card_image_url ?: $this->product->image_url;
-            if (!empty($primary)) {
+            if (! empty($primary)) {
                 return (string) $primary;
             }
         }
 
-        // Fallback to batch-level stored paths (legacy support).
-        if (!empty($this->image_path)) {
+        // Fallback to batch-level stored paths (legacy).
+        if (! empty($this->image_path)) {
             $disk = $this->imageDisk();
 
             try {
                 return Storage::disk($disk)->url(ltrim($this->image_path, '/'));
             } catch (\Throwable $e) {
-                // Fallback to asset helper if disk call fails
                 return asset('storage/' . ltrim($this->image_path, '/'));
             }
         }
@@ -312,8 +326,8 @@ class Production extends Model
      */
     public function getImageSrcsetAttribute(): ?string
     {
-        // If product has a srcset (set by controller), use that.
-        if ($this->product && !empty($this->product->card_image_srcset)) {
+        // If product has a srcset (set by image pipeline), use that.
+        if ($this->product && ! empty($this->product->card_image_srcset)) {
             return (string) $this->product->card_image_srcset;
         }
 
@@ -322,7 +336,9 @@ class Production extends Model
         $parts = [];
 
         $push = function (?string $path, string $size) use (&$parts, $disk) {
-            if (!$path) return;
+            if (! $path) {
+                return;
+            }
 
             try {
                 $url = Storage::disk($disk)->url(ltrim($path, '/'));
@@ -333,7 +349,7 @@ class Production extends Model
             $parts[] = "{$url} {$size}";
         };
 
-        // Align with your 400/800/1200 WebP pipeline
+        // Align with 400/800/1200 WebP pipeline
         $push($this->image_thumb_path,  '400w');
         $push($this->image_medium_path, '800w');
         $push($this->image_path,        '1200w');
@@ -352,7 +368,9 @@ class Production extends Model
         if ($childName !== '') {
             if ($parentName !== '' && stripos($childName, $parentName) !== false) {
                 $type = trim(preg_replace('/\s+/', ' ', str_ireplace($parentName, '', $childName)));
-                if ($type !== '') return $type;
+                if ($type !== '') {
+                    return $type;
+                }
             }
 
             if ($parentName === '' || strcasecmp($childName, $parentName) !== 0) {
@@ -396,13 +414,11 @@ class Production extends Model
 
         $raw = trim((string) $value);
 
-        // Prefer numeric extraction (controller generates pure ints now)
         if ($raw !== '' && preg_match('/(\d+)/', $raw, $m)) {
             $this->attributes['batch_number'] = (string) ((int) $m[1]);
             return;
         }
 
-        // Fallback: sanitized string (legacy)
         $norm = preg_replace('/\s+/', ' ', $raw);
         $this->attributes['batch_number'] = mb_strtoupper($norm);
     }
@@ -423,7 +439,7 @@ class Production extends Model
     protected static function booted(): void
     {
         static::saving(function (self $m) {
-            // numeric coercions & clamps
+            // numeric coercions and clamps
             $m->quantity          = is_numeric($m->quantity) ? (int) $m->quantity : 0;
             $m->current_inventory = is_numeric($m->current_inventory) ? (float) $m->current_inventory : null;
             $m->forecasted_demand = is_numeric($m->forecasted_demand) ? (float) $m->forecasted_demand : 0.0;
@@ -431,11 +447,9 @@ class Production extends Model
             $m->unit_price_pack   = is_numeric($m->unit_price_pack) ? max(0.0, (float) $m->unit_price_pack) : 0.0;
             $m->unit_price_bag    = is_numeric($m->unit_price_bag)  ? max(0.0, (float) $m->unit_price_bag)  : 0.0;
 
-            // availability fields
             $m->available_pack = is_numeric($m->available_pack) ? max(0, (int) $m->available_pack) : 0;
             $m->available_bag  = is_numeric($m->available_bag)  ? max(0, (int) $m->available_bag)  : 0;
 
-            // defaults
             if ($m->exists === false && ($m->current_inventory === null || $m->current_inventory === '')) {
                 $m->current_inventory = (int) $m->quantity;
             }
@@ -449,7 +463,7 @@ class Production extends Model
             }
 
             // ensure parent_product_id
-            if (empty($m->parent_product_id) && !empty($m->product_id)) {
+            if (empty($m->parent_product_id) && ! empty($m->product_id)) {
                 if ($m->relationLoaded('product') && $m->product) {
                     $m->parent_product_id = (int) ($m->product->parent_id ?: $m->product_id);
                 } else {
@@ -458,7 +472,7 @@ class Production extends Model
                 }
             }
 
-            // snapshot label (type)
+            // snapshot label (type-ish text)
             if (empty($m->product_name_snapshot)) {
                 $cat   = null;
                 $pname = null;
@@ -466,7 +480,7 @@ class Production extends Model
                 if ($m->relationLoaded('product') && $m->product) {
                     $cat   = trim((string) ($m->product->category ?? ''));
                     $pname = trim((string) ($m->product->product_name ?? ''));
-                } elseif (!empty($m->product_id)) {
+                } elseif (! empty($m->product_id)) {
                     $prod  = Product::select('category', 'product_name')->find($m->product_id);
                     $cat   = trim((string) ($prod->category ?? ''));
                     $pname = trim((string) ($prod->product_name ?? ''));
@@ -475,13 +489,13 @@ class Production extends Model
                 $m->product_name_snapshot = $cat !== '' ? $cat : ($pname ?: 'Base');
             }
 
-            // expiration auto-calc
-            if (empty($m->expiration_date) && !empty($m->production_date)) {
+            // expiration auto-calc from product’s shelf_life_days
+            if (empty($m->expiration_date) && ! empty($m->production_date)) {
                 $days = null;
 
                 if ($m->relationLoaded('product') && $m->product) {
                     $days = (int) ($m->product->shelf_life_days ?? 0);
-                } elseif (!empty($m->product_id)) {
+                } elseif (! empty($m->product_id)) {
                     $days = (int) (Product::whereKey($m->product_id)->value('shelf_life_days') ?? 0);
                 }
 
@@ -515,7 +529,6 @@ class Production extends Model
      */
     protected function recomputeProductBalanceInternal(int $productId): void
     {
-        // only count non-archived (not soft-deleted) batches
         $produced = (float) static::query()
             ->where('product_id', $productId)
             ->whereNull('deleted_at')
@@ -539,8 +552,7 @@ class Production extends Model
             'stock_status' => $balance > 0 ? 'in_stock' : 'out_of_stock',
         ];
 
-        // don't push NULL into production_date if DB column is NOT NULL
-        if (!is_null($latestProdDate)) {
+        if (! is_null($latestProdDate)) {
             $data['production_date'] = $latestProdDate;
         }
 
@@ -556,16 +568,17 @@ class Production extends Model
     {
         /** @var self|null $row */
         $row = static::find($id);
-        if (!$row) return false;
+        if (! $row) {
+            return false;
+        }
 
         $row->archived_reason = $reason ?: 'manual';
 
         if (Schema::hasColumn($row->getTable(), 'purge_at')) {
-            $ttl = (int) config('app.archive_ttl_days', 7);
+            $ttl        = (int) config('app.archive_ttl_days', 7);
             $row->purge_at = Carbon::now()->addDays(max(1, $ttl));
         }
 
-        // save updated reason/purge_at then soft-delete
         $row->save();
 
         return (bool) $row->delete();
