@@ -485,7 +485,6 @@
         err.classList.remove('hidden');
         return;
       }
-
       try {
         const res = await fetch(@json(route('products.quick-store')), {
           method: 'POST',

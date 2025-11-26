@@ -25,11 +25,11 @@ class ProductController extends Controller
     /** Products index with filters, sort, and pagination (with latest production snapshot). */
     public function index(Request $request)
     {
-        $perPage   = max(1, (int) $request->integer('per_page', 10));
-        $search    = $request->get('search');
-        $category  = $request->get('category');
-        $status    = $request->get('status');
-        $sort      = $request->get('sort');
+        $perPage = max(1, (int) $request->integer('per_page', 10));
+        $search = $request->get('search');
+        $category = $request->get('category');
+        $status = $request->get('status');
+        $sort = $request->get('sort');
 
         $products = Product::query()
             ->search($search)
@@ -49,16 +49,16 @@ class ProductController extends Controller
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
-                'ok'        => true,
-                'data'      => $products->items(),
-                'meta'      => [
+                'ok' => true,
+                'data' => $products->items(),
+                'meta' => [
                     'current_page' => $products->currentPage(),
-                    'per_page'     => $products->perPage(),
-                    'total'        => $products->total(),
-                    'last_page'    => $products->lastPage(),
+                    'per_page' => $products->perPage(),
+                    'total' => $products->total(),
+                    'last_page' => $products->lastPage(),
                 ],
-                'filters'   => compact('search','category','status','sort'),
-                'categories'=> $categories,
+                'filters' => compact('search', 'category', 'status', 'sort'),
+                'categories' => $categories,
             ]);
         }
 
@@ -69,10 +69,10 @@ class ProductController extends Controller
     public function show(Product $product, Request $request)
     {
         $product->load([
-            'productions' => fn ($q) => $q->orderByDesc('production_date')->orderByDesc('id'),
+            'productions' => fn($q) => $q->orderByDesc('production_date')->orderByDesc('id'),
             'recipes.material' => function ($q) {
                 $q->select('id', 'material_name', 'unit')
-                  ->addSelect(DB::raw('unit_price as default_unit_price'));
+                    ->addSelect(DB::raw('unit_price as default_unit_price'));
             },
             'parent:id,product_name',
             'children:id,product_name,parent_id',
@@ -84,16 +84,16 @@ class ProductController extends Controller
             ->orderBy('material_name')
             ->get();
 
-        $recipe   = $product->recipes;
+        $recipe = $product->recipes;
         $variants = $product->children;
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
-                'ok'        => true,
-                'product'   => $product,
+                'ok' => true,
+                'product' => $product,
                 'materials' => $materials,
-                'recipe'    => $recipe,
-                'variants'  => $variants,
+                'recipe' => $recipe,
+                'variants' => $variants,
             ]);
         }
 
@@ -105,10 +105,10 @@ class ProductController extends Controller
     public function create()
     {
         return view('products.create', [
-            'parents'        => Product::roots()->orderBy('product_name')->get(['id', 'product_name']),
-            'categories'     => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
-            'unitOptions'    => ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'],
-            'statusOptions'  => ['active' => 'Active', 'inactive' => 'Inactive', 'pending' => 'Pending', 'on_sale' => 'On Sale'],
+            'parents' => Product::roots()->orderBy('product_name')->get(['id', 'product_name']),
+            'categories' => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
+            'unitOptions' => ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'],
+            'statusOptions' => ['active' => 'Active', 'inactive' => 'Inactive', 'pending' => 'Pending', 'on_sale' => 'On Sale'],
         ]);
     }
 
@@ -133,10 +133,10 @@ class ProductController extends Controller
     public function edit(Product $product)
     {
         return view('products.edit', [
-            'product'       => $product,
-            'parents'       => Product::roots()->where('id', '<>', $product->id)->orderBy('product_name')->get(['id','product_name']),
-            'categories'    => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
-            'unitOptions'   => ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'],
+            'product' => $product,
+            'parents' => Product::roots()->where('id', '<>', $product->id)->orderBy('product_name')->get(['id', 'product_name']),
+            'categories' => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
+            'unitOptions' => ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'],
             'statusOptions' => ['active' => 'Active', 'inactive' => 'Inactive', 'pending' => 'Pending', 'on_sale' => 'On Sale'],
         ]);
     }
@@ -145,7 +145,7 @@ class ProductController extends Controller
     {
         $data = $this->validateProduct($request, $product->id);
 
-        if (!empty($data['parent_id']) && (int)$data['parent_id'] === (int)$product->id) {
+        if (!empty($data['parent_id']) && (int) $data['parent_id'] === (int) $product->id) {
             unset($data['parent_id']);
         }
 
@@ -168,70 +168,43 @@ class ProductController extends Controller
      * - Deletes Sales first, then Productions, then Recipes, then Product(s).
      * - Uses forceDelete where models use SoftDeletes to truly purge.
      */
-    public function destroy(Request $request, Product $product)
+    public function archiveProduct(Request $request, Product $product)
     {
+        Log::info('ARCHIVE PRODUCT ROUTE HIT', ['id' => $product->id]);
+
         try {
             DB::transaction(function () use ($product) {
+                // Soft delete product + its children
                 $targets = collect([$product])->merge($product->children()->get());
 
                 foreach ($targets as $p) {
-                    // Sales -> Productions -> Recipes
-                    Sale::where('product_id', $p->id)->withTrashed()->get()->each(function ($row) {
-                        method_exists($row, 'forceDelete') ? $row->forceDelete() : $row->delete();
-                    });
-
-                    Production::where('product_id', $p->id)->withTrashed()->get()->each(function ($row) {
-                        method_exists($row, 'forceDelete') ? $row->forceDelete() : $row->delete();
-                    });
-
-                    if (method_exists($p, 'recipes')) {
-                        $p->recipes()->delete();
-                    }
-
-                    // Delete main image if present (double-safety)
-                    try {
-                        if (!empty($p->image_path) && Storage::disk('public')->exists($p->image_path)) {
-                            Storage::disk('public')->delete($p->image_path);
-                        }
-                    } catch (\Throwable $e) {
-                        Log::warning('Failed to delete product image', ['product_id' => $p->id, 'error' => $e->getMessage()]);
-                    }
-
-                    method_exists($p, 'forceDelete') ? $p->forceDelete() : $p->delete();
+                    $p->delete();
                 }
             });
 
-            [$forecastedDemand, $actualInventory, $shortfall, $recommendedProduction] = $this->totalsSnapshot();
-
-            if ($request->ajax() || $request->wantsJson()) {
+            if ($request->ajax()) {
                 return response()->json([
-                    'ok'         => true,
-                    'message'    => 'Product permanently deleted.',
-                    'product_id' => (int) $product->id,
-                    'totals'     => [
-                        'forecastedDemand'      => (float)$forecastedDemand,
-                        'actualInventory'       => (float)$actualInventory,
-                        'shortfall'             => (float)$shortfall,
-                        'recommendedProduction' => (float)$recommendedProduction,
-                    ],
+                    'ok' => true,
+                    'message' => 'Product archived.',
+                    'id' => $product->id,
                 ]);
             }
 
-            return redirect()->route('products.index')->with('success', 'Product permanently deleted.');
+            return back()->with('success', 'Product archived.');
+
         } catch (\Throwable $e) {
-            Log::error('Failed to permanently delete product', [
-                'product_id' => $product->id ?? null,
-                'error'      => $e->getMessage(),
-            ]);
 
-            $msg = config('app.debug') ? 'Delete failed: '.$e->getMessage() : 'Server error while deleting product.';
+            Log::error('ARCHIVE FAILED', ['id' => $product->id, 'error' => $e->getMessage()]);
 
-            if ($request->ajax() || $request->wantsJson()) {
-                return response()->json(['ok' => false, 'message' => $msg], 500);
+            if ($request->ajax()) {
+                return response()->json(['ok' => false, 'error' => 'Archive failed'], 500);
             }
-            return redirect()->back()->with('error', $msg);
+
+            return back()->with('error', 'Archive failed.');
         }
     }
+
+
 
     /**
      * QUICK STORE (AJAX) — used by “+ New variant” button in Orders modal.
@@ -248,9 +221,9 @@ class ProductController extends Controller
         }
 
         $validated = $request->validate([
-            'parent_id'        => ['nullable','integer', Rule::exists('products','id')->whereNull('deleted_at')],
-            'unit_cost'        => ['nullable','numeric','min:0'],
-            'shelf_life_days'  => ['nullable','integer','min:0'],
+            'parent_id' => ['nullable', 'integer', Rule::exists('products', 'id')->whereNull('deleted_at')],
+            'unit_cost' => ['nullable', 'numeric', 'min:0'],
+            'shelf_life_days' => ['nullable', 'integer', 'min:0'],
         ]);
 
         if (Product::where('product_name', $name)->exists()) {
@@ -261,20 +234,20 @@ class ProductController extends Controller
         }
 
         $product = Product::create([
-            'product_name'     => $name,
-            'parent_id'        => $validated['parent_id'] ?? null,
-            'unit_cost'        => (float)($validated['unit_cost'] ?? 0),
-            'shelf_life_days'  => (int)($validated['shelf_life_days'] ?? 0),
-            'status'           => 'active',
-            'unit'             => 'kg',
+            'product_name' => $name,
+            'parent_id' => $validated['parent_id'] ?? null,
+            'unit_cost' => (float) ($validated['unit_cost'] ?? 0),
+            'shelf_life_days' => (int) ($validated['shelf_life_days'] ?? 0),
+            'status' => 'active',
+            'unit' => 'kg',
         ]);
 
         if ($request->wantsJson()) {
             return response()->json([
-                'ok'           => true,
-                'id'           => $product->id,
+                'ok' => true,
+                'id' => $product->id,
                 'product_name' => $product->product_name,
-                'unit_cost'    => (float)($product->unit_cost ?? 0),
+                'unit_cost' => (float) ($product->unit_cost ?? 0),
             ]);
         }
 
@@ -292,15 +265,15 @@ class ProductController extends Controller
     public function recipeStore(Request $request, Product $product)
     {
         $validated = $request->validate([
-            'rows'                       => ['required','array','min:1'],
-            'rows.*.ingredient_id'       => ['nullable','integer', 'exists:materials,id'],
-            'rows.*.material_id'         => ['nullable','integer', 'exists:materials,id'],
-            'rows.*.qty'                 => ['nullable','numeric','min:0'],
-            'rows.*.quantity_per_unit'   => ['nullable','numeric','min:0'],
-            'rows.*.unit'                => ['nullable','string','max:10'],
-            'rows.*.wastage_pct'         => ['nullable','numeric','min:0','max:100'],
-            'rows.*.unit_price'          => ['nullable','numeric','min:0'],
-            'rows.*.unit_price_snapshot' => ['nullable','numeric','min:0'],
+            'rows' => ['required', 'array', 'min:1'],
+            'rows.*.ingredient_id' => ['nullable', 'integer', 'exists:materials,id'],
+            'rows.*.material_id' => ['nullable', 'integer', 'exists:materials,id'],
+            'rows.*.qty' => ['nullable', 'numeric', 'min:0'],
+            'rows.*.quantity_per_unit' => ['nullable', 'numeric', 'min:0'],
+            'rows.*.unit' => ['nullable', 'string', 'max:10'],
+            'rows.*.wastage_pct' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'rows.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'rows.*.unit_price_snapshot' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         DB::transaction(function () use ($product, $validated) {
@@ -325,12 +298,12 @@ class ProductController extends Controller
                 }
 
                 $payload = [
-                    'qty'                 => $qty,
+                    'qty' => $qty,
                     'unit_price_snapshot' => $snap,
-                    'material_id'         => $matId,
-                    'ingredient_id'       => $matId,
-                    'quantity_per_unit'   => $qty,
-                    'wastage_pct'         => $wst,
+                    'material_id' => $matId,
+                    'ingredient_id' => $matId,
+                    'quantity_per_unit' => $qty,
+                    'wastage_pct' => $wst,
                 ];
                 if (!is_null($unt)) {
                     $payload['unit'] = $unt;
@@ -411,24 +384,24 @@ class ProductController extends Controller
     protected function validateProduct(Request $request, ?int $productId = null): array
     {
         $rules = [
-            'parent_id'           => ['nullable','integer', Rule::exists('products','id')->whereNull('deleted_at')],
-            'product_name'        => ['required', 'string', 'max:255', Rule::unique('products', 'product_name')->ignore($productId)],
-            'category'            => ['nullable', 'string', 'max:100'],
-            'unit'                => ['nullable', Rule::in(['kg','pcs','lt'])],
-            'status'              => ['nullable', Rule::in(['active','inactive','pending','on_sale'])],
-            'default_price'       => ['nullable', 'numeric', 'min:0'],
-            'shelf_life_days'     => ['nullable', 'integer', 'min:0'],
-            'yield_rate'          => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'parent_id' => ['nullable', 'integer', Rule::exists('products', 'id')->whereNull('deleted_at')],
+            'product_name' => ['required', 'string', 'max:255', Rule::unique('products', 'product_name')->ignore($productId)],
+            'category' => ['nullable', 'string', 'max:100'],
+            'unit' => ['nullable', Rule::in(['kg', 'pcs', 'lt'])],
+            'status' => ['nullable', Rule::in(['active', 'inactive', 'pending', 'on_sale'])],
+            'default_price' => ['nullable', 'numeric', 'min:0'],
+            'shelf_life_days' => ['nullable', 'integer', 'min:0'],
+            'yield_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'standard_batch_size' => ['nullable', 'numeric', 'min:0'],
-            'lead_time_days'      => ['nullable', 'integer', 'min:0'],
-            'min_run_qty'         => ['nullable', 'numeric', 'min:0'],
-            'max_run_qty'         => ['nullable', 'numeric', 'min:0'],
-            'storage_zone'        => ['nullable', Rule::in(['chiller','freezer','ambient'])],
-            'unit_cost'           => ['nullable', 'numeric', 'min:0'],
-            'last_cost_date'      => ['nullable', 'date'],
-            'temp_requirements'   => ['nullable', 'string', 'max:2000'],
-            'line_constraints'    => ['nullable'],
-            'image'               => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
+            'lead_time_days' => ['nullable', 'integer', 'min:0'],
+            'min_run_qty' => ['nullable', 'numeric', 'min:0'],
+            'max_run_qty' => ['nullable', 'numeric', 'min:0'],
+            'storage_zone' => ['nullable', Rule::in(['chiller', 'freezer', 'ambient'])],
+            'unit_cost' => ['nullable', 'numeric', 'min:0'],
+            'last_cost_date' => ['nullable', 'date'],
+            'temp_requirements' => ['nullable', 'string', 'max:2000'],
+            'line_constraints' => ['nullable'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
         ];
 
         if (Schema::hasColumn('products', 'product_code')) {
@@ -448,9 +421,9 @@ class ProductController extends Controller
     private function totalsSnapshot(): array
     {
         $products = Product::all();
-        $forecastedDemand      = (float) $products->sum('forecasted_demand');
-        $actualInventory       = (float) $products->sum('quantity');
-        $shortfall             = max($forecastedDemand - $actualInventory, 0.0);
+        $forecastedDemand = (float) $products->sum('forecasted_demand');
+        $actualInventory = (float) $products->sum('quantity');
+        $shortfall = max($forecastedDemand - $actualInventory, 0.0);
         $recommendedProduction = $shortfall;
 
         return [$forecastedDemand, $actualInventory, $shortfall, $recommendedProduction];
@@ -458,8 +431,10 @@ class ProductController extends Controller
 
     private function normMoney($v): float
     {
-        if (is_null($v)) return 0.00;
-        if (is_numeric($v)) return round((float) $v, 2);
+        if (is_null($v))
+            return 0.00;
+        if (is_numeric($v))
+            return round((float) $v, 2);
 
         $s = (string) $v;
         $s = preg_replace('/[₱\p{Sc}\s]+/u', '', $s);
@@ -477,8 +452,10 @@ class ProductController extends Controller
 
     private function normQty($v): float
     {
-        if (is_null($v)) return 0.000;
-        if (is_numeric($v)) return round((float) $v, 3);
+        if (is_null($v))
+            return 0.000;
+        if (is_numeric($v))
+            return round((float) $v, 3);
 
         $s = (string) $v;
         $s = preg_replace('/[\s,]+/u', '', $s);
@@ -490,7 +467,8 @@ class ProductController extends Controller
 
     private function normPct($v): float
     {
-        if (is_null($v) || $v === '') return 0.00;
+        if (is_null($v) || $v === '')
+            return 0.00;
         $num = is_numeric($v) ? (float) $v : 0.00;
         return round(min(max($num, 0.00), 100.00), 2);
     }
@@ -512,7 +490,7 @@ class ProductController extends Controller
             } catch (\Throwable $e) {
                 Log::warning('setImageFromUpload failed, using controller pipeline instead', [
                     'product_id' => $product->id,
-                    'error'      => $e->getMessage(),
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
@@ -538,66 +516,75 @@ class ProductController extends Controller
 
             $disk = 'public';
 
-            $uuid = (string) Str::uuid();
-            $base = "products/{$product->id}/{$uuid}";
+            // Use product name as base, e.g. products/12/chicken-breast
+            $baseName = \Illuminate\Support\Str::slug($product->product_name ?? 'product');
+            $base = "products/{$product->id}/{$baseName}";
 
-            $img    = Image::read($file->getRealPath())->orient();
+            $img = Image::read($file->getRealPath())->orient();
             $master = (clone $img)->scaleDown(1600, 1600);
 
             $w1200 = (clone $master)->scaleDown(1200, 1200);
-            $w800  = (clone $master)->scaleDown(800, 800);
-            $w400  = (clone $master)->scaleDown(400, 400);
+            $w800 = (clone $master)->scaleDown(800, 800);
+            $w400 = (clone $master)->scaleDown(400, 400);
 
             $path1200 = "{$base}-1200.webp";
-            $path800  = "{$base}-800.webp";
-            $path400  = "{$base}-400.webp";
+            $path800 = "{$base}-800.webp";
+            $path400 = "{$base}-400.webp";
 
             Storage::disk($disk)->put($path1200, (string) $w1200->toWebp(quality: 80));
-            Storage::disk($disk)->put($path800,  (string) $w800->toWebp(quality: 80));
-            Storage::disk($disk)->put($path400,  (string) $w400->toWebp(quality: 80));
+            Storage::disk($disk)->put($path800, (string) $w800->toWebp(quality: 80));
+            Storage::disk($disk)->put($path400, (string) $w400->toWebp(quality: 80));
 
             $url1200 = Storage::disk($disk)->url($path1200);
-            $url800  = Storage::disk($disk)->url($path800);
-            $url400  = Storage::disk($disk)->url($path400);
+            $url800 = Storage::disk($disk)->url($path800);
+            $url400 = Storage::disk($disk)->url($path400);
 
-            $srcset  = "{$url400} 400w, {$url800} 800w, {$url1200} 1200w";
+            $srcset = "{$url400} 400w, {$url800} 800w, {$url1200} 1200w";
 
-            $product->image_disk        = $disk;
-            $product->image_path        = $path1200;
+            $product->image_disk = $disk;
+            $product->image_path = $path1200;
             $product->image_medium_path = $path800;
-            $product->image_thumb_path  = $path400;
+            $product->image_thumb_path = $path400;
 
-            $product->image_url         = $url1200;
-            $product->card_image_url    = $url800;
+            $product->image_url = $url1200;
+            $product->card_image_url = $url800;
             $product->card_image_srcset = $srcset;
 
             $product->save();
         } catch (\Throwable $e) {
             Log::warning('applyImageToProduct failed, using simple store()', [
                 'product_id' => $product->id,
-                'error'      => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
 
             try {
-                $path = $file->store('products', 'public');
-                $url  = Storage::disk('public')->url($path);
+                $disk = 'public';
+                $baseName = \Illuminate\Support\Str::slug($product->product_name ?? 'product');
+                $dir = "products/{$product->id}";
+                $ext = $file->getClientOriginalExtension() ?: 'jpg';
+                $filename = "{$baseName}.{$ext}";
+                $path = "{$dir}/{$filename}";
 
-                $product->image_disk        = 'public';
-                $product->image_path        = $path;
+                Storage::disk($disk)->putFileAs($dir, $file, $filename);
+                $url = Storage::disk($disk)->url($path);
+
+                $product->image_disk = $disk;
+                $product->image_path = $path;
                 $product->image_medium_path = null;
-                $product->image_thumb_path  = null;
+                $product->image_thumb_path = null;
 
-                $product->image_url         = $url;
-                $product->card_image_url    = $url;
+                $product->image_url = $url;
+                $product->card_image_url = $url;
                 $product->card_image_srcset = null;
 
                 $product->save();
             } catch (\Throwable $e2) {
                 Log::error('Fallback store() for product image failed', [
                     'product_id' => $product->id,
-                    'error'      => $e2->getMessage(),
+                    'error' => $e2->getMessage(),
                 ]);
             }
         }
     }
+
 }

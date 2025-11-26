@@ -23,8 +23,8 @@ class Product extends Model
     protected $table = 'products';
 
     protected $primaryKey = 'id';
-    public $incrementing  = true;
-    protected $keyType    = 'int';
+    public $incrementing = true;
+    protected $keyType = 'int';
 
     /** Columns expected from controllers + schema (includes parent_id) */
     protected $fillable = [
@@ -80,30 +80,30 @@ class Product extends Model
     ];
 
     protected $casts = [
-        'id'                  => 'integer',
-        'parent_id'           => 'integer',
+        'id' => 'integer',
+        'parent_id' => 'integer',
 
-        'deleted_at'          => 'datetime',
-        'created_at'          => 'datetime',
-        'updated_at'          => 'datetime',
-        'last_cost_date'      => 'date',
-        'production_date'     => 'date',
+        'deleted_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+        'last_cost_date' => 'date',
+        'production_date' => 'date',
 
-        'quantity'            => 'float',
-        'current_inventory'   => 'float',
-        'unit_cost'           => 'float',
-        'price'               => 'float',
-        'default_price'       => 'float',
-        'forecasted_demand'   => 'float',
+        'quantity' => 'float',
+        'current_inventory' => 'float',
+        'unit_cost' => 'float',
+        'price' => 'float',
+        'default_price' => 'float',
+        'forecasted_demand' => 'float',
 
-        'shelf_life_days'     => 'integer',
-        'yield_rate'          => 'float',
+        'shelf_life_days' => 'integer',
+        'yield_rate' => 'float',
         'standard_batch_size' => 'float',
-        'lead_time_days'      => 'integer',
-        'min_run_qty'         => 'float',
-        'max_run_qty'         => 'float',
+        'lead_time_days' => 'integer',
+        'min_run_qty' => 'float',
+        'max_run_qty' => 'float',
 
-        'line_constraints'    => 'array',
+        'line_constraints' => 'array',
     ];
 
     /**
@@ -219,8 +219,8 @@ class Product extends Model
     protected function image(): Attribute
     {
         return Attribute::make(
-            get: fn () => $this->image_path,
-            set: fn ($value) => ['image_path' => $value],
+            get: fn() => $this->image_path,
+            set: fn($value) => ['image_path' => $value],
         );
     }
 
@@ -229,9 +229,11 @@ class Product extends Model
      */
     protected function imageDisk(): string
     {
-        // Prefer DB setting; fall back to configured default; then "public".
-        return $this->image_disk ?: config('filesystems.default', 'public');
+        // Always store product images on the public disk
+        return $this->image_disk ?: 'public';
     }
+
+
 
     /**
      * Public URL for images, prefer DB image_url if present.
@@ -239,14 +241,14 @@ class Product extends Model
     public function getImageUrlAttribute($value): string
     {
         // If DB already stores a full URL, use it.
-        if (! empty($value) && is_string($value)) {
+        if (!empty($value) && is_string($value)) {
             return $value;
         }
 
         $disk = $this->imageDisk();
 
         // Try physical path columns
-        if (! empty($this->image_path)) {
+        if (!empty($this->image_path)) {
             try {
                 return Storage::disk($disk)->url(ltrim($this->image_path, '/'));
             } catch (\Throwable $e) {
@@ -271,15 +273,15 @@ class Product extends Model
         $disk = $this->imageDisk();
 
         try {
-            if (! empty($this->image_thumb_path)) {
+            if (!empty($this->image_thumb_path)) {
                 return Storage::disk($disk)->url($this->image_thumb_path);
             }
 
-            if (! empty($this->image_medium_path)) {
+            if (!empty($this->image_medium_path)) {
                 return Storage::disk($disk)->url($this->image_medium_path);
             }
 
-            if (! empty($this->image_path)) {
+            if (!empty($this->image_path)) {
                 return Storage::disk($disk)->url($this->image_path);
             }
         } catch (\Throwable $e) {
@@ -299,7 +301,7 @@ class Product extends Model
      */
     public function getCardImageUrlAttribute($value): string
     {
-        if (! empty($value) && is_string($value)) {
+        if (!empty($value) && is_string($value)) {
             return $value;
         }
 
@@ -316,15 +318,15 @@ class Product extends Model
      */
     public function getCardImageSrcsetAttribute($value): ?string
     {
-        if (! empty($value) && is_string($value)) {
+        if (!empty($value) && is_string($value)) {
             return $value;
         }
 
-        $disk  = $this->imageDisk();
+        $disk = $this->imageDisk();
         $parts = [];
 
         $push = function (?string $path, string $size) use (&$parts, $disk) {
-            if (! $path) {
+            if (!$path) {
                 return;
             }
 
@@ -337,9 +339,9 @@ class Product extends Model
             $parts[] = "{$url} {$size}";
         };
 
-        $push($this->image_thumb_path,  '400w');
+        $push($this->image_thumb_path, '400w');
         $push($this->image_medium_path, '800w');
-        $push($this->image_path,        '1200w');
+        $push($this->image_path, '1200w');
 
         return $parts ? implode(', ', $parts) : null;
     }
@@ -348,10 +350,10 @@ class Product extends Model
     public function getUnitMaterialCostAttribute(): float
     {
         $rows = $this->relationLoaded('recipes') ? $this->recipes : $this->recipes()->get();
-        $sum  = 0.0;
+        $sum = 0.0;
 
         foreach ($rows as $r) {
-            $qty  = is_numeric($r->qty) ? (float) $r->qty : 0.0;
+            $qty = is_numeric($r->qty) ? (float) $r->qty : 0.0;
             $unit = is_numeric($r->unit_price_snapshot) ? (float) $r->unit_price_snapshot : 0.0;
             $sum += $qty * $unit;
         }
@@ -379,7 +381,7 @@ class Product extends Model
     /** Gross margin percentage. */
     public function getGrossMarginPctAttribute(): ?float
     {
-        $cost  = (float) $this->effective_unit_cost;
+        $cost = (float) $this->effective_unit_cost;
         $price = (float) $this->price;
 
         if ($price <= 0) {
@@ -412,7 +414,7 @@ class Product extends Model
 
     public function getIsVariantAttribute(): bool
     {
-        return ! empty($this->parent_id);
+        return !empty($this->parent_id);
     }
 
     public function getBaseNameAttribute(): ?string
@@ -425,11 +427,11 @@ class Product extends Model
      */
     public function getTypeNameAttribute(): string
     {
-        $childName  = trim((string) ($this->product_name ?? ''));
+        $childName = trim((string) ($this->product_name ?? ''));
         $parentName = trim((string) ($this->parent?->product_name ?? ''));
-        $category   = trim((string) ($this->category ?? ''));
+        $category = trim((string) ($this->category ?? ''));
 
-        if (! $this->is_variant) {
+        if (!$this->is_variant) {
             return $category !== '' ? $category : 'Base';
         }
 
@@ -475,7 +477,7 @@ class Product extends Model
     /** Convenience: compute an expiry date from a given production date. */
     public function computeExpiryFrom(\DateTimeInterface|string|null $productionDate): ?string
     {
-        if (! $productionDate || ! $this->shelf_life_days) {
+        if (!$productionDate || !$this->shelf_life_days) {
             return null;
         }
 
@@ -611,69 +613,75 @@ class Product extends Model
         $disk = $this->imageDisk() ?: 'public';
 
         try {
-            if (! class_exists(Image::class)) {
+            if (!class_exists(Image::class)) {
                 throw new \RuntimeException('Intervention Image facade not available');
             }
 
             $productId = $this->id ?: 'tmp';
-            $uuid      = (string) Str::uuid();
-            $base      = "products/{$productId}/{$uuid}";
+            $baseName = Str::slug($this->product_name ?: 'product');
+            $base = "products/{$productId}/{$baseName}";
 
-            // v3: read and orient
-            $img    = Image::read($file->getRealPath())->orient();
+            $img = Image::read($file->getRealPath())->orient();
             $master = (clone $img)->scaleDown(1600, 1600);
 
             $w1200 = (clone $master)->scaleDown(1200, 1200);
-            $w800  = (clone $master)->scaleDown(800, 800);
-            $w400  = (clone $master)->scaleDown(400, 400);
+            $w800 = (clone $master)->scaleDown(800, 800);
+            $w400 = (clone $master)->scaleDown(400, 400);
 
             $path1200 = "{$base}-1200.webp";
-            $path800  = "{$base}-800.webp";
-            $path400  = "{$base}-400.webp";
+            $path800 = "{$base}-800.webp";
+            $path400 = "{$base}-400.webp";
 
             Storage::disk($disk)->put($path1200, (string) $w1200->toWebp(quality: 80));
-            Storage::disk($disk)->put($path800,  (string) $w800->toWebp(quality: 80));
-            Storage::disk($disk)->put($path400,  (string) $w400->toWebp(quality: 80));
+            Storage::disk($disk)->put($path800, (string) $w800->toWebp(quality: 80));
+            Storage::disk($disk)->put($path400, (string) $w400->toWebp(quality: 80));
 
             $url1200 = Storage::disk($disk)->url($path1200);
-            $url800  = Storage::disk($disk)->url($path800);
-            $url400  = Storage::disk($disk)->url($path400);
+            $url800 = Storage::disk($disk)->url($path800);
+            $url400 = Storage::disk($disk)->url($path400);
 
             $srcset = "{$url400} 400w, {$url800} 800w, {$url1200} 1200w";
 
-            $this->image_disk        = $disk;
-            $this->image_path        = $path1200;
+            $this->image_disk = $disk;
+            $this->image_path = $path1200;
             $this->image_medium_path = $path800;
-            $this->image_thumb_path  = $path400;
+            $this->image_thumb_path = $path400;
 
-            $this->image_url          = $url1200;
-            $this->card_image_url     = $url800;
-            $this->card_image_srcset  = $srcset;
+            $this->image_url = $url1200;
+            $this->card_image_url = $url800;
+            $this->card_image_srcset = $srcset;
             $this->image_original_url = $url1200;
+
         } catch (\Throwable $e) {
-            Log::warning('Product::setImageFromUpload failed', [
-                'product_id' => $this->id,
-                'error'      => $e->getMessage(),
-            ]);
 
-            // Fallback: simple store so UI still has something
-            $path = $file->store('products', $disk);
-            $url  = Storage::disk($disk)->url($path);
+            // Fallback — ALWAYS WORKS
+            $productId = $this->id ?: 'tmp';
+            $baseDir = "products/{$productId}";
+            $baseName = Str::slug($this->product_name ?: 'product');
+            $ext = $file->getClientOriginalExtension() ?: 'jpg';
+            $filename = "{$baseName}.{$ext}";
+            $path = "{$baseDir}/{$filename}";
 
-            $this->image_disk        = $disk;
-            $this->image_path        = $path;
-            $this->image_url         = $url;
-            $this->card_image_url    = $url;
+            Storage::disk($disk)->putFileAs($baseDir, $file, $filename);
+
+            $url = Storage::disk($disk)->url($path);
+
+            $this->image_disk = $disk;
+            $this->image_path = $path;
+            $this->image_url = $url;
+            $this->card_image_url = $url;
             $this->card_image_srcset = null;
         }
     }
+
+
 
     /**
      * Replace image_path and delete the previous file.
      */
     public function replaceImagePath(?string $newPath): void
     {
-        $old  = $this->getOriginal('image_path');
+        $old = $this->getOriginal('image_path');
         $disk = $this->imageDisk();
 
         $this->image_path = $newPath;
@@ -689,7 +697,7 @@ class Product extends Model
     protected static function booted()
     {
         static::saving(function (self $m) {
-            $has = fn (string $c) => Schema::hasColumn($m->getTable(), $c);
+            $has = fn(string $c) => Schema::hasColumn($m->getTable(), $c);
 
             if ($has('quantity') && $m->quantity === null) {
                 $m->quantity = 0;
@@ -706,7 +714,7 @@ class Product extends Model
 
         static::updating(function (self $model) {
             if (Schema::hasColumn($model->getTable(), 'image_path') && $model->isDirty('image_path')) {
-                $old  = $model->getOriginal('image_path');
+                $old = $model->getOriginal('image_path');
                 $disk = $model->imageDisk();
 
                 if ($old && Storage::disk($disk)->exists($old)) {
@@ -741,7 +749,7 @@ class Product extends Model
      * ---------------------------------------------------------------------*/
     public function scopeSearch($q, ?string $term)
     {
-        if (! $term) {
+        if (!$term) {
             return $q;
         }
 
@@ -766,7 +774,7 @@ class Product extends Model
 
     public function scopeCategory($q, ?string $category)
     {
-        if (! $category) {
+        if (!$category) {
             return $q;
         }
 
@@ -784,7 +792,7 @@ class Product extends Model
             ? 'status'
             : (self::has('stock_status') ? 'stock_status' : null);
 
-        if (! $col) {
+        if (!$col) {
             return $q;
         }
 
@@ -796,18 +804,18 @@ class Product extends Model
     public function scopeSorted($q, ?string $sort)
     {
         $map = [
-            'name_asc'     => ['product_name', 'asc'],
-            'name_desc'    => ['product_name', 'desc'],
-            'category'     => ['category', 'asc'],
-            'stock_desc'   => ['quantity', 'desc'],
-            'stock_asc'    => ['quantity', 'asc'],
-            'cost_desc'    => ['unit_cost', 'desc'],
-            'cost_asc'     => ['unit_cost', 'asc'],
+            'name_asc' => ['product_name', 'asc'],
+            'name_desc' => ['product_name', 'desc'],
+            'category' => ['category', 'asc'],
+            'stock_desc' => ['quantity', 'desc'],
+            'stock_asc' => ['quantity', 'asc'],
+            'cost_desc' => ['unit_cost', 'desc'],
+            'cost_asc' => ['unit_cost', 'asc'],
             'updated_desc' => ['updated_at', 'desc'],
-            'recent'       => ['updated_at', 'desc'],
+            'recent' => ['updated_at', 'desc'],
         ];
 
-        if (! $sort || ! isset($map[$sort])) {
+        if (!$sort || !isset($map[$sort])) {
             return $q->orderBy('product_name', 'asc');
         }
 
@@ -896,4 +904,16 @@ class Product extends Model
     {
         return $this->available_stock_kg;
     }
+
+    /**
+     * Base storage path for this product's images using a clean product name.
+     */
+    protected function imageBasePath(): string
+    {
+        $productId = $this->id ?: 'tmp';
+        $baseName = Str::slug($this->product_name ?: 'product');
+
+        return "products/{$productId}/{$baseName}";
+    }
+
 }

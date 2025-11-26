@@ -145,6 +145,10 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
 | Admin + Production Manager
 |--------------------------------------------------------------------------
 */
+Route::post('products/{product}/archive-product', [ProductController::class, 'archiveProduct'])
+    ->name('products.archiveProduct');
+
+
 Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Production'])->group(function () {
 
     // ===== Products (catalog + BOM management) =====
@@ -152,8 +156,6 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
     Route::post('products/quick-store',     [ProductController::class, 'quickStore'])->name('products.quick-store');
     Route::post('products/{product}/image', [ProductController::class, 'updateImage'])
         ->whereNumber('product')->name('products.image.update');
-    Route::post('products/{id}/archive',    [ProductController::class, 'archive'])
-        ->whereNumber('id')->name('products.archive');
 
     // BOM / Recipe (under products/{product}/materials)
     Route::prefix('products/{product}')->whereNumber('product')->group(function () {
