@@ -10,6 +10,9 @@
   <!-- Tailwind CDN (pinned major) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inria+Sans:wght@300;400;700&display=swap" rel="stylesheet">
 
@@ -36,7 +39,13 @@
       --neon-cyan:#67E8F9; --neon-blue:#3B82F6; --neon-amber:#FBBF24;
     }
     html,body{ height:100%; }
-    body{ background:var(--page); color:var(--ink); font-family:'Inria Sans',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; min-height:100vh; overflow-x:hidden; }
+    body{
+      background:var(--page);
+      color:var(--ink);
+      font-family:'Inria Sans',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      min-height:100vh;
+      overflow-x:hidden;
+    }
 
     .nav-surface{ background:var(--nav); border-bottom:1px solid var(--line); box-shadow:var(--shadow); }
     .sidebar{ background:#ffffff; border-right:1px solid var(--line); }
@@ -75,7 +84,11 @@
       border-left:3px solid var(--brand-red); font-weight:700;
     }
 
-    .btn{ display:inline-flex; align-items:center; justify-content:center; gap:.5rem; padding:.65rem 1rem; border-radius:12px; border:1px solid transparent; font-weight:700; }
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center;
+      gap:.5rem; padding:.65rem 1rem; border-radius:12px;
+      border:1px solid transparent; font-weight:700;
+    }
     .btn-primary{ background:var(--brand-red); color:#fff; border-color:var(--brand-red); }
     .btn-primary:hover{ filter:brightness(.97); }
     .btn-ghost{ background:#fff; border:1px solid var(--line); color:var(--ink); }
@@ -83,12 +96,25 @@
     .btn-green{ background:var(--green); color:#fff; border-color:var(--green); }
     .btn-blue{ background:var(--blue); color:#fff; border-color:var(--blue); }
 
-    .input{ width:100%; padding:.65rem .9rem; border-radius:12px; background:#fff; border:1px solid var(--line); color:var(--ink); transition:border-color .15s, box-shadow .15s, transform .12s; }
+    .input{
+      width:100%; padding:.65rem .9rem; border-radius:12px;
+      background:#fff; border:1px solid var(--line); color:var(--ink);
+      transition:border-color .15s, box-shadow .15s, transform .12s;
+    }
     .input::placeholder{ color:#9ca3af; }
     .input:hover{ border-color:#e2e8f0; }
-    .input:focus{ outline:0; border-color:#93c5fd; box-shadow:0 0 0 2px rgba(37,99,235,.18); transform:translateY(-1px); }
+    .input:focus{
+      outline:0; border-color:#93c5fd;
+      box-shadow:0 0 0 2px rgba(37,99,235,.18);
+      transform:translateY(-1px);
+    }
 
-    .chip{ display:inline-flex; align-items:center; gap:.4rem; padding:.32rem .6rem; border-radius:999px; font-size:.72rem; font-weight:700; background:var(--chip); border:1px solid var(--line); color:var(--ink); }
+    .chip{
+      display:inline-flex; align-items:center; gap:.4rem;
+      padding:.32rem .6rem; border-radius:999px;
+      font-size:.72rem; font-weight:700;
+      background:var(--chip); border:1px solid var(--line); color:var(--ink);
+    }
 
     table{ border-collapse:separate; border-spacing:0; width:100%; }
     thead th{ background:#f9fafb; color:#374151; font-weight:800; border-bottom:1px solid var(--line); }
@@ -104,23 +130,34 @@
       #sidebar{ transform:translateX(-100%); transition:transform .3s ease; }
       #sidebar.open{ transform:translateX(0); }
     }
-    :where(a,button,[role="menuitem"],.side-link,.btn):focus{ outline:2px solid var(--brand-yellow); outline-offset:2px; }
+    :where(a,button,[role="menuitem"],.side-link,.btn):focus{
+      outline:2px solid var(--brand-yellow); outline-offset:2px;
+    }
 
     /* Neon status dot */
-    #dot3d{ width:8px; height:8px; border-radius:999px; background:var(--brand-red); box-shadow:0 0 0 2px rgba(177,18,26,.18), 0 0 12px var(--brand-red-80); }
+    #dot3d{
+      width:8px; height:8px; border-radius:999px;
+      background:var(--brand-red);
+      box-shadow:0 0 0 2px rgba(177,18,26,.18), 0 0 12px var(--brand-red-80);
+    }
 
     /* Reduced motion */
     @media (prefers-reduced-motion: reduce) {
       * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
       .card { box-shadow: none; }
     }
+
     /* Ensure Chart.js gets real pixels to draw into */
     .card .chart-wrap{position:relative; height:14rem;}
     .card .chart-wrap > canvas{display:block !important; width:100% !important; height:100% !important;}
     @media (min-width:1280px){
       .card .chart-wrap{height:22rem;}
     }
-    .sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,1px,1px); white-space:nowrap; border:0; }
+
+    .sr-only{
+      position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+      overflow:hidden; clip:rect(0,0,1px,1px); white-space:nowrap; border:0;
+    }
   </style>
 </head>
 <body>
@@ -130,7 +167,7 @@
       <div class="p-6 border-b border-[var(--line)] flex justify-between items-center">
         <a href="{{ route('dashboard') }}" class="flex items-center gap-3" aria-label="GenRev Home">
           <div class="h-10 w-10 rounded-2xl bg-white border border-gray-200 shadow-sm overflow-hidden flex items-center justify-center">
-            <img src="{{ asset('images/GENREV_FINAL.png') }}" alt="GenRev" loading="lazy" decoding="async" class="h-full w-full object-contain" onerror="this.closest('div').innerHTML='<span class=&quot;sr-only&quot;>GenRev</span>';">
+            <img src="{{ asset('images/GENREV_FINAL.png') }}" alt="GenRev" loading="lazy" decoding="async" class="h-full w-full object-contain" onerror="this.closest('div').innerHTML='<span class=&quot;sr-only&quot;>GenRev</span>'; ">
           </div>
           <span class="text-2xl font-bold tracking-wide brand-title">GenRev Meat Production</span>
         </a>
@@ -494,7 +531,7 @@
             </div>
             <div class="h-56 relative">
               <p id="expiryDesc" class="sr-only">
-                Three dimensional bar chart of finished meat packs and bags that will expire in the next seven days by calendar day.
+                Bar chart of finished meat packs and bags that will expire in the next seven days by calendar day.
               </p>
               <canvas id="expiryChart" aria-label="Expiry chart" aria-describedby="expiryDesc"></canvas>
               <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted text-center px-4">
@@ -592,10 +629,6 @@
           <div class="card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-base font-semibold">Weekly Production in Finished Units</h2>
-              <label class="text-xs flex items-center gap-2">
-                <input id="toggleProduction" type="checkbox" checked class="sr-only">
-                <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D view</span>
-              </label>
             </div>
             <div class="h-56 relative">
               <p id="prodDesc" class="sr-only">Bar chart of weekly finished meat units produced, combined view of packs and bags.</p>
@@ -614,10 +647,6 @@
                   <option value="profit">Revenue and profit</option>
                   <option value="forecast">Next week forecast AI</option>
                 </select>
-                <label class="text-xs flex items-center gap-2">
-                  <input id="toggleSales" type="checkbox" checked class="sr-only">
-                  <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">3D view</span>
-                </label>
               </div>
             </div>
             <div class="h-56 relative">
@@ -774,7 +803,7 @@
                       </div>
                       <div class="text-right ml-3">
                         @if(!is_null($daysLeft))
-                          <div class="text-[11px] {{ $daysLeft <= 3 ? 'text-red-600' : ($daysLeft <= 7 ? 'text-amber-500' : 'text-green-600') }}">
+                          <div class="text-[11px] {{ $daysLeft <= 3 ? 'text-red-600' : ($daysLeft <= 7 ? 'text-amber-500' : 'text-green-600') }} ">
                             {{ $daysLeft <= 0 ? 'No days left' : $daysLeft . ' days left' }}
                           </div>
                         @endif
@@ -903,10 +932,23 @@
   </div>
 
   <!-- Materials Used (full width, raw ingredients in kg) -->
+  @php
+    use Carbon\Carbon;
+
+    $rangeLabel = isset($filterStart, $filterEnd)
+        ? Carbon::parse($filterStart)->format('M d, Y') . ' to ' . Carbon::parse($filterEnd)->format('M d, Y')
+        : 'This week';
+  @endphp
+
   <div class="mx-8 my-6 card p-5 rounded-2xl">
     <div class="flex items-center justify-between mb-2">
       <div>
-        <h2 class="text-base font-semibold">Materials Used This Week</h2>
+        <h2 class="text-base font-semibold">
+          Materials Used
+          <span class="text-[11px] font-normal muted">
+            ({{ $rangeLabel }})
+          </span>
+        </h2>
         <p class="text-xs muted">Raw meat and ingredients based on production recipes</p>
       </div>
       <div class="text-right text-xs muted">
@@ -917,7 +959,7 @@
 
     @php $rows = $materialsUsage ?? collect(); @endphp
     @if($rows->isEmpty())
-      <div class="text-sm muted">No materials consumed this week.</div>
+      <div class="text-sm muted">No materials consumed for this period.</div>
     @else
       <div class="overflow-x-auto">
         <table class="text-sm text-left">
@@ -932,7 +974,9 @@
             @foreach($rows as $r)
               <tr class="border-t">
                 <td class="py-2 px-3">{{ $r->material_name }}</td>
-                <td class="py-2 px-3 text-right">{{ number_format($r->qty_used, 3) }} {{ $r->unit ?? 'kg' }}</td>
+                <td class="py-2 px-3 text-right">
+                  {{ number_format($r->qty_used, 3) }} {{ $r->unit ?? 'kg' }}
+                </td>
                 <td class="py-2 px-3 text-right">₱{{ number_format($r->cost_used, 2) }}</td>
               </tr>
             @endforeach
@@ -941,6 +985,83 @@
       </div>
     @endif
   </div>
+
+  <!-- Floating Demand Forecast Calendar Button -->
+  <button
+      id="demandCalendarButton"
+      type="button"
+      class="fixed z-40 bottom-6 right-6 md:bottom-8 md:right-8 h-12 w-12 rounded-full shadow-lg border border-[var(--line)] bg-white flex items-center justify-center hover:shadow-xl hover:-translate-y-0.5 transition transform"
+      title="View demand forecast calendar"
+      aria-label="View demand forecast calendar"
+  >
+    <span class="relative inline-flex items-center justify-center">
+      <span class="text-xl" aria-hidden="true">📅</span>
+      <span class="sr-only">Open inventory demand forecast calendar</span>
+    </span>
+  </button>
+
+<!-- Reservation Modal -->
+<div id="reservationModal"
+     class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center">
+  <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-sm font-semibold">Add reservation</h3>
+      <button type="button"
+              class="text-xs px-2 py-1 rounded-full border border-gray-200 hover:bg-gray-100"
+              data-reservation-close="true">✕</button>
+    </div>
+
+    <form method="POST" action="{{ route('reservations.store') }}">
+      @csrf
+      <input type="hidden" name="reserved_date" id="reservation_date_input">
+      {{-- preserve current filter range --}}
+      @if(request('start'))
+        <input type="hidden" name="start" value="{{ request('start') }}">
+      @endif
+      @if(request('end'))
+        <input type="hidden" name="end" value="{{ request('end') }}">
+      @endif
+
+      <div class="space-y-3 text-sm">
+        <div>
+          <label class="block text-xs font-semibold mb-1">
+            Date
+          </label>
+          <input type="text"
+                 id="reservation_date_label"
+                 class="input bg-gray-100 cursor-not-allowed"
+                 disabled>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold mb-1">
+            Units to reserve
+          </label>
+          <input type="number" name="units" class="input" min="1" required>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold mb-1">
+            Reference / customer / note
+          </label>
+          <textarea name="notes" class="input min-h-[70px]" rows="3"
+                    placeholder="Ex: Reservation for Client X, party-size, channel, etc."></textarea>
+        </div>
+      </div>
+
+      <div class="mt-4 flex justify-end gap-2">
+        <button type="button"
+                data-reservation-close="true"
+                class="btn btn-ghost text-xs">
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary text-xs">
+          Save reservation
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
 
   <!-- Model Info Modal (shared for planning and top five AI) -->
   <div id="modelInfoModal"
@@ -969,826 +1090,1125 @@
     </div>
   </div>
 
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+  @php
+      // Use the filter range (if any) to decide which month to show in the calendar
+      $filterStartDate = isset($filterStart) ? Carbon::parse($filterStart) : Carbon::today()->startOfMonth();
+      $filterEndDate   = isset($filterEnd)   ? Carbon::parse($filterEnd)   : Carbon::today();
 
-  <!-- Simple Bar 3D faces plugin -->
+      $calendarRef     = $filterStartDate->copy(); // month anchor
+      $calendarYear    = $calendarRef->year;
+      $calendarMonth   = $calendarRef->month;
+
+      $calendarDemand  = $demandCalendar ?? [];
+  @endphp
+
+  <!-- Demand Forecast Calendar Modal (dark theme) -->
+  <div
+      id="demandCalendarModal"
+      class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm"
+  >
+    <div class="w-full max-w-5xl mx-4 bg-slate-950 text-slate-100 rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden border border-slate-800/80">
+        <!-- LEFT: Calendar -->
+        <div class="w-full md:w-2/3 p-5 border-b md:border-b-0 md:border-r border-slate-800/80">
+            <div class="flex items-center justify-between mb-4 gap-3">
+                <button
+                    id="calendarPrevMonth"
+                    type="button"
+                    class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-900/80 border border-slate-700/80 text-slate-200 hover:bg-slate-800 transition"
+                >
+                    ‹
+                </button>
+
+                <div class="text-center flex-1">
+                    <div id="calendarMonthLabel" class="text-sm font-semibold text-slate-100">
+                        {{ \Carbon\Carbon::create($calendarYear, $calendarMonth, 1)->format('F Y') }}
+                    </div>
+                    <div id="calendarSelectedRangeLabel" class="text-[11px] text-slate-400 mt-0.5">
+                        @if(isset($filterStart, $filterEnd))
+                          {{ \Carbon\Carbon::parse($filterStart)->format('M d, Y') }} – {{ \Carbon\Carbon::parse($filterEnd)->format('M d, Y') }}
+                        @else
+                          No range selected yet
+                        @endif
+                    </div>
+                </div>
+
+                <button
+                    id="calendarNextMonth"
+                    type="button"
+                    class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-900/80 border border-slate-700/80 text-slate-200 hover:bg-slate-800 transition"
+                >
+                    ›
+                </button>
+            </div>
+
+            <!-- Weekday header -->
+            <div class="grid grid-cols-7 text-[11px] font-medium text-slate-500 tracking-wide mb-1.5">
+                <div class="text-center">Mon</div>
+                <div class="text-center">Tue</div>
+                <div class="text-center">Wed</div>
+                <div class="text-center">Thu</div>
+                <div class="text-center">Fri</div>
+                <div class="text-center">Sat</div>
+                <div class="text-center">Sun</div>
+            </div>
+
+            <!-- Calendar grid will be injected here -->
+            <div id="calendarGrid" class="grid grid-cols-7 gap-1.5 text-xs md:text-sm"></div>
+
+            <!-- Legend and actions -->
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
+                <div class="flex flex-wrap gap-2 text-[11px] text-slate-400">
+                    <span class="inline-flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                        High demand
+                    </span>
+                    <span class="inline-flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                        Low demand
+                    </span>
+                    <span class="inline-flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        Reservations
+                    </span>
+                    <span class="inline-flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                        Holidays and events
+                    </span>
+                </div>
+
+                <div class="flex gap-2 w-full sm:w-auto">
+                    <button
+                        id="demandCalendarReset"
+                        type="button"
+                        class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-slate-700 text-[12px] text-slate-200 hover:bg-slate-900 transition"
+                    >
+                        Reset
+                    </button>
+                    <button
+                        id="demandCalendarApply"
+                        type="button"
+                        class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-blue-600 text-[12px] font-semibold text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                        disabled
+                    >
+                        Apply range
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: Day details -->
+        <div class="w-full md:w-1/3 p-5 space-y-3">
+            <div class="flex items-center justify-between">
+                <div class="space-y-0.5">
+                    <div class="text-[13px] font-semibold uppercase tracking-wide text-slate-400">
+                        Day insights
+                    </div>
+                    <div id="calendarDayTitle" class="text-base font-semibold text-slate-50">
+                        Pick a day on the calendar
+                    </div>
+                </div>
+        <div class="rounded-xl bg-slate-900/80 border border-slate-800/80 px-3 py-2.5">
+          <p id="calendarDayNotes" class="text-[11px] leading-relaxed text-slate-300">
+              Use the calendar on the left to inspect a day. High demand days are perfect for planning extra production and staffing.
+          </p>
+
+          <button
+              id="openReservationButton"
+              type="button"
+              class="mt-3 inline-flex items-center px-3 py-1.5 rounded-lg bg-emerald-600 text-[11px] font-semibold text-white hover:bg-emerald-500">
+              Add reservation for this day
+          </button>
+        </div>
+
+                <button
+                    id="demandCalendarClose"
+                    type="button"
+                    class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-900 text-slate-300 hover:bg-slate-800 transition"
+                >
+                    ✕
+                </button>
+            </div>
+
+            <div id="calendarDayBadges" class="flex flex-wrap gap-1.5 text-[10px]"></div>
+
+            <dl class="space-y-2 text-[11px]">
+                <div class="flex items-center justify-between">
+                    <dt class="text-slate-400">Forecast demand</dt>
+                    <dd id="calendarDayDemand" class="font-semibold text-slate-50">–</dd>
+                </div>
+                <div class="flex items-center justify-between">
+                    <dt class="text-slate-400">Forecast remaining stock</dt>
+                    <dd id="calendarDayInventory" class="font-semibold text-slate-50">–</dd>
+                </div>
+                <div class="flex items-center justify-between">
+                    <dt class="text-slate-400">Reserved units</dt>
+                    <dd id="calendarDayReserved" class="font-semibold text-slate-50">–</dd>
+                </div>
+                <div class="flex items-center justify-between">
+                    <dt class="text-slate-400">Net available</dt>
+                    <dd id="calendarDayNet" class="font-semibold text-slate-50">–</dd>
+                </div>
+            </dl>
+
+            <div class="rounded-xl bg-slate-900/80 border border-slate-800/80 px-3 py-2.5">
+                <p id="calendarDayNotes" class="text-[11px] leading-relaxed text-slate-300">
+                    Use the calendar on the left to inspect a day. High demand days are perfect for planning extra production and staffing.
+                </p>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <!-- ===========================
+       SCRIPTS (Unified & Updated)
+       =========================== -->
   <script>
-/* 3D faces plugin */
-const Bar3DPlugin = {
-  id: 'bar3d',
-  afterDatasetDraw(chart, args, opts) {
-    try {
-      if (!opts || !opts.enabled) return;
-      if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  document.addEventListener('DOMContentLoaded', () => {
+    /* ============================================================
+     * 0. SHARED CONSTANTS + HELPERS
+     * ============================================================ */
+    const C_RED        = 'rgba(239,68,68,1)';
+    const C_RED_SOFT   = 'rgba(248,113,113,0.6)';
+    const C_RED_30     = 'rgba(248,113,113,0.3)';
+    const C_GREEN      = 'rgba(34,197,94,1)';
+    const C_GREEN_SOFT = 'rgba(34,197,94,0.6)';
+    const C_GREEN_30   = 'rgba(34,197,94,0.3)';
+    const C_BLUE       = 'rgba(37,99,235,1)';
+    const TICK_COLOR   = '#64748b';
+    const GRID_COLOR   = 'rgba(148,163,184,0.16)';
+    const BAR_RADIUS   = 10;
 
-      const meta = args.meta;
-      if (!meta || meta.type !== 'bar') return;
-      const {ctx, chartArea} = chart;
-      if (!chartArea) return;
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      const depth = Number(opts.depth ?? 10);
-      const lift  = Number(opts.lift ?? -6);
+    const palette = [
+      'rgba(248,113,113,0.9)',
+      'rgba(251,146,60,0.9)',
+      'rgba(52,211,153,0.9)',
+      'rgba(59,130,246,0.9)',
+      'rgba(244,114,182,0.9)',
+      'rgba(96,165,250,0.9)'
+    ];
 
-      const dim = (rgba, f=0.85) => {
-        const m = (rgba||'').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-        if (!m) return rgba || 'rgba(0,0,0,0.2)';
-        const [r,g,b] = [m[1],m[2],m[3]].map(n=>Math.max(0,Math.min(255,Math.floor(n*f))));
-        const a = (rgba.match(/rgba\(.+,\s*([.\d]+)\)/i)?.[1]) ?? 1;
-        return `rgba(${r},${g},${b},${a})`;
+    const barFillByIndex = (i) => palette[i % palette.length];
+
+    const sumArray = (arr) => (arr || []).reduce((s, v) => s + Number(v || 0), 0);
+
+    const maxIndex = (arr) => {
+      let max = -Infinity;
+      let idx = -1;
+      (arr || []).forEach((v, i) => {
+        const n = Number(v || 0);
+        if (n > max) { max = n; idx = i; }
+      });
+      return idx;
+    };
+
+    const setEmptyBanner = (values, emptyId) => {
+      const el = document.getElementById(emptyId);
+      if (!el) return;
+      const hasData = (values || []).some(v => Number(v || 0) !== 0);
+      el.classList.toggle('hidden', hasData);
+      el.classList.toggle('flex', !hasData);
+    };
+
+    const mk = (id, cfg) => {
+      const canvas = document.getElementById(id);
+      if (!canvas) return null;
+      const ctx = canvas.getContext('2d');
+      return new Chart(ctx, cfg);
+    };
+
+    /* ============================================================
+     * 1. BACK-END DATA (Blade → JS)
+     * ============================================================ */
+    const filterStart    = @json($filterStart ?? null);
+    const filterEnd      = @json($filterEnd ?? null);
+    const calendarEvents = @json($calendarEvents ?? []);
+
+    const labels   = @json($labels ?? []);                         // Mon..Sun
+    const prod     = @json($weeklyProductionSeries ?? []);         // production units
+    const qty      = @json($weeklySalesQtySeries ?? []);           // sales units
+    const rev      = @json($weeklySalesRevenueSeries ?? []);       // revenue
+    const profit   = @json($weeklySalesProfitSeries ?? []);        // profit
+
+    const expiryLabels = @json($expiryLabels ?? []);               // Mon..Sun
+    const exp          = @json($weeklyExpirySeries ?? []);         // expiring packs/bags
+
+    const forecastLabels    = @json($forecastLabels ?? []);
+    const forecastDemand    = @json($forecastDemandSeries ?? []);
+    const forecastInventory = @json($forecastInventorySeries ?? []);
+
+    const qtyForecast    = @json($weeklySalesForecastQtySeries ?? []);
+    const revForecast    = @json($weeklySalesForecastRevenueSeries ?? []);
+    const profitForecast = @json($weeklySalesForecastProfitSeries ?? []);
+
+    const weekRevenueJS         = @json($weekRevenue ?? 0);
+    const estimatedWeekProfitJS = @json($estimatedWeekProfit ?? 0);
+    const estimatedMarginJS     = @json($estimatedGrossMarginPct ?? null);
+
+    // 3D controls (visual only)
+    const toggle3D        = document.getElementById('toggle3D');
+    const depthRange      = document.getElementById('depthRange');
+    const liftRange       = document.getElementById('liftRange');
+    const depthVal        = document.getElementById('depthVal');
+    const liftVal         = document.getElementById('liftVal');
+    const dot3d           = document.getElementById('dot3d');
+
+    let debounceTimer;
+    const debounce = (fn, ms = 120) => (...a) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => fn(...a), ms);
+    };
+
+    /* ----------------------------------------
+     * 2. CHARTS
+     * -------------------------------------- */
+    function initCharts() {
+      // Production
+      setEmptyBanner(prod, 'prodEmpty');
+      const productionChart = mk('productionChart', {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Units produced (packs and bags)',
+            data: prod,
+            backgroundColor: (ctx) => {
+              const chart = ctx.chart;
+              const { ctx: c, chartArea } = chart;
+              if (!chartArea) return 'rgba(248,250,252,1)';
+              const g = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+              g.addColorStop(0, 'rgba(241,245,249,1)');
+              g.addColorStop(0.5, 'rgba(248,113,113,.5)');
+              g.addColorStop(1, 'rgba(248,113,113,.9)');
+              return g;
+            },
+            borderColor: 'rgba(15,23,42,1)',
+            borderWidth: 1.5,
+            borderRadius: BAR_RADIUS
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: TICK_COLOR } },
+            title: {
+              display: true,
+              text: 'Weekly production in finished units',
+              color: '#0f172a'
+            }
+          },
+          scales: {
+            x: { ticks: { color: TICK_COLOR }, grid: { color: GRID_COLOR } },
+            y: {
+              beginAtZero: true,
+              ticks: { color: TICK_COLOR },
+              grid:  { color: GRID_COLOR },
+              title: { display: true, text: 'Units', color: TICK_COLOR }
+            }
+          }
+        }
+      });
+
+      // Sales with AI
+      setEmptyBanner([...qty, ...rev], 'salesEmpty');
+      const salesChart = mk('salesChart', {
+        data: {
+          labels,
+          datasets: [
+            {
+              key: 'qtyActual',
+              type: 'bar',
+              label: 'Quantity sold in units',
+              data: qty,
+              yAxisID: 'y',
+              backgroundColor: (ctx) => {
+                const chart = ctx.chart;
+                const { ctx: c, chartArea } = chart;
+                if (!chartArea) return 'rgba(251,113,133,.7)';
+                const g = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+                g.addColorStop(0, 'rgba(248,250,252,1)');
+                g.addColorStop(0.5, 'rgba(251,113,133,.7)');
+                g.addColorStop(1, 'rgba(248,113,113,1)');
+                return g;
+              },
+              borderColor: 'rgba(15,23,42,1)',
+              borderWidth: 1.5,
+              borderRadius: BAR_RADIUS
+            },
+            {
+              key: 'revActual',
+              type: 'line',
+              label: 'Revenue',
+              data: rev,
+              yAxisID: 'y1',
+              borderColor: C_RED,
+              backgroundColor: C_RED,
+              borderWidth: 3,
+              tension: 0.4,
+              pointRadius: 3,
+              pointHoverRadius: 6,
+              fill: false
+            },
+            {
+              key: 'profitActual',
+              type: 'line',
+              label: 'Estimated profit',
+              data: profit,
+              yAxisID: 'y1',
+              borderColor: C_GREEN_SOFT,
+              backgroundColor: C_GREEN_SOFT,
+              borderWidth: 2,
+              tension: 0.35,
+              pointRadius: 2.5,
+              pointHoverRadius: 5,
+              fill: false,
+              hidden: true
+            },
+            {
+              key: 'qtyForecast',
+              type: 'bar',
+              label: 'Predicted quantity in units AI',
+              data: qtyForecast,
+              yAxisID: 'y',
+              backgroundColor: 'rgba(59,130,246,.25)',
+              borderColor: 'rgba(37,99,235,1)',
+              borderWidth: 1.5,
+              borderRadius: BAR_RADIUS,
+              borderDash: [4,3],
+              hidden: true
+            },
+            {
+              key: 'revForecast',
+              type: 'line',
+              label: 'Predicted revenue AI',
+              data: revForecast,
+              yAxisID: 'y1',
+              borderColor: C_RED_SOFT,
+              backgroundColor: C_RED_SOFT,
+              borderWidth: 2,
+              tension: 0.4,
+              pointRadius: 2,
+              pointHoverRadius: 5,
+              fill: false,
+              borderDash: [6,4],
+              hidden: true
+            },
+            {
+              key: 'profitForecast',
+              type: 'line',
+              label: 'Predicted profit AI',
+              data: profitForecast,
+              yAxisID: 'y1',
+              borderColor: C_GREEN_SOFT,
+              backgroundColor: C_GREEN_SOFT,
+              borderWidth: 2,
+              tension: 0.4,
+              pointRadius: 2,
+              pointHoverRadius: 5,
+              fill: false,
+              borderDash: [6,4],
+              hidden: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: TICK_COLOR } },
+            title: {
+              display: true,
+              text: 'Weekly sales in units and revenue',
+              color: '#0f172a'
+            },
+            tooltip: {
+              backgroundColor: 'rgba(15,23,42,.96)',
+              borderColor: 'rgba(148,163,184,.7)',
+              borderWidth: 1,
+              padding: 10,
+              cornerRadius: 10,
+              callbacks: {
+                label: (ctx) => {
+                  const label = ctx.dataset.label || '';
+                  const val   = Number(ctx.parsed.y);
+                  const formatted = val.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  });
+
+                  const lower = label.toLowerCase();
+                  if (lower.includes('revenue')) {
+                    const tag = lower.includes('predicted') ? 'Predicted revenue' : 'Revenue';
+                    return `${tag}: ₱${formatted}`;
+                  }
+                  if (lower.includes('profit')) {
+                    const tag = lower.includes('predicted') ? 'Predicted profit' : 'Estimated profit';
+                    return `${tag}: ₱${formatted}`;
+                  }
+                  if (lower.includes('predicted quantity')) {
+                    return `Predicted quantity: ${val.toLocaleString()} unit(s)`;
+                  }
+                  return `Quantity: ${val.toLocaleString()} unit(s)`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: TICK_COLOR }, grid: { color: GRID_COLOR } },
+            y: {
+              position: 'left',
+              beginAtZero: true,
+              ticks: { color: TICK_COLOR },
+              grid:  { color: GRID_COLOR },
+              title: { display: true, text: 'Units', color: TICK_COLOR }
+            },
+            y1: {
+              position: 'right',
+              beginAtZero: true,
+              ticks: { color: TICK_COLOR },
+              grid:  { drawOnChartArea: false },
+              title: { display: true, text: '₱', color: TICK_COLOR }
+            }
+          }
+        }
+      });
+
+      // Sales sparkline
+      mk('salesTrendsChart', {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Revenue',
+            data: rev,
+            borderColor: C_RED,
+            backgroundColor: C_RED,
+            borderWidth: 2,
+            tension: 0.35,
+            pointRadius: 0,
+            fill: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { display: false },
+            y: { display: false, beginAtZero: true }
+          }
+        }
+      });
+
+      // Expiry chart
+      setEmptyBanner(exp, 'expEmpty');
+      mk('expiryChart', {
+        type: 'bar',
+        data: {
+          labels: expiryLabels,
+          datasets: [{
+            label: 'Packs or bags expiring',
+            data: exp,
+            backgroundColor: 'rgba(249,115,22,.7)',
+            borderColor: 'rgba(148,27,12,1)',
+            borderWidth: 1.5,
+            borderRadius: BAR_RADIUS
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: TICK_COLOR } },
+            title: {
+              display: true,
+              text: 'Packs and bags at risk this week',
+              color: '#0f172a'
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const v = Number(ctx.parsed.y);
+                  return `Expiring packs or bags: ${v.toLocaleString()}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: TICK_COLOR }, grid: { color: GRID_COLOR } },
+            y: { beginAtZero: true, ticks: { color: TICK_COLOR }, grid: { color: GRID_COLOR } }
+          }
+        }
+      });
+
+      // Forecast chart
+      setEmptyBanner([...forecastDemand, ...forecastInventory], 'forecastEmpty');
+      mk('forecastChart', {
+        type: 'bar',
+        data: {
+          labels: forecastLabels,
+          datasets: [
+            {
+              type: 'bar',
+              label: 'Expected daily orders (units)',
+              data: forecastDemand,
+              yAxisID: 'y',
+              borderColor: C_RED,
+              backgroundColor: 'rgba(248,113,113,.55)',
+              borderWidth: 2,
+              borderRadius: BAR_RADIUS
+            },
+            {
+              type: 'bar',
+              label: 'Estimated remaining stock (units)',
+              data: forecastInventory,
+              yAxisID: 'y',
+              borderColor: C_GREEN,
+              backgroundColor: 'rgba(34,197,94,.5)',
+              borderWidth: 2,
+              borderRadius: BAR_RADIUS
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: TICK_COLOR } }
+          },
+          scales: {
+            x: {
+              ticks: { color: TICK_COLOR },
+              grid:  { color: 'rgba(148,163,184,.12)', drawBorder:false }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { color: TICK_COLOR },
+              grid:  { color: 'rgba(148,163,184,.22)', drawBorder:false },
+              title: { display: true, text: 'Units', color: TICK_COLOR }
+            }
+          }
+        }
+      });
+
+      // Forecast insights text
+      const forecastInsightsEl = document.getElementById('forecastInsights');
+      const updateForecastInsights = () => {
+        if (!forecastInsightsEl) return;
+        const totalDemand = sumArray(forecastDemand);
+        if (!forecastDemand.length || totalDemand === 0) {
+          forecastInsightsEl.textContent =
+            'When forecast data is available, this will highlight the busiest day and the day with the lowest projected stock in finished units.';
+          return;
+        }
+        const bestIdx = maxIndex(forecastDemand);
+        const bestLabel = bestIdx >= 0 && forecastLabels[bestIdx] !== undefined
+          ? forecastLabels[bestIdx]
+          : 'Day';
+        const bestVal = bestIdx >= 0 ? forecastDemand[bestIdx] : 0;
+
+        const minStockIdx = maxIndex(forecastInventory.map(v => v === 0 ? -Infinity : -v));
+        const minStockLabel = minStockIdx >= 0 && forecastLabels[minStockIdx] !== undefined
+          ? forecastLabels[minStockIdx]
+          : null;
+        const minStockVal = minStockIdx >= 0 ? forecastInventory[minStockIdx] : null;
+
+        const lines = [
+          `Busiest expected orders day is ${bestLabel} with about ${Math.round(bestVal).toLocaleString()} unit(s).`,
+          `Total expected demand over the forecast window is about ${Math.round(totalDemand).toLocaleString()} unit(s).`
+        ];
+        if (minStockLabel !== null && minStockVal !== null) {
+          lines.push(
+            `Lowest projected remaining stock is about ${Math.round(minStockVal).toLocaleString()} unit(s) on ${minStockLabel}.`
+          );
+        }
+        forecastInsightsEl.textContent = lines.join(' ');
+      };
+      updateForecastInsights();
+
+      // Weekly sales mode + insights
+      const weeklySalesMode     = document.getElementById('weeklySalesMode');
+      const weeklySalesInsights = document.getElementById('weeklySalesInsights');
+
+      const findDs = (key) => salesChart?.data.datasets.find(d => d.key === key) || null;
+
+      const buildWeeklySalesInsights = (mode) => {
+        if (!weeklySalesInsights) return;
+        const insights = [];
+
+        const totalQty     = sumArray(qty);
+        const totalRevenue = weekRevenueJS || sumArray(rev);
+        const totalProfit  = estimatedWeekProfitJS || sumArray(profit);
+        const margin       = isFinite(estimatedMarginJS) && estimatedMarginJS > 0
+          ? estimatedMarginJS
+          : null;
+
+        const bestIdx      = maxIndex(qty);
+        const bestDayLabel = bestIdx >= 0 && labels[bestIdx] !== undefined ? labels[bestIdx] : null;
+        const bestDayQty   = bestIdx >= 0 ? qty[bestIdx] : 0;
+
+        if (mode === 'quantity') {
+          if (totalQty > 0) {
+            insights.push(`You sold about ${Math.round(totalQty).toLocaleString()} finished unit(s) in packs and bags for this period.`);
+          }
+          if (bestDayLabel && bestDayQty > 0) {
+            insights.push(`${bestDayLabel} was the strongest day with about ${Math.round(bestDayQty).toLocaleString()} unit(s) sold.`);
+          }
+          if (totalRevenue > 0) {
+            insights.push(`Total recorded revenue for this period is around ₱${totalRevenue.toLocaleString(undefined,{ maximumFractionDigits: 2 })}.`);
+          }
+        } else if (mode === 'profit') {
+          if (totalRevenue > 0) {
+            insights.push(`This period generated about ₱${totalRevenue.toLocaleString(undefined,{ maximumFractionDigits: 2 })} in revenue.`);
+          }
+          if (totalProfit > 0) {
+            insights.push(`Estimated profit is around ₱${totalProfit.toLocaleString(undefined,{ maximumFractionDigits: 2 })}.`);
+          }
+          if (margin !== null) {
+            insights.push(`Gross margin is approximately ${margin.toFixed(1)}%.`);
+          } else {
+            insights.push('As cost data improves, the gross margin estimate will become more accurate.');
+          }
+        } else if (mode === 'forecast') {
+          const totalForecastQty = sumArray(qtyForecast);
+          const totalForecastRev = sumArray(revForecast);
+          const hasForecast = totalForecastQty > 0 || totalForecastRev > 0;
+
+          if (!hasForecast) {
+            insights.push('Not enough historical data yet to show a forecast. Keep recording production and sales to unlock next week predictions.');
+          } else {
+            insights.push(`Next week the AI expects about ${Math.round(totalForecastQty).toLocaleString()} finished unit(s) to be sold in packs and bags.`);
+            if (totalForecastRev > 0) {
+              insights.push(`Forecast revenue for the same period is around ₱${totalForecastRev.toLocaleString(undefined,{ maximumFractionDigits: 2 })}.`);
+            }
+            if (bestDayLabel && bestDayQty > 0) {
+              insights.push(`Use this to schedule staffing and production around the busier days like ${bestDayLabel}.`);
+            }
+          }
+        }
+
+        if (!insights.length) {
+          insights.push('When more data is recorded, this section will summarize which days are strongest and how current results compare to the forecast.');
+        }
+
+        weeklySalesInsights.textContent = insights.join(' ');
       };
 
-      const ds = chart.config.data.datasets?.[args.index] || {};
-      const baseFill   = ds.backgroundColor || 'rgba(16,185,129,0.25)';
-      const baseStroke = ds.borderColor     || 'rgba(16,185,129,1)';
-      const topFill    = ds.topFaceColor    || dim(baseFill, 1.15);
-      const sideFill   = ds.sideFaceColor   || dim(baseFill, 0.78);
-      const topStroke  = ds.topStrokeColor  || dim(baseStroke, 1.1);
-      const sideStroke = ds.sideStrokeColor || dim(baseStroke, 0.85);
+      const updateWeeklySalesMode = () => {
+        if (!salesChart) return;
+        const mode = weeklySalesMode?.value || 'quantity';
 
-      meta.data.forEach(bar => {
-        const p = bar.getProps?.(['x','y','base','width'], true);
-        if (!p) return;
-        const x = p.x - p.width/2;
-        const y = p.y;
-        const w = p.width;
-        const h = Math.max(0, (p.base ?? chartArea.bottom) - y);
-        if (!isFinite(h) || h === 0) return;
+        const dsQty     = findDs('qtyActual');
+        const dsRev     = findDs('revActual');
+        const dsProfit  = findDs('profitActual');
+        const dsQtyF    = findDs('qtyForecast');
+        const dsRevF    = findDs('revForecast');
+        const dsProfitF = findDs('profitForecast');
 
-        const dx = depth, dy = lift;
+        const setHidden = (ds, hidden) => { if (ds) ds.hidden = hidden; };
 
-        const poly = (pts, fill, stroke) => {
-          ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
-          for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y);
-          ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
-          if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
-        };
-        const top  = [{x, y},{x:x+dx, y:y+dy},{x:x+dx+w, y:y+dy},{x:x+w, y}];
-        const side = [{x:x+w, y},{x:x+w+dx, y:y+dy},{x:x+w+dx, y:y+dy+h},{x:x+w, y:y+h}];
+        const hasForecast =
+          sumArray(qtyForecast)    > 0 ||
+          sumArray(revForecast)    > 0 ||
+          sumArray(profitForecast) > 0;
 
-        ctx.save(); ctx.shadowColor='rgba(0,0,0,.12)'; ctx.shadowBlur=6; ctx.shadowOffsetY=3;
-        poly(top, topFill, topStroke); ctx.restore();
-        poly(side, sideFill, sideStroke);
+        if (mode === 'quantity') {
+          setHidden(dsQty, false);
+          setHidden(dsRev, false);
+          setHidden(dsProfit, true);
+          setHidden(dsQtyF, true);
+          setHidden(dsRevF, true);
+          setHidden(dsProfitF, true);
+          salesChart.options.plugins.title.text = 'Weekly sales in units and revenue';
+        } else if (mode === 'profit') {
+          setHidden(dsQty, true);
+          setHidden(dsRev, false);
+          setHidden(dsProfit, false);
+          setHidden(dsQtyF, true);
+          setHidden(dsRevF, true);
+          setHidden(dsProfitF, true);
+          salesChart.options.plugins.title.text = 'Weekly revenue and profit';
+        } else if (mode === 'forecast') {
+          setHidden(dsQty, true);
+          setHidden(dsRev, false);
+          setHidden(dsProfit, true);
+
+          setHidden(dsQtyF, !hasForecast);
+          setHidden(dsRevF, !hasForecast);
+          setHidden(dsProfitF, !hasForecast);
+
+          salesChart.options.plugins.title.text = 'Weekly sales next week forecast AI';
+        }
+
+        salesChart.update();
+        buildWeeklySalesInsights(mode);
+      };
+
+      weeklySalesMode?.addEventListener('change', updateWeeklySalesMode);
+      updateWeeklySalesMode();
+
+      return { productionChart, salesChart };
+    }
+
+    /* ----------------------------------------
+     * 3. MODEL INFO MODAL
+     * -------------------------------------- */
+    function initModelInfoModal() {
+      const modelInfoModal = document.getElementById('modelInfoModal');
+      const modelInfoTitle = document.getElementById('modelInfoTitle');
+
+      const openModelInfo = (contextLabel) => {
+        if (!modelInfoModal) return;
+        if (modelInfoTitle && contextLabel) modelInfoTitle.textContent = contextLabel;
+        modelInfoModal.classList.remove('hidden');
+        modelInfoModal.classList.add('flex');
+      };
+
+      const closeModelInfo = () => {
+        if (!modelInfoModal) return;
+        modelInfoModal.classList.add('hidden');
+        modelInfoModal.classList.remove('flex');
+      };
+
+      document.querySelectorAll('.model-info-trigger').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const label = btn.getAttribute('data-context') || 'Model information';
+          openModelInfo(label);
+        });
       });
-    } catch(e) {
-      // silent fail to protect charts
-    }
-  }
-};
-  </script>
 
-  <script>
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof Chart === 'undefined') {
-    console.error('Chart.js not loaded.');
-    return;
-  }
-  Chart.register(Bar3DPlugin);
+      modelInfoModal?.querySelectorAll('[data-close-model]').forEach(btn => {
+        btn.addEventListener('click', closeModelInfo);
+      });
 
-  const labels = @json($labels ?? []) || ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  const expiryLabelsRaw = @json($expiryLabels ?? []);
-  const expiryLabels = Array.isArray(expiryLabelsRaw) && expiryLabelsRaw.length ? expiryLabelsRaw : labels;
-
-  // Weekly production and sales quantities are finished units
-  const prod   = (@json($weeklyProductionSeries ?? []) || []).map(v=>Number(v)||0);
-  const qty    = (@json($weeklySalesQtySeries ?? []) || []).map(v=>Number(v)||0);
-
-  const rev    = (@json($weeklySalesRevenueSeries ?? []) || []).map(v=>Number(v)||0);
-  const profit = (@json($weeklySalesProfitSeries ?? []) || []).map(v=>Number(v)||0);
-
-  // AI forecast for weekly sales
-  const qtyForecast    = (@json($weeklySalesForecastQtySeries ?? []) || []).map(v=>Number(v)||0);
-  const revForecast    = (@json($weeklySalesForecastRevenueSeries ?? []) || []).map(v=>Number(v)||0);
-  const profitForecast = (@json($weeklySalesForecastProfitSeries ?? []) || []).map(v=>Number(v)||0);
-
-  // Expiry data already represents packs and bags at risk (per day)
-  const exp    = (@json($weeklyExpirySeries ?? []) || []).map(v=>Number(v)||0);
-
-  const weekRevenueJS         = Number(@json($weekRevenue ?? 0));
-  const estimatedWeekProfitJS = Number(@json($estimatedWeekProfit ?? 0));
-  const estimatedMarginJS     = Number(@json($estimatedGrossMarginPct ?? 0));
-
-  // Forecast data for production planning in units
-  const forecastLabelsRaw    = @json($forecastLabels ?? []);
-  const forecastDemandRaw    = @json($forecastDemandSeries ?? []);
-  const forecastInventoryRaw = @json($forecastInventorySeries ?? []);
-  const forecastLabels       = Array.isArray(forecastLabelsRaw) ? forecastLabelsRaw : [];
-  const forecastDemand       = (forecastDemandRaw || []).map(v => Number(v) || 0);
-  const forecastInventory    = (forecastInventoryRaw || []).map(v => Number(v) || 0);
-
-  const C_RED='rgba(239,68,68,1)',     C_RED_30='rgba(239,68,68,.3)';
-  const C_GREEN='rgba(16,185,129,1)',  C_GREEN_30='rgba(16,185,129,.3)';
-  const C_BLUE='rgba(37,99,235,1)',    C_BLUE_30='rgba(37,99,235,1,.3)';
-  const C_YELLOW='rgba(245,158,11,1)', C_YELLOW_30='rgba(245,158,11,.3)';
-  const gridColor='rgba(107,114,128,.25)', tickColor='#0f172a', barRadius=6;
-
-  // THEME-BASED COLOR PALETTE FOR COLORFUL BARS
-  const THEME_BAR_COLORS = [
-    'rgba(177,18,26,1)',   // brand red
-    'rgba(37,99,235,1)',   // blue
-    'rgba(16,185,129,1)',  // green
-    'rgba(245,158,11,1)',  // amber
-    'rgba(236,72,153,1)',  // pink
-    'rgba(139,92,246,1)',  // violet
-    'rgba(103,232,249,1)', // cyan
-    'rgba(251,191,36,1)',  // neon amber
-  ];
-  const barFillByIndex = (dataIndex) => {
-    const idx = typeof dataIndex === 'number' ? dataIndex : 0;
-    const safe = ((idx % THEME_BAR_COLORS.length) + THEME_BAR_COLORS.length) % THEME_BAR_COLORS.length;
-    return THEME_BAR_COLORS[safe];
-  };
-
-  const prefersReduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const toggle3D = document.getElementById('toggle3D');
-  if (prefersReduced && toggle3D) toggle3D.checked = false;
-
-  const setEmptyBanner = (arr, id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const empty = !arr.length || arr.every(v => Number(v) === 0);
-    el.classList.toggle('hidden', !empty);
-    el.classList.toggle('flex', empty);
-  };
-
-  const sumArray = (arr = []) => arr.reduce((a,b)=>a+(Number(b)||0),0);
-
-  const maxIndex = (arr = []) => {
-    if (!arr.length) return -1;
-    let m = -Infinity, idx = -1;
-    arr.forEach((v,i) => {
-      const val = Number(v) || 0;
-      if (val > m) { m = val; idx = i; }
-    });
-    return idx;
-  };
-
-  const mk = (id, config) => {
-    const c = document.getElementById(id);
-    return c ? new Chart(c.getContext('2d'), config) : null;
-  };
-
-  // Production chart (theme-colored bars)
-  setEmptyBanner(prod, 'prodEmpty');
-  const productionChart = mk('productionChart', {
-    type: 'bar',
-    data: { labels, datasets: [{
-      label: 'Units produced (packs and bags)', data: prod,
-      backgroundColor: (ctx) => barFillByIndex(ctx.dataIndex),
-      borderColor: 'rgba(15,23,42,1)',
-      borderWidth: 1.5,
-      borderRadius: barRadius
-    }]},
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins:{
-        legend:{ labels:{ color: tickColor } },
-        title:{ display:true, text:'Weekly production in finished units', color:'#0f172a' },
-        bar3d:{ enabled:true, depth:10, lift:-6 }
-      },
-      scales:{
-        x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
-        y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor }, title:{ display:true, text:'Units', color:tickColor } }
-      }
-    }
-  });
-
-  // Weekly sales chart (theme-colored quantity bars + forecast bars)
-  setEmptyBanner([...qty, ...rev], 'salesEmpty');
-  const salesChart = mk('salesChart', {
-    data: {
-      labels,
-      datasets: [
-        {
-          key:'qtyActual',
-          type:'bar',
-          label:'Quantity sold in units',
-          data: qty,
-          yAxisID:'y',
-          backgroundColor:(ctx) => barFillByIndex(ctx.dataIndex),
-          borderColor:'rgba(15,23,42,1)',
-          borderWidth:1.5,
-          borderRadius:barRadius
-        },
-        {
-          key:'revActual',
-          type:'line',
-          label:'Revenue',
-          data: rev,
-          yAxisID:'y1',
-          borderColor:(ctx) => {
-            const chart = ctx.chart;
-            const {ctx: c, chartArea} = chart;
-            if (!chartArea) return C_RED;
-            const g = c.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
-            g.addColorStop(0, 'rgba(248,113,113,1)');
-            g.addColorStop(0.5, 'rgba(239,68,68,1)');
-            g.addColorStop(1, 'rgba(248,250,252,1)');
-            return g;
-          },
-          backgroundColor:C_RED,
-          borderWidth:3,
-          tension:.4,
-          pointRadius:3,
-          pointHoverRadius:6,
-          pointHitRadius:10,
-          fill:false
-        },
-        {
-          key:'profitActual',
-          type:'line',
-          label:'Estimated profit',
-          data: profit,
-          yAxisID:'y1',
-          borderColor:'rgba(16,185,129,.9)',
-          backgroundColor:'rgba(16,185,129,.9)',
-          borderWidth:2,
-          tension:.35,
-          pointRadius:2.5,
-          pointHoverRadius:5,
-          fill:false,
-          hidden:true
-        },
-        {
-          key:'qtyForecast',
-          type:'bar',
-          label:'Predicted quantity in units AI',
-          data: qtyForecast,
-          yAxisID:'y',
-          backgroundColor:(ctx) => barFillByIndex(ctx.dataIndex),
-          borderColor:'rgba(15,23,42,1)',
-          borderWidth:1.5,
-          borderRadius:barRadius,
-          borderDash:[4,3],
-          hidden:true
-        },
-        {
-          key:'revForecast',
-          type:'line',
-          label:'Predicted revenue AI',
-          data: revForecast,
-          yAxisID:'y1',
-          borderColor:'rgba(239,68,68,.6)',
-          backgroundColor:'rgba(239,68,68,.6)',
-          borderWidth:2,
-          tension:.4,
-          pointRadius:2,
-          pointHoverRadius:5,
-          fill:false,
-          borderDash:[6,4],
-          hidden:true
-        },
-        {
-          key:'profitForecast',
-          type:'line',
-          label:'Predicted profit AI',
-          data: profitForecast,
-          yAxisID:'y1',
-          borderColor:'rgba(16,185,129,.5)',
-          backgroundColor:'rgba(16,185,129,.5)',
-          borderWidth:2,
-          tension:.4,
-          pointRadius:2,
-          pointHoverRadius:5,
-          fill:false,
-          borderDash:[6,4],
-          hidden:true
+      modelInfoModal?.addEventListener('click', (e) => {
+        if (e.target === modelInfoModal || e.target.dataset.modalOverlay === 'true') {
+          closeModelInfo();
         }
-      ]
-    },
-    options: {
-      responsive:true,
-      maintainAspectRatio:false,
-      plugins:{
-        legend:{ labels:{ color: tickColor } },
-        title:{ display:true, text:'Weekly sales in units and revenue', color:'#0f172a' },
-        tooltip:{
-          backgroundColor:'rgba(15,23,42,.96)',
-          borderColor:'rgba(148,163,184,.7)',
-          borderWidth:1,
-          padding:10,
-          cornerRadius:10,
-          callbacks:{
-            label:(ctx)=>{
-              const label  = ctx.dataset.label || '';
-              const val    = Number(ctx.parsed.y);
-              const valueFormatted = val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 });
-
-              if (label.toLowerCase().includes('revenue')) {
-                const tag = label.toLowerCase().includes('predicted') ? 'Predicted revenue' : 'Revenue';
-                return `${tag}: ₱${valueFormatted}`;
-              }
-              if (label.toLowerCase().includes('profit')) {
-                const tag = label.toLowerCase().includes('predicted') ? 'Predicted profit' : 'Estimated profit';
-                return `${tag}: ₱${valueFormatted}`;
-              }
-              if (label.toLowerCase().includes('predicted quantity')) {
-                return `Predicted quantity: ${val.toLocaleString()} unit(s)`;
-              }
-              return `Quantity: ${val.toLocaleString()} unit(s)`;
-            }
-          }
-        },
-        bar3d:{ enabled:true, depth:10, lift:-6 }
-      },
-      animation:{
-        duration:1000,
-        easing:'easeOutQuart',
-        delay:(ctx) => {
-          if (ctx.type !== 'data' || ctx.mode !== 'default') return 0;
-          return ctx.dataIndex * 60 + ctx.datasetIndex * 80;
-        }
-      },
-      datasets:{
-        bar:{
-          animations:{
-            y:{
-              duration:900,
-              easing:'easeOutBack',
-              from:(ctx)=>{
-                const chart = ctx.chart;
-                const yAxis = chart.scales.y;
-                return yAxis ? yAxis.getPixelForValue(0) : chart.chartArea.bottom;
-              }
-            }
-          }
-        },
-        line:{
-          animations:{
-            y:{
-              duration:900,
-              easing:'easeOutCubic',
-              from:(ctx)=>{
-                const chart = ctx.chart;
-                const yAxis = ctx.scale || chart.scales.y1 || chart.scales.y;
-                return yAxis ? yAxis.getPixelForValue(0) : chart.chartArea.bottom;
-              }
-            }
-          }
-        }
-      },
-      scales:{
-        x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
-        y:{ position:'left', beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor }, title:{ display:true, text:'Units', color:tickColor } },
-        y1:{ position:'right', beginAtZero:true, ticks:{ color: tickColor }, grid:{ drawOnChartArea:false }, title:{ display:true, text:'₱', color:tickColor } }
-      }
-    }
-  });
-
-  // Sparkline for revenue
-  const spark = mk('salesTrendsChart', {
-    type:'line',
-    data:{ labels, datasets:[{
-      label:'Revenue',
-      data: rev,
-      borderColor:C_RED,
-      backgroundColor:C_RED,
-      borderWidth:2,
-      tension:.35,
-      pointRadius:0,
-      fill:false
-    }] },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ display:false } },
-      scales:{ x:{ display:false }, y:{ display:false, beginAtZero:true } },
-      animation:{ duration:700, easing:'easeOutCubic' }
-    }
-  });
-
-  // Expiry chart (theme-colored bars)
-  setEmptyBanner(exp, 'expEmpty');
-  const expiryChart = mk('expiryChart', {
-    type:'bar',
-    data:{
-      labels: expiryLabels,
-      datasets:[{
-        label:'Packs or bags expiring',
-        data: exp,
-        backgroundColor:(ctx) => barFillByIndex(ctx.dataIndex),
-        borderColor:'rgba(15,23,42,1)',
-        borderWidth:1.5,
-        borderRadius: barRadius
-      }]
-    },
-    options:{
-      responsive:true,
-      maintainAspectRatio:false,
-      plugins:{
-        legend:{ labels:{ color: tickColor } },
-        title:{ display:true, text:'Packs and bags at risk this week', color:'#0f172a' },
-        tooltip:{
-          callbacks:{
-            label:(ctx)=>{
-              const v = Number(ctx.parsed.y);
-              return `Expiring packs or bags: ${v.toLocaleString()}`;
-            }
-          }
-        },
-        bar3d:{ enabled:true, depth:10, lift:-6 }
-      },
-      animation:{
-        duration:900,
-        easing:'easeOutCubic'
-      },
-      datasets:{
-        bar:{
-          animations:{
-            y:{
-              duration:1100,
-              easing:'easeOutElastic',
-              from:(ctx)=>{
-                const chart = ctx.chart;
-                const yAxis = chart.scales.y;
-                return yAxis ? yAxis.getPixelForValue(0) : chart.chartArea.bottom;
-              }
-            }
-          }
-        }
-      },
-      scales:{
-        x:{ ticks:{ color: tickColor }, grid:{ color: gridColor } },
-        y:{ beginAtZero:true, ticks:{ color: tickColor }, grid:{ color: gridColor } }
-      }
-    }
-  });
-
-  // Production planning chart (keeps dual-color theme by metric)
-  setEmptyBanner([...forecastDemand, ...forecastInventory], 'forecastEmpty');
-
-  const forecastChart = mk('forecastChart', {
-    type: 'bar',
-    data: {
-      labels: forecastLabels,
-      datasets: [
-        {
-          type: 'bar',
-          label: 'Expected daily orders (units)',
-          data: forecastDemand,
-          yAxisID: 'y',
-          borderColor: 'rgba(239,68,68,1)',
-          backgroundColor: (ctx) => {
-            const chart = ctx.chart;
-            const {ctx: c, chartArea} = chart;
-            if (!chartArea) return C_RED_30;
-            const gradient = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-            gradient.addColorStop(0, 'rgba(248,113,113,.18)');
-            gradient.addColorStop(0.5, 'rgba(239,68,68,.45)');
-            gradient.addColorStop(1, 'rgba(248,250,252,.9)');
-            return gradient;
-          },
-          borderWidth: 2,
-          borderRadius: 10,
-          topFaceColor: 'rgba(248,113,113,.55)',
-          sideFaceColor:'rgba(127,29,29,.35)',
-          hoverBorderWidth: 3
-        },
-        {
-          type: 'bar',
-          label: 'Estimated remaining stock (units)',
-          data: forecastInventory,
-          yAxisID: 'y',
-          borderColor: 'rgba(34,197,94,1)',
-          backgroundColor: (ctx) => {
-            const chart = ctx.chart;
-            const {ctx: c, chartArea} = chart;
-            if (!chartArea) return C_GREEN_30;
-            const gradient = c.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
-            gradient.addColorStop(0, 'rgba(22,163,74,.16)');
-            gradient.addColorStop(0.5, 'rgba(34,197,94,.45)');
-            gradient.addColorStop(1, 'rgba(240,253,250,.9)');
-            return gradient;
-          },
-          borderWidth: 2,
-          borderRadius: 10,
-          topFaceColor: 'rgba(74,222,128,.55)',
-          sideFaceColor:'rgba(22,101,52,.35)',
-          hoverBorderWidth: 3
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: tickColor } },
-        title: { display: false },
-        tooltip: {
-          backgroundColor: 'rgba(15,23,42,.9)',
-          borderColor: 'rgba(148,163,184,.6)',
-          borderWidth: 1,
-          padding: 10,
-          cornerRadius: 10,
-          callbacks: {
-            label: (ctx) => {
-              const val = Number(ctx.parsed.y);
-              const ds  = ctx.dataset.label || '';
-              return `${ds}: ${val.toLocaleString(undefined,{ minimumFractionDigits:2, maximumFractionDigits:2 })} unit(s)`;
-            }
-          }
-        },
-        bar3d: { enabled: true, depth: 12, lift: -8 }
-      },
-      animation: { duration: 900, easing: 'easeOutCubic' },
-      datasets: {
-        bar: {
-          animations: {
-            y: {
-              duration: 1100,
-              easing: 'easeOutElastic',
-              from: (ctx) => {
-                const chart = ctx.chart;
-                const yAxis = chart.scales.y;
-                return yAxis ? yAxis.getPixelForValue(0) : chart.chartArea.bottom;
-              }
-            }
-          }
-        }
-      },
-      scales: {
-        x: { ticks: { color: tickColor }, grid: { color: 'rgba(148,163,184,.12)', drawBorder: false } },
-        y: {
-          beginAtZero: true,
-          ticks: { color: tickColor },
-          grid: { color: 'rgba(148,163,184,.22)', drawBorder: false },
-          title:{ display:true, text:'Units', color:tickColor }
-        }
-      }
-    }
-  });
-
-  // 3D controls
-  const toggleProduction = document.getElementById('toggleProduction');
-  const toggleSales = document.getElementById('toggleSales');
-  const toggleExpiry = null;
-  const depthRange = document.getElementById('depthRange');
-  const liftRange = document.getElementById('liftRange');
-  const depthVal = document.getElementById('depthVal');
-  const liftVal = document.getElementById('liftVal');
-  const dot3d = document.getElementById('dot3d');
-
-  let t;
-  const debounce = (fn, ms=120) => (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); };
-
-  const set3D = (chart, enabled, depth, lift) => {
-    if (!chart) return;
-    chart.options.plugins = chart.options.plugins || {};
-    chart.options.plugins.bar3d = chart.options.plugins.bar3d || {};
-    chart.options.plugins.bar3d.enabled = enabled && (toggle3D?.checked ?? true) && !prefersReduced;
-    chart.options.plugins.bar3d.depth = depth;
-    chart.options.plugins.bar3d.lift = lift;
-    chart.update();
-  };
-
-  const apply3D = () => {
-    const depth = Number(depthRange?.value ?? 10);
-    const lift  = Number(liftRange?.value ?? -6);
-    if (depthVal) depthVal.textContent = depth;
-    if (liftVal)  liftVal.textContent  = lift;
-    if (dot3d) dot3d.style.background = (toggle3D?.checked ? 'var(--green)' : 'var(--brand-red)');
-
-    set3D(productionChart, toggleProduction ? toggleProduction.checked : true, depth, lift);
-    set3D(salesChart,      toggleSales ? toggleSales.checked : true,      depth, lift);
-    set3D(expiryChart,     toggleExpiry ? toggleExpiry.checked : true,    depth, lift);
-    set3D(forecastChart,   true,                                          depth, lift);
-  };
-
-  [toggle3D, toggleProduction, toggleSales, toggleExpiry, depthRange, liftRange]
-    .forEach(el => el?.addEventListener('input', debounce(apply3D)));
-
-  apply3D();
-
-  // Weekly sales mode and insights
-  const weeklySalesMode     = document.getElementById('weeklySalesMode');
-  const weeklySalesInsights = document.getElementById('weeklySalesInsights');
-
-  function findDs(key) {
-    if (!salesChart) return null;
-    return salesChart.data.datasets.find(d => d.key === key) || null;
-  }
-
-  function buildWeeklySalesInsights(mode) {
-    if (!weeklySalesInsights) return;
-    const insights = [];
-
-    const totalQty      = sumArray(qty);
-    const totalRevenue  = weekRevenueJS || sumArray(rev);
-    const totalProfit   = estimatedWeekProfitJS || sumArray(profit);
-    const margin        = isFinite(estimatedMarginJS) && estimatedMarginJS > 0 ? estimatedMarginJS : null;
-
-    const bestIdx       = maxIndex(qty);
-    const bestDayLabel  = bestIdx >= 0 && labels[bestIdx] !== undefined ? labels[bestIdx] : null;
-    const bestDayQty    = bestIdx >= 0 ? qty[bestIdx] : 0;
-
-    if (mode === 'quantity') {
-      if (totalQty > 0) {
-        insights.push(
-          `You sold about ${Math.round(totalQty).toLocaleString()} finished unit(s) in packs and bags this week.`
-        );
-      }
-      if (bestDayLabel && bestDayQty > 0) {
-        insights.push(
-          `${bestDayLabel} was the strongest day with about ${Math.round(bestDayQty).toLocaleString()} unit(s) sold.`
-        );
-      }
-      if (totalRevenue > 0) {
-        insights.push(
-          `Total recorded revenue for the week is around ₱${totalRevenue.toLocaleString(undefined,{maximumFractionDigits:2})}.`
-        );
-      }
-    } else if (mode === 'profit') {
-      if (totalRevenue > 0) {
-        insights.push(
-          `This week generated about ₱${totalRevenue.toLocaleString(undefined,{maximumFractionDigits:2})} in revenue.`
-        );
-      }
-      if (totalProfit > 0) {
-        insights.push(
-          `Estimated profit is around ₱${totalProfit.toLocaleString(undefined,{maximumFractionDigits:2})}.`
-        );
-      }
-      if (margin !== null) {
-        insights.push(
-          `Gross margin is approximately ${margin.toFixed(1)}%.`
-        );
-      } else {
-        insights.push(
-          `As cost data improves, the gross margin estimate will become more accurate.`
-        );
-      }
-    } else if (mode === 'forecast') {
-      const totalForecastQty   = sumArray(qtyForecast);
-      const totalForecastRev   = sumArray(revForecast);
-      const hasForecastData    = totalForecastQty > 0 || totalForecastRev > 0;
-
-      if (!hasForecastData) {
-        insights.push(
-          'Not enough historical data yet to show a forecast. Keep recording production and sales to unlock next week predictions.'
-        );
-      } else {
-        insights.push(
-          `Next week the AI expects about ${Math.round(totalForecastQty).toLocaleString()} finished unit(s) to be sold in packs and bags.`
-        );
-        if (totalForecastRev > 0) {
-          insights.push(
-            `Forecast revenue for the same period is around ₱${totalForecastRev.toLocaleString(undefined,{maximumFractionDigits:2})}.`
-          );
-        }
-        if (bestDayLabel && bestDayQty > 0) {
-          insights.push(
-            `Use this to schedule staffing and production around the busier days like ${bestDayLabel}.`
-          );
-        }
-      }
+      });
     }
 
-    if (!insights.length) {
-      insights.push(
-        'When more data is recorded, this section will summarize which days are strongest and how current results compare to the forecast.'
+    /* ----------------------------------------
+     * 4. SIDEBAR
+     * -------------------------------------- */
+    function initSidebar() {
+      const sidebar       = document.getElementById('sidebar');
+      const sidebarToggle = document.getElementById('sidebarToggle');
+      const sidebarClose  = document.getElementById('sidebarClose');
+
+      sidebarToggle?.addEventListener('click', () => {
+        sidebar?.classList.add('open');
+      });
+
+      sidebarClose?.addEventListener('click', () => {
+        sidebar?.classList.remove('open');
+      });
+    }
+
+    /* ----------------------------------------
+     * 5. DEMAND CALENDAR (DARK MODAL)
+     * -------------------------------------- */
+    function initDemandCalendar() {
+      const modal     = document.getElementById('demandCalendarModal');
+      const openBtn   = document.getElementById('demandCalendarButton');
+      const closeBtn  = document.getElementById('demandCalendarClose');
+      const prevBtn   = document.getElementById('calendarPrevMonth');
+      const nextBtn   = document.getElementById('calendarNextMonth');
+      const monthLbl  = document.getElementById('calendarMonthLabel');
+      const rangeLbl  = document.getElementById('calendarSelectedRangeLabel');
+      const grid      = document.getElementById('calendarGrid');
+      const resetBtn  = document.getElementById('demandCalendarReset');
+      const applyBtn  = document.getElementById('demandCalendarApply');
+
+      const dayTitle  = document.getElementById('calendarDayTitle');
+      const dayBadges = document.getElementById('calendarDayBadges');
+      const dayDemand = document.getElementById('calendarDayDemand');
+      const dayInv    = document.getElementById('calendarDayInventory');
+      const dayRes    = document.getElementById('calendarDayReserved');
+      const dayNet    = document.getElementById('calendarDayNet');
+      const dayNotes  = document.getElementById('calendarDayNotes');
+
+      if (!modal || !grid) return;
+
+      // initial month from Blade
+      let currentYear  = {{ $calendarYear }};
+      let currentMonth = {{ $calendarMonth }}; // 1-12
+
+      const parseIso = (iso) => {
+        if (!iso) return null;
+        const d = new Date(iso + 'T00:00:00');
+        return isNaN(d.getTime()) ? null : d;
+      };
+
+      let selectedStart = parseIso(filterStart);
+      let selectedEnd   = parseIso(filterEnd);
+      let selectedDay   = null;
+
+      const eventsMeta = calendarEvents || {};
+
+      const formatDateLabel = (d) => {
+        if (!d) return 'No range selected yet';
+        return d.toLocaleDateString(undefined, {
+          month:'short', day:'2-digit', year:'numeric'
+        });
+      };
+
+      const formatFullDate = (d) => d.toLocaleDateString(undefined, {
+        weekday:'long', month:'long', day:'2-digit', year:'numeric'
+      });
+
+      const dateKey = (d) => d.toISOString().slice(0,10);
+
+      const updateRangeLabel = () => {
+        if (!rangeLbl) return;
+        if (selectedStart && selectedEnd) {
+          rangeLbl.textContent = `${formatDateLabel(selectedStart)} – ${formatDateLabel(selectedEnd)}`;
+        } else if (selectedStart) {
+          rangeLbl.textContent = formatDateLabel(selectedStart);
+        } else {
+          rangeLbl.textContent = 'No range selected yet';
+        }
+      };
+
+      const updateApplyState = () => {
+        if (!applyBtn) return;
+        const enabled = !!(selectedStart && selectedEnd);
+        applyBtn.disabled = !enabled;
+      };
+
+      const updateDayDetails = (d) => {
+        selectedDay = d;
+        const key   = dateKey(d);
+        const meta  = eventsMeta[key] || {};
+        if (dayTitle) dayTitle.textContent = formatFullDate(d);
+
+        if (dayBadges) {
+          dayBadges.innerHTML = '';
+          const badges = [];
+
+          const level = meta.level || meta.demand || 'normal';
+          if (level === 'high') {
+            badges.push({ label: 'High demand', class: 'bg-amber-500/20 text-amber-300 border border-amber-500/40' });
+          } else if (level === 'low') {
+            badges.push({ label: 'Low demand', class: 'bg-sky-500/20 text-sky-300 border border-sky-500/40' });
+          } else {
+            badges.push({ label: 'Normal demand', class: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' });
+          }
+
+          if (meta.reservations && meta.reservations > 0) {
+            badges.push({ label: 'Has reservations', class: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' });
+          }
+          if (meta.event) {
+            badges.push({ label: meta.event, class: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' });
+          }
+
+          badges.forEach(b => {
+            const span = document.createElement('span');
+            span.className = `px-2 py-0.5 rounded-full ${b.class}`;
+            span.textContent = b.label;
+            dayBadges.appendChild(span);
+          });
+        }
+
+        if (dayDemand) dayDemand.textContent   = meta.demand_units   != null ? `${meta.demand_units} unit(s)` : '–';
+        if (dayInv)    dayInv.textContent      = meta.inventory_units!= null ? `${meta.inventory_units} unit(s)` : '–';
+        if (dayRes)    dayRes.textContent      = meta.reservations   != null ? `${meta.reservations} unit(s)` : '–';
+        if (dayNet)    dayNet.textContent      = meta.net_available  != null ? `${meta.net_available} unit(s)` : '–';
+        if (dayNotes)  dayNotes.textContent    = meta.notes || 'Use this day to plan production and staffing based on the expected demand.';
+      };
+
+      const isSameDay = (a, b) => (
+        a && b &&
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
       );
+
+      const isBetween = (d, start, end) => {
+        if (!start || !end) return false;
+        const t  = d.getTime();
+        const t1 = start.getTime();
+        const t2 = end.getTime();
+        return t >= Math.min(t1, t2) && t <= Math.max(t1, t2);
+      };
+
+      const renderMonth = () => {
+        const firstOfMonth = new Date(currentYear, currentMonth - 1, 1);
+        const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+        const weekdayIndex = (firstOfMonth.getDay() + 6) % 7; // make Monday=0
+
+        if (monthLbl) {
+          monthLbl.textContent = firstOfMonth.toLocaleDateString(undefined, {
+            month:'long', year:'numeric'
+          });
+        }
+
+        grid.innerHTML = '';
+
+        for (let i = 0; i < weekdayIndex; i++) {
+          const empty = document.createElement('div');
+          grid.appendChild(empty);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+          const d = new Date(currentYear, currentMonth - 1, day);
+          const key = dateKey(d);
+          const meta = eventsMeta[key] || {};
+          const level = meta.level || meta.demand || 'normal';
+
+          const btn = document.createElement('button');
+          btn.type  = 'button';
+          btn.dataset.date = key;
+          btn.className = 'flex flex-col items-center justify-center py-2 rounded-lg border text-xs cursor-pointer select-none transition bg-slate-900/80 border-slate-700 text-slate-200 hover:bg-slate-800';
+
+          let colorClass = 'bg-emerald-900/30 border-emerald-700/40 text-emerald-100';
+          if (level === 'high') {
+            colorClass = 'bg-amber-900/40 border-amber-600/50 text-amber-100';
+          } else if (level === 'low') {
+            colorClass = 'bg-sky-900/40 border-sky-600/50 text-sky-100';
+          }
+          btn.className += ' ' + colorClass;
+
+          const inRange = selectedStart && selectedEnd && isBetween(d, selectedStart, selectedEnd);
+          const isStart = selectedStart && isSameDay(d, selectedStart);
+          const isEnd   = selectedEnd   && isSameDay(d, selectedEnd);
+
+          if (inRange) {
+            btn.className += ' ring-1 ring-blue-400/80 ring-offset-1 ring-offset-slate-950';
+          }
+          if (isStart || isEnd) {
+            btn.className += ' font-semibold bg-blue-900/60 border-blue-400';
+          }
+
+          const weekdayLabel = d.toLocaleDateString(undefined, { weekday:'short' });
+          btn.innerHTML = `
+            <span class="text-[11px] mb-0.5 text-slate-400">${weekdayLabel}</span>
+            <span class="text-sm font-semibold">${day}</span>
+          `;
+
+          btn.addEventListener('click', () => {
+            if (!selectedStart || (selectedStart && selectedEnd)) {
+              selectedStart = d;
+              selectedEnd   = null;
+            } else {
+              if (d.getTime() < selectedStart.getTime()) {
+                selectedEnd   = selectedStart;
+                selectedStart = d;
+              } else {
+                selectedEnd = d;
+              }
+            }
+            updateRangeLabel();
+            updateApplyState();
+            updateDayDetails(d);
+            renderMonth(); // re-render to refresh highlight
+          });
+
+          grid.appendChild(btn);
+        }
+      };
+
+      // Open/close
+      const openModal = () => {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        renderMonth();
+        updateRangeLabel();
+        updateApplyState();
+      };
+      const closeModal = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      };
+
+      openBtn?.addEventListener('click', openModal);
+      closeBtn?.addEventListener('click', closeModal);
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+      });
+
+      // Month navigation
+      prevBtn?.addEventListener('click', () => {
+        currentMonth--;
+        if (currentMonth < 1) {
+          currentMonth = 12;
+          currentYear--;
+        }
+        renderMonth();
+      });
+
+      nextBtn?.addEventListener('click', () => {
+        currentMonth++;
+        if (currentMonth > 12) {
+          currentMonth = 1;
+          currentYear++;
+        }
+        renderMonth();
+      });
+
+      // Reset
+      resetBtn?.addEventListener('click', () => {
+        selectedStart = null;
+        selectedEnd   = null;
+        selectedDay   = null;
+        updateRangeLabel();
+        updateApplyState();
+        if (dayTitle) dayTitle.textContent = 'Pick a day on the calendar';
+        if (dayBadges) dayBadges.innerHTML = '';
+        if (dayDemand)   dayDemand.textContent   = '–';
+        if (dayInv)      dayInv.textContent      = '–';
+        if (dayRes)      dayRes.textContent      = '–';
+        if (dayNet)      dayNet.textContent      = '–';
+        if (dayNotes)    dayNotes.textContent    = 'Use the calendar on the left to inspect a day. High demand days are perfect for planning extra production and staffing.';
+        renderMonth();
+      });
+
+      // Apply: reload with query params
+      applyBtn?.addEventListener('click', () => {
+        if (!selectedStart || !selectedEnd) return;
+        const startStr = dateKey(selectedStart);
+        const endStr   = dateKey(selectedEnd);
+
+        const url   = new URL(window.location.href);
+        url.searchParams.set('start', startStr);
+        url.searchParams.set('end',   endStr);
+        window.location.href = url.toString();
+      });
+
+      // Auto-open day details if filterStart exists
+      if (selectedStart) {
+        updateDayDetails(selectedStart);
+      }
     }
 
-    weeklySalesInsights.textContent = insights.join(' ');
-  }
+    /* ----------------------------------------
+     * 6. 3D TOGGLE (visual only)
+     * -------------------------------------- */
+    function init3DControls() {
+      const update = () => {
+        if (depthVal && depthRange) depthVal.textContent = depthRange.value;
+        if (liftVal && liftRange)   liftVal.textContent  = liftRange.value;
+        if (dot3d && toggle3D) {
+          dot3d.style.background = toggle3D.checked ? 'var(--green)' : 'var(--brand-red)';
+        }
+      };
 
-  function updateWeeklySalesMode() {
-    if (!salesChart) return;
-    const mode = weeklySalesMode?.value || 'quantity';
-
-    const dsQty       = findDs('qtyActual');
-    const dsRev       = findDs('revActual');
-    const dsProfit    = findDs('profitActual');
-    const dsQtyF      = findDs('qtyForecast');
-    const dsRevF      = findDs('revForecast');
-    const dsProfitF   = findDs('profitForecast');
-
-    const setHidden = (ds, hidden) => { if (ds) ds.hidden = hidden; };
-
-    const hasForecast = sumArray(qtyForecast) > 0 || sumArray(revForecast) > 0 || sumArray(profitForecast) > 0;
-
-    if (mode === 'quantity') {
-      setHidden(dsQty, false);
-      setHidden(dsRev, false);
-      setHidden(dsProfit, true);
-      setHidden(dsQtyF, true);
-      setHidden(dsRevF, true);
-      setHidden(dsProfitF, true);
-      salesChart.options.plugins.title.text = 'Weekly sales in units and revenue';
-    } else if (mode === 'profit') {
-      setHidden(dsQty, true);
-      setHidden(dsRev, false);
-      setHidden(dsProfit, false);
-      setHidden(dsQtyF, true);
-      setHidden(dsRevF, true);
-      setHidden(dsProfitF, true);
-      salesChart.options.plugins.title.text = 'Weekly revenue and profit';
-    } else if (mode === 'forecast') {
-      // Focus on forecast but keep actual revenue as reference
-      setHidden(dsQty, true);
-      setHidden(dsRev, false);
-      setHidden(dsProfit, true);
-
-      setHidden(dsQtyF, !hasForecast);
-      setHidden(dsRevF, !hasForecast);
-      setHidden(dsProfitF, !hasForecast);
-
-      salesChart.options.plugins.title.text = 'Weekly sales next week forecast AI';
+      depthRange?.addEventListener('input', debounce(update));
+      liftRange?.addEventListener('input', debounce(update));
+      toggle3D?.addEventListener('input', debounce(update));
+      update();
     }
 
-    salesChart.update();
-    buildWeeklySalesInsights(mode);
-  }
-
-  weeklySalesMode?.addEventListener('change', updateWeeklySalesMode);
-  updateWeeklySalesMode();
-
-  // Forecast insights text
-  const forecastInsightsEl = document.getElementById('forecastInsights');
-  function updateForecastInsights() {
-    if (!forecastInsightsEl) return;
-
-    const totalDemand = sumArray(forecastDemand);
-    if (!forecastDemand.length || totalDemand === 0) {
-      forecastInsightsEl.textContent =
-        'When forecast data is available, this will highlight the busiest day and the day with the lowest projected stock in finished units.';
-      return;
-    }
-
-    const bestIdx = maxIndex(forecastDemand);
-    const bestLabel = bestIdx >= 0 && forecastLabels[bestIdx] !== undefined ? forecastLabels[bestIdx] : 'Day';
-    const bestVal   = bestIdx >= 0 ? forecastDemand[bestIdx] : 0;
-
-    const minStockIdx = maxIndex(forecastInventory.map(v => v === 0 ? -Infinity : -v));
-    const minStockLabel = minStockIdx >= 0 && forecastLabels[minStockIdx] !== undefined ? forecastLabels[minStockIdx] : null;
-    const minStockVal   = minStockIdx >= 0 ? forecastInventory[minStockIdx] : null;
-
-    const lines = [];
-    lines.push(
-      `Busiest expected orders day is ${bestLabel} with about ${Math.round(bestVal).toLocaleString()} unit(s).`
-    );
-    lines.push(
-      `Total expected demand over the forecast window is about ${Math.round(totalDemand).toLocaleString()} unit(s).`
-    );
-    if (minStockLabel !== null && minStockVal !== null) {
-      lines.push(
-        `Lowest projected remaining stock is about ${Math.round(minStockVal).toLocaleString()} unit(s) on ${minStockLabel}.`
-      );
-    }
-
-    forecastInsightsEl.textContent = lines.join(' ');
-  }
-  updateForecastInsights();
-
-  // Model info modal
-  const modelInfoModal  = document.getElementById('modelInfoModal');
-  const modelInfoTitle  = document.getElementById('modelInfoTitle');
-
-  function openModelInfo(contextLabel) {
-    if (!modelInfoModal) return;
-    if (modelInfoTitle && contextLabel) {
-      modelInfoTitle.textContent = contextLabel;
-    }
-    modelInfoModal.classList.remove('hidden');
-    modelInfoModal.classList.add('flex');
-  }
-
-  function closeModelInfo() {
-    if (!modelInfoModal) return;
-    modelInfoModal.classList.add('hidden');
-    modelInfoModal.classList.remove('flex');
-  }
-
-  document.querySelectorAll('.model-info-trigger').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const label = btn.getAttribute('data-context') || 'Model information';
-      openModelInfo(label);
-    });
+    // Boot
+    initCharts();
+    initModelInfoModal();
+    initSidebar();
+    initDemandCalendar();
+    init3DControls();
   });
-
-  modelInfoModal?.querySelectorAll('[data-close-model]').forEach(btn => {
-    btn.addEventListener('click', closeModelInfo);
-  });
-
-  modelInfoModal?.addEventListener('click', (e) => {
-    if (e.target === modelInfoModal || e.target.dataset.modalOverlay === 'true') {
-      closeModelInfo();
-    }
-  });
-
-  // Sidebar toggle
-  const sidebar = document.getElementById('sidebar');
-  const sidebarToggle = document.getElementById('sidebarToggle');
-  const sidebarClose = document.getElementById('sidebarClose');
-
-  sidebarToggle?.addEventListener('click', () => {
-    sidebar?.classList.add('open');
-  });
-  sidebarClose?.addEventListener('click', () => {
-    sidebar?.classList.remove('open');
-  });
-
-  window.GenRevDashboard = { productionChart, salesChart, expiryChart, spark, forecastChart, apply3D };
-});
   </script>
 </body>
 </html>

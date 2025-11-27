@@ -346,6 +346,7 @@
 
     $badge = null;
     $badgeCls = '';
+
     if (isset($p->is_expired) || isset($p->days_to_expiry)) {
       if ($p->is_expired ?? false) {
         $badge = 'Expired';
@@ -362,11 +363,7 @@
       ? \Carbon\Carbon::parse($nextExpiryRaw)->format('M d, Y')
       : '—';
 
-    // Image pipeline:
-    // 1) Product card image
-    // 2) Product thumb / image_url
-    // 3) Latest production batch image (so Add Order upload can show here)
-    // 4) Default placeholder
+    // Image pipeline
     $latestProduction = $p->latestProduction ?? null;
     $batchImg = $latestProduction ? $latestProduction->image_url : null;
     $batchSet = $latestProduction ? $latestProduction->image_srcset : null;
@@ -377,9 +374,7 @@
       ?? $batchImg
       ?? asset('images/default-product.png');
 
-    $srcset = $p->card_image_srcset
-      ?? $batchSet
-      ?? null;
+    $srcset = $p->card_image_srcset ?? $batchSet ?? null;
 
     $sku = $p->sku ?? '—';
     $defaultPrice = (float) ($p->default_price ?? $p->price ?? $p->unit_cost ?? 0);
@@ -388,15 +383,15 @@
   <div id="product-card-{{ $p->id }}" class="prod-card {{ $ring }}" data-id="{{ $p->id }}"
     data-name="{{ e($p->product_name) }}" data-price="{{ $defaultPrice }}">
 
-    {{-- Image block: fixed frame + skeleton + glow --}}
+    {{-- Image block --}}
     <div class="prod-card-media">
       <div class="img-skeleton" aria-hidden="true"></div>
 
       <img @if($srcset) srcset="{{ $srcset }}" sizes="(min-width:1280px) 25vw,
          (min-width:1024px) 33vw,
          (min-width:640px) 50vw,
-       100vw" @endif src="{{ $imgPrimary }}" alt="{{ $p->product_name }} image" class="prod-card-img" loading="lazy"
-        decoding="async" onload="this.previousElementSibling?.remove()"
+       100vw" @endif src="{{ $imgPrimary }}" alt="{{ $p->product_name }} image" class="prod-card-img"
+        loading="lazy" decoding="async" onload="this.previousElementSibling?.remove()"
         onerror="this.onerror=null;this.src='{{ asset('images/default-product.png') }}';this.previousElementSibling?.remove();">
 
       @if($badge)
@@ -422,7 +417,7 @@
       <p class="text-xs text-gray-500">SKU: {{ $sku }}</p>
     </div>
 
-    {{-- Stats grid (Unit Cost removed, Next Expiry added) --}}
+    {{-- Stats grid --}}
     <div class="grid grid-cols-2 gap-3 text-sm">
       <div class="stat-chip">
         <p class="stat-label">Inventory</p>
@@ -476,31 +471,6 @@
         Archive Product
       </button>
 
-
-      <script>
-        $(document).on('click', '.js-open-archive-product', function () {
-          let productId = $(this).data('product-id');
-
-          $.post(`/products/${productId}/archive-product`, {
-            _token: $('meta[name="csrf-token"]').attr('content')
-          })
-            .done(function (res) {
-              console.log("ARCHIVED:", res);
-              location.reload();
-            })
-            .fail(function (err) {
-              console.error(err);
-              alert("Archive failed.");
-            });
-        });
-
-
-
-
-      </script>
-
-
-
       <button type="button" class="js-quick-add neo-btn neo-btn--green text-sm" data-id="{{ (int) $p->id }}"
         data-name="{{ e($p->product_name) }}" data-price="{{ $defaultPrice }}" title="Quick add this product to Sales">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"
@@ -518,3 +488,48 @@
     No products yet.
   </div>
 @endforelse
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+  (function ($) {
+    const archivedUrl = "{{ route('products.archived') }}";
+    console.log("Archive script loaded"); // Debug 1
+
+    $(document).on('click', '.js-open-archive-product', function () {
+
+      console.log("Archive button clicked"); // Debug 2
+
+      let productId = $(this).data('product-id');
+      console.log("Product ID is:", productId); // Debug 3
+
+      const csrf = $('meta[name="csrf-token"]').attr('content');
+      console.log("CSRF Token:", csrf); // Debug 4
+
+      console.log("Sending POST request to:", `/products/${productId}/archive-product`); // Debug 5
+
+      $.post(`/products/${productId}/archive-product`, {
+        _token: csrf
+      })
+        .done(function (res) {
+          console.log("ARCHIVE REQUEST SUCCESS"); // Debug 6
+          console.log("Response:", res);
+
+          if (res.redirect) {
+            console.log("Redirecting to:", res.redirect); // Debug 7
+            window.location.href = res.redirect;
+          } else {
+            console.log("Reloading page"); // Debug 8
+            location.reload();
+          }
+        })
+        .fail(function (err) {
+          console.log("ARCHIVE REQUEST FAILED"); // Debug 9
+          console.error("Error:", err);
+          alert("Archive failed.");
+        });
+    });
+
+  })(jQuery);
+
+</script>

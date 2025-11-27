@@ -17,6 +17,9 @@ use App\Http\Controllers\ProductRecipeController;
 use App\Http\Controllers\FallbackController;
 use App\Http\Controllers\UserManagementController;
 use App\Http\Controllers\LoginActivityController;
+use App\Http\Controllers\DemandEventController;
+use App\Http\Controllers\ReservationController;
+
 
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\EnsureUserIsActive;
@@ -34,11 +37,33 @@ Route::pattern('sale', '[0-9]+');
 Route::pattern('allocation', '[0-9]+');
 Route::pattern('item', '[0-9]+');
 Route::pattern('line', '[0-9]+');
-Route::pattern('material', '[0-9]+'); // added to align with whereNumber('material')
-
-/* Landing */
+Route::pattern('material', '[0-9]+'); // align with whereNumber('material')
+/*
+|--------------------------------------------------------------------------
+| reservations
+|--------------------------------------------------------------------------
+*/
+Route::post('/reservations', [ReservationController::class, 'store'])
+    ->name('reservations.store');
+/*
+|--------------------------------------------------------------------------
+| Landing
+|--------------------------------------------------------------------------
+*/
 Route::redirect('/', '/dashboard')->name('home');
-
+/*
+|--------------------------------------------------------------------------
+| Demand Events
+|--------------------------------------------------------------------------
+*/
+Route::prefix('demand-events')->name('demand-events.')->group(function () {
+    Route::get('/',          [DemandEventController::class, 'index'])->name('index');
+    Route::get('/calendar',  [DemandEventController::class, 'calendar'])->name('calendar');
+    Route::post('/',         [DemandEventController::class, 'store'])->name('store');
+    Route::get('/{demandEvent}', [DemandEventController::class, 'show'])->name('show');
+    Route::put('/{demandEvent}', [DemandEventController::class, 'update'])->name('update');
+    Route::delete('/{demandEvent}', [DemandEventController::class, 'destroy'])->name('destroy');
+});
 /*
 |--------------------------------------------------------------------------
 | Guest (Auth)
@@ -57,11 +82,9 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])
         ->middleware('throttle:10,1') // avoid OTP abuse
         ->name('register.submit');
+
     Route::post('/register/otp', [AuthController::class, 'requestOtp'])
         ->name('register.otp');
-
-    // legacy alias
-    Route::redirect('/settings/notifications', '/notifications')->name('settings.notifications');
 });
 
 /*
@@ -75,7 +98,7 @@ Route::middleware(['auth', EnsureUserIsActive::class])->group(function () {
     Route::get('/dashboard',      [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/data', [DashboardController::class, 'data'])->name('dashboard.data');
 
-    // Settings
+    // Settings (general + account)
     Route::get('/settings',                 [SettingsController::class, 'index'])->name('settings.index');
     Route::get('/settings/account',         [SettingsController::class, 'account'])->name('settings.account');
     Route::post('/settings',                [SettingsController::class, 'store'])->name('settings.store');
@@ -91,6 +114,10 @@ Route::middleware(['auth', EnsureUserIsActive::class])->group(function () {
     Route::get('/notifications',            [NotificationController::class, 'getNotifications'])->name('notifications.index');
     Route::post('/notifications/mark-read', [NotificationController::class, 'markNotificationsAsRead'])->name('notifications.markRead');
 
+    // Legacy alias for notifications (needs auth)
+    Route::redirect('/settings/notifications', '/notifications')
+        ->name('settings.notifications');
+
     // Logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });
@@ -102,11 +129,11 @@ Route::middleware(['auth', EnsureUserIsActive::class])->group(function () {
 */
 Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin'])->group(function () {
 
-    // ----- Login Activity (Log Book) -----
+    // Login Activity (Log Book)
     Route::get('/settings/login-activity', [LoginActivityController::class, 'index'])
         ->name('settings.login-activity');
 
-    // ----- User Management -----
+    // User Management
     Route::prefix('users')->name('users.')->controller(UserManagementController::class)->group(function () {
         Route::get('/',            'index')->name('index');
         Route::post('/',           'store')->name('store');
@@ -123,7 +150,7 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
         Route::get('/export/csv',       'exportCsv')->name('export.csv');
     });
 
-    // ----- Employees -----
+    // Employees
     Route::prefix('employees')->name('employees.')->controller(EmployeeController::class)->group(function () {
         Route::get('/',                    'index')->name('index');
         Route::post('/',                   'store')->name('store');
@@ -145,45 +172,68 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
 | Admin + Production Manager
 |--------------------------------------------------------------------------
 */
-Route::post('products/{product}/archive-product', [ProductController::class, 'archiveProduct'])
-    ->name('products.archiveProduct');
-
-
 Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Production'])->group(function () {
 
-    // ===== Products (catalog + BOM management) =====
+    /*
+    |----------------------------------------------------------------------
+    | Products (catalog + BOM management)
+    |----------------------------------------------------------------------
+    */
+
+    // Archived products page (for archived.blade.php)
+    Route::get('products/archived', [ProductController::class, 'archived'])
+        ->name('products.archived');
+
+    // Optional alias for convenience
+    Route::redirect('/products-archived', '/products/archived')
+        ->name('products.archived.alias');
+
     Route::resource('products', ProductController::class);
+
+    // Archive a product (used by "Archive Product" button on cards)
+    Route::post('products/{product}/archive-product', [ProductController::class, 'archiveProduct'])
+        ->whereNumber('product')
+        ->name('products.archiveProduct');
+
     Route::post('products/quick-store',     [ProductController::class, 'quickStore'])->name('products.quick-store');
     Route::post('products/{product}/image', [ProductController::class, 'updateImage'])
         ->whereNumber('product')->name('products.image.update');
 
     // BOM / Recipe (under products/{product}/materials)
     Route::prefix('products/{product}')->whereNumber('product')->group(function () {
-        Route::get('/materials',             [ProductRecipeController::class, 'index'])->name('products.materials.index');
-        Route::get('/materials/defaults',    [ProductRecipeController::class, 'defaults'])->name('products.materials.defaults');
-        Route::post('/materials',            [ProductRecipeController::class, 'store'])->name('products.materials.store');
-        Route::delete('/materials/{line}',   [ProductRecipeController::class, 'destroy'])
+        Route::get('/materials',           [ProductRecipeController::class, 'index'])->name('products.materials.index');
+        Route::get('/materials/defaults',  [ProductRecipeController::class, 'defaults'])->name('products.materials.defaults');
+        Route::post('/materials',          [ProductRecipeController::class, 'store'])->name('products.materials.store');
+        Route::delete('/materials/{line}', [ProductRecipeController::class, 'destroy'])
             ->whereNumber('line')->name('products.materials.destroy');
 
         // Legacy aliases
-        Route::post('/recipe',               [ProductController::class, 'recipeStore'])->name('products.recipe.store');
-        Route::delete('/recipe/{line}',      [ProductController::class, 'recipeDestroy'])
+        Route::post('/recipe',          [ProductController::class, 'recipeStore'])->name('products.recipe.store');
+        Route::delete('/recipe/{line}', [ProductController::class, 'recipeDestroy'])
             ->whereNumber('line')->name('products.recipe.destroy');
     });
 
-    // ===== Production / Batches =====
+    // Production archive list (outer alias)
+    Route::get('/production/archived', [ProductionController::class, 'archived'])
+        ->name('production.archived');
+
+    /*
+    |----------------------------------------------------------------------
+    | Production / Batches
+    |----------------------------------------------------------------------
+    */
     Route::prefix('production')->name('production.')->controller(ProductionController::class)->group(function () {
         Route::get('/',               'index')->name('index');
         Route::get('/filter',         'filter')->name('filter');
         Route::get('/info/{name}',    'getProductInfo')->name('info');
 
         // Lightweight types endpoints for chips and modals
-        Route::get('/sales-types', 'salesTypes')->name('sales.types');
+        Route::get('/sales-types',    'salesTypes')->name('sales.types');
         Route::get('/{parent}/types', 'suggestTypes')->whereNumber('parent')->name('types');
 
         // Orders under a parent product
-        Route::get('/orders/{id}', 'showOrders')->whereNumber('id')->name('orders');
-        Route::post('/orders',     'storeOrder')->name('orders.store');
+        Route::get('/orders/{id}',    'showOrders')->whereNumber('id')->name('orders');
+        Route::post('/orders',        'storeOrder')->name('orders.store');
         Route::post('/orders/legacy', 'storeOrder')->name('storeOrder');
 
         // Create and store production
@@ -196,11 +246,11 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
         Route::delete('/{production}', 'destroy')->whereNumber('production')->name('destroy');
         Route::delete('/batch/latest/{product}', 'destroyLatest')->whereNumber('product')->name('batch.destroyLatest');
 
-        // Archive
-        Route::get('/archived',        'archivedIndex')->name('archived');
-        Route::post('/{id}/archive',   'archive')->whereNumber('id')->name('archive');
-        Route::post('/{id}/restore',   'restore')->whereNumber('id')->name('restore');
-        Route::delete('/{id}/force',   'destroyForever')->whereNumber('id')->name('force');
+        // Archive (for productions / batches)
+        Route::get('/archived',      'archivedIndex')->name('archived');
+        Route::post('/{id}/archive', 'archive')->whereNumber('id')->name('archive');
+        Route::post('/{id}/restore', 'restore')->whereNumber('id')->name('restore');
+        Route::delete('/{id}/force', 'destroyForever')->whereNumber('id')->name('force');
 
         // PDF
         Route::get('/{id}/pdf', 'pdf')->whereNumber('id')->name('pdf');
@@ -242,11 +292,11 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
     Route::get('/sales/api/types', [SalesController::class, 'apiTypes'])->name('sales.api.types');
 
     // Sales Archive (Trash)
-    Route::get('/sales/archived',               [SalesController::class, 'archivedIndex'])->name('sales.archived');
-    Route::patch('/sales/archived/{id}/restore',[SalesController::class, 'restore'])->whereNumber('id')->name('sales.restore');
-    Route::delete('/sales/archived/{id}/force', [SalesController::class, 'forceDelete'])->whereNumber('id')->name('sales.forceDelete');
-    Route::post('/sales/archived/restore-many', [SalesController::class, 'restoreMany'])->name('sales.restoreMany');
-    Route::post('/sales/archived/force-many',   [SalesController::class, 'forceDeleteMany'])->name('sales.forceDeleteMany');
+    Route::get('/sales/archived',                [SalesController::class, 'archivedIndex'])->name('sales.archived');
+    Route::patch('/sales/archived/{id}/restore', [SalesController::class, 'restore'])->whereNumber('id')->name('sales.restore');
+    Route::delete('/sales/archived/{id}/force',  [SalesController::class, 'forceDelete'])->whereNumber('id')->name('sales.forceDelete');
+    Route::post('/sales/archived/restore-many',  [SalesController::class, 'restoreMany'])->name('sales.restoreMany');
+    Route::post('/sales/archived/force-many',    [SalesController::class, 'forceDeleteMany'])->name('sales.forceDeleteMany');
 
     // Handy aliases
     Route::redirect('/sales-archived', '/sales/archived')->name('sales.archived.alias');
@@ -275,13 +325,17 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
 */
 Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Inventory'])->group(function () {
 
-    // ===== Materials =====
+    /*
+    |----------------------------------------------------------------------
+    | Materials
+    |----------------------------------------------------------------------
+    */
     Route::prefix('materials')->name('materials.')->group(function () {
         Route::get('/',          [MaterialController::class, 'index'])->name('index');
         Route::get('/create',    [MaterialController::class, 'create'])->name('create');
         Route::post('/',         [MaterialController::class, 'store'])->name('store');
         Route::get('/{id}/edit', [MaterialController::class, 'edit'])->whereNumber('id')->name('edit');
-        Route::match(['put','patch'],'/{id}', [MaterialController::class, 'update'])->whereNumber('id')->name('update');
+        Route::match(['put', 'patch'], '/{id}', [MaterialController::class, 'update'])->whereNumber('id')->name('update');
         Route::delete('/{id}',   [MaterialController::class, 'destroy'])->whereNumber('id')->name('destroy');
 
         // JSON helpers
@@ -293,22 +347,30 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
 
     Route::redirect('/materials-alias', '/materials')->name('materials');
 
-    // ===== Inventory =====
+    /*
+    |----------------------------------------------------------------------
+    | Inventory
+    |----------------------------------------------------------------------
+    */
     Route::prefix('inventory')->name('inventory.')->group(function () {
-        Route::get('/',          [InventoryController::class, 'index'])->name('index');
-        Route::post('/',         [InventoryController::class, 'store'])->name('store');
+        Route::get('/',  [InventoryController::class, 'index'])->name('index');
+        Route::post('/', [InventoryController::class, 'store'])->name('store');
 
         // export routes added here before parameter routes
         Route::get('/export/csv', [InventoryController::class, 'exportCsv'])->name('export.csv');
         Route::get('/export/pdf', [InventoryController::class, 'exportPdf'])->name('export.pdf');
 
         Route::get('/{id}/edit', [InventoryController::class, 'edit'])->whereNumber('id')->name('edit');
-        Route::match(['put','patch'],'/{id}', [InventoryController::class, 'update'])->whereNumber('id')->name('update');
+        Route::match(['put', 'patch'], '/{id}', [InventoryController::class, 'update'])->whereNumber('id')->name('update');
     });
 
     Route::redirect('/inventory-alias', '/inventory')->name('inventory');
 
-    // ===== Allocations =====
+    /*
+    |----------------------------------------------------------------------
+    | Allocations
+    |----------------------------------------------------------------------
+    */
     Route::prefix('allocations')->name('allocations.')->group(function () {
         Route::patch('/{allocation}/approve',    [BatchAllocationController::class, 'approve'])
             ->whereNumber('allocation')->name('approve');
