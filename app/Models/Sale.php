@@ -17,13 +17,15 @@ class Sale extends Model
 
     protected $table = 'sales';
 
-    /** Statuses */
+    /* ----------------------------------------------------------------------
+     |  STATUS ENUM
+     |-----------------------------------------------------------------------*/
+
     public const STATUS_PENDING   = 'Pending';
     public const STATUS_COMPLETED = 'Completed';
     public const STATUS_CANCELLED = 'Cancelled';
     public const STATUS_PAID      = 'Paid';
 
-    /** Useful list for validation/UI */
     public const STATUSES = [
         self::STATUS_PENDING,
         self::STATUS_COMPLETED,
@@ -31,7 +33,24 @@ class Sale extends Model
         self::STATUS_PAID,
     ];
 
-    /** Mass-assignable fields */
+    /* ----------------------------------------------------------------------
+     |  UNIT MODES (KG / PACK / BAG)
+     |-----------------------------------------------------------------------*/
+
+    public const UNIT_KG   = 'kg';
+    public const UNIT_PACK = 'pack';
+    public const UNIT_BAG  = 'bag';
+
+    public const UNIT_TYPES = [
+        self::UNIT_KG,
+        self::UNIT_PACK,
+        self::UNIT_BAG,
+    ];
+
+    /* ----------------------------------------------------------------------
+     |  FILLABLE
+     |-----------------------------------------------------------------------*/
+
     protected $fillable = [
         // schema columns (new + legacy)
         'product_id',
@@ -57,7 +76,7 @@ class Sale extends Model
         'production_date',
         'expiration_date',
 
-        // legacy date
+        // legacy date column
         'date',
     ];
 
@@ -87,7 +106,9 @@ class Sale extends Model
         'sale_type',
     ];
 
-    /* ----------------------------- Relationships ----------------------------- */
+    /* ----------------------------------------------------------------------
+     |  RELATIONSHIPS
+     |-----------------------------------------------------------------------*/
 
     public function productRef()
     {
@@ -109,7 +130,18 @@ class Sale extends Model
         return $this->hasMany(\App\Models\SaleAudit::class);
     }
 
-    /* -------------------------------- Scopes --------------------------------- */
+    /**
+     * Reverse link: one reservation can create one sale.
+     * Reservation has sale_id → so we use hasOne here.
+     */
+    public function reservation()
+    {
+        return $this->hasOne(\App\Models\Reservation::class, 'sale_id');
+    }
+
+    /* ----------------------------------------------------------------------
+     |  SCOPES
+     |-----------------------------------------------------------------------*/
 
     public function scopeStatus($q, string $status)
     {
@@ -129,8 +161,14 @@ class Sale extends Model
     public function scopeDateBetween($q, ?string $from, ?string $to)
     {
         $col = Schema::hasColumn($this->getTable(), 'order_date') ? 'order_date' : 'date';
-        if ($from) $q->whereDate($col, '>=', $from);
-        if ($to)   $q->whereDate($col, '<=', $to);
+
+        if ($from) {
+            $q->whereDate($col, '>=', $from);
+        }
+        if ($to) {
+            $q->whereDate($col, '<=', $to);
+        }
+
         return $q;
     }
 
@@ -138,36 +176,45 @@ class Sale extends Model
     {
         if (!$term) return $q;
         $term = trim($term);
+
         return $q->where(function ($qq) use ($term) {
             $qq->where('order_number', 'like', "%{$term}%")
-               ->orWhere('invoice_number', 'like', "%{$term}%")
-               ->orWhere('customer_name', 'like', "%{$term}%")
-               ->orWhere('product', 'like', "%{$term}%")
-               ->orWhere('product_name', 'like', "%{$term}%")
-               ->orWhere('type_label', 'like', "%{$term}%")
-               ->orWhere('notes', 'like', "%{$term}%");
+                ->orWhere('invoice_number', 'like', "%{$term}%")
+                ->orWhere('customer_name', 'like', "%{$term}%")
+                ->orWhere('product', 'like', "%{$term}%")
+                ->orWhere('product_name', 'like', "%{$term}%")
+                ->orWhere('type_label', 'like', "%{$term}%")
+                ->orWhere('notes', 'like', "%{$term}%");
         });
     }
 
-    /* ---------------------------- Unified Accessors --------------------------- */
+    /* ----------------------------------------------------------------------
+     |  ACCESSORS / HELPERS
+     |-----------------------------------------------------------------------*/
 
-    /** Qty in kg-equivalent, when applicable */
+    /** Quantity in kg-equivalent, when applicable. */
     public function qtyKg(): float
     {
         return (float) ($this->quantity_kg ?? $this->quantity ?? 0);
     }
 
-    /** Unit price numeric */
+    /** Unit price numeric. */
     public function unitPriceValue(): float
     {
         return (float) ($this->unit_price ?? $this->price ?? 0);
     }
 
-    /** Unified total value */
+    /** Unified total value. */
     public function totalValue(): float
     {
-        if (!is_null($this->total_price ?? null)) return (float) $this->total_price;
-        if (!is_null($this->total ?? null))       return (float) $this->total;
+        if (!is_null($this->total_price ?? null)) {
+            return (float) $this->total_price;
+        }
+
+        if (!is_null($this->total ?? null)) {
+            return (float) $this->total;
+        }
+
         return round($this->qtyKg() * $this->unitPriceValue(), 2);
     }
 
@@ -178,8 +225,14 @@ class Sale extends Model
 
     public function getDisplayProductAttribute(): string
     {
-        if (!empty($this->product_name)) return (string) $this->product_name;
-        if (!empty($this->product))      return (string) $this->product;
+        if (!empty($this->product_name)) {
+            return (string) $this->product_name;
+        }
+
+        if (!empty($this->product)) {
+            return (string) $this->product;
+        }
+
         return optional($this->productRef)->product_name ?? '';
     }
 
@@ -221,11 +274,27 @@ class Sale extends Model
         return null;
     }
 
-    /* -------------------------------- Mutators -------------------------------- */
+    /* ----------------------------------------------------------------------
+     |  MUTATORS
+     |-----------------------------------------------------------------------*/
 
     public function setOrderDateAttribute($value): void
     {
         $this->attributes['order_date'] = $value ? Carbon::parse($value) : null;
+    }
+
+    /**
+     * Normalize unit_type → kg | pack | bag using constants.
+     */
+    public function setUnitTypeAttribute($value): void
+    {
+        $raw = strtolower(trim((string) $value));
+
+        if (!in_array($raw, self::UNIT_TYPES, true)) {
+            $raw = self::UNIT_KG; // default
+        }
+
+        $this->attributes['unit_type'] = $raw;
     }
 
     public function setQuantityKgAttribute($value): void
@@ -248,6 +317,7 @@ class Sale extends Model
         if (Schema::hasColumn('sales', 'quantity_kg') && !isset($this->attributes['quantity_kg'])) {
             $this->attributes['quantity_kg'] = $this->attributes['quantity'];
         }
+
         $this->recomputeTotalsIntoAttributes();
     }
 
@@ -259,30 +329,51 @@ class Sale extends Model
 
     protected function recomputeTotalsIntoAttributes(): void
     {
-        if (Schema::hasColumn('sales', 'total_price')
+        if (
+            Schema::hasColumn('sales', 'total_price')
             && array_key_exists('quantity_kg', $this->attributes)
             && array_key_exists('unit_price', $this->attributes)
             && !is_null($this->attributes['quantity_kg'])
-            && !is_null($this->attributes['unit_price'])) {
-
+            && !is_null($this->attributes['unit_price'])
+        ) {
             $this->attributes['total_price'] = round(
-                (float)$this->attributes['quantity_kg'] * (float)$this->attributes['unit_price'], 2
+                (float) $this->attributes['quantity_kg'] * (float) $this->attributes['unit_price'],
+                2
             );
         }
 
-        if (Schema::hasColumn('sales', 'total')
+        if (
+            Schema::hasColumn('sales', 'total')
             && array_key_exists('quantity', $this->attributes)
             && array_key_exists('price', $this->attributes)
             && !is_null($this->attributes['quantity'])
-            && !is_null($this->attributes['price'])) {
-
+            && !is_null($this->attributes['price'])
+        ) {
             $this->attributes['total'] = round(
-                (float)$this->attributes['quantity'] * (float)$this->attributes['price'], 2
+                (float) $this->attributes['quantity'] * (float) $this->attributes['price'],
+                2
             );
         }
     }
 
-    /* ----------------------------- Stock Utilities --------------------------- */
+    /* ----------------------------------------------------------------------
+     |  UNIT / MODE HELPERS
+     |-----------------------------------------------------------------------*/
+
+    public function isKgMode(): bool
+    {
+        return $this->resolveMode() === self::UNIT_KG;
+    }
+
+    public function isPackMode(): bool
+    {
+        return $this->resolveMode() === self::UNIT_PACK;
+    }
+
+    public function isBagMode(): bool
+    {
+        return $this->resolveMode() === self::UNIT_BAG;
+    }
 
     /**
      * Normalize selling mode from unit_type column (preferred): kg | pack | bag (default kg).
@@ -296,7 +387,11 @@ class Sale extends Model
         $raw = $col ? ($this->{$col} ?? null) : null;
         $t   = strtolower(trim((string) $raw));
 
-        return in_array($t, ['kg','pack','bag'], true) ? $t : 'kg';
+        if (in_array($t, self::UNIT_TYPES, true)) {
+            return $t;
+        }
+
+        return self::UNIT_KG;
     }
 
     /**
@@ -305,7 +400,8 @@ class Sale extends Model
     protected function requestedAmount(): float
     {
         $mode = $this->resolveMode();
-        if ($mode === 'kg') {
+
+        if ($mode === self::UNIT_KG) {
             return (float) ($this->quantity_kg ?? $this->quantity ?? 0);
         }
 
@@ -320,17 +416,19 @@ class Sale extends Model
     {
         $q = DB::table('productions')->whereNull('deleted_at');
 
-        if ($mode === 'pack') {
+        if ($mode === self::UNIT_PACK) {
             $q = $productionId ? $q->where('id', $productionId) : $q->where('product_id', $productId);
+
             return (float) $q->sum(DB::raw('COALESCE(available_pack,0)'));
         }
 
-        if ($mode === 'bag') {
+        if ($mode === self::UNIT_BAG) {
             $q = $productionId ? $q->where('id', $productionId) : $q->where('product_id', $productId);
+
             return (float) $q->sum(DB::raw('COALESCE(available_bag,0)'));
         }
 
-        // kg default: produced - sold
+        // kg default
         return self::availableKg($productId, $productionId);
     }
 
@@ -354,7 +452,9 @@ class Sale extends Model
         return (float) ($produced - $sold);
     }
 
-    /* ------------------------- Inventory Side-Effects ------------------------- */
+    /* ----------------------------------------------------------------------
+     |  MODEL EVENTS: INVENTORY + ALLOCATION
+     |-----------------------------------------------------------------------*/
 
     protected static function booted()
     {
@@ -508,7 +608,9 @@ class Sale extends Model
         });
     }
 
-    /* ----------------------- Allocation + Audit (local) ----------------------- */
+    /* ----------------------------------------------------------------------
+     |  Allocation + Audit
+     |-----------------------------------------------------------------------*/
 
     /**
      * Main batch connection:
@@ -521,6 +623,7 @@ class Sale extends Model
     {
         $mode = $this->resolveMode();
         $req  = $this->requestedAmount();
+
         if ($req <= 0 || !$this->product_id) return;
 
         DB::transaction(function () use ($mode, $req) {
@@ -532,11 +635,11 @@ class Sale extends Model
                 $p = \App\Models\Production::lockForUpdate()->find($alloc->production_id);
                 if (!$p || $p->deleted_at) continue;
 
-                if ($alloc->mode === 'pack') {
+                if ($alloc->mode === self::UNIT_PACK) {
                     $p->available_pack = (float) ($p->available_pack ?? 0) + (float) $alloc->quantity_value;
                     $p->save();
                     $this->audit("Returned {$alloc->quantity_value} pack(s) to batch {$p->batch_number} (Production #{$p->id}).");
-                } elseif ($alloc->mode === 'bag') {
+                } elseif ($alloc->mode === self::UNIT_BAG) {
                     $p->available_bag = (float) ($p->available_bag ?? 0) + (float) $alloc->quantity_value;
                     $p->save();
                     $this->audit("Returned {$alloc->quantity_value} bag(s) to batch {$p->batch_number} (Production #{$p->id}).");
@@ -555,45 +658,52 @@ class Sale extends Model
             $remaining = $req;
 
             $deductFromProd = function (\App\Models\Production $p, float $take) use ($mode) {
-                if ($mode === 'pack') {
+                if ($mode === self::UNIT_PACK) {
                     $avail = (float) ($p->available_pack ?? 0);
                     $take  = min($take, $avail);
+
                     if ($take > 0) {
-                        $this->recordAllocation($p->id, $mode, $take);
+                        $this->recordAllocation($p->id, self::UNIT_PACK, $take);
                         $p->available_pack = max(0, $avail - $take);
                         $p->save();
                         $this->audit("Deducted {$take} pack(s) from batch {$p->batch_number} (Production #{$p->id}).");
                     }
+
                     return $take;
                 }
 
-                if ($mode === 'bag') {
+                if ($mode === self::UNIT_BAG) {
                     $avail = (float) ($p->available_bag ?? 0);
                     $take  = min($take, $avail);
+
                     if ($take > 0) {
-                        $this->recordAllocation($p->id, $mode, $take);
+                        $this->recordAllocation($p->id, self::UNIT_BAG, $take);
                         $p->available_bag = max(0, $avail - $take);
                         $p->save();
                         $this->audit("Deducted {$take} bag(s) from batch {$p->batch_number} (Production #{$p->id}).");
                     }
+
                     return $take;
                 }
 
                 // default kg allocation uses current_inventory
                 $availKg = (float) ($p->current_inventory ?? 0);
                 $takeKg  = min($take, $availKg);
+
                 if ($takeKg > 0) {
-                    $this->recordAllocation($p->id, 'kg', $takeKg);
+                    $this->recordAllocation($p->id, self::UNIT_KG, $takeKg);
                     $p->current_inventory = max(0, $availKg - $takeKg);
                     $p->save();
                     $this->audit("FIFO deduct {$takeKg} kg from batch {$p->batch_number} (Production #{$p->id}).");
                 }
+
                 return $takeKg;
             };
 
             // Specific batch first (if user selected a batch)
             if ($this->production_id) {
                 $p = \App\Models\Production::lockForUpdate()->find($this->production_id);
+
                 if ($p && !$p->deleted_at) {
                     $taken = $deductFromProd($p, $remaining);
                     $remaining -= $taken;
@@ -608,10 +718,11 @@ class Sale extends Model
                     ->orderByDesc('production_date')
                     ->orderByDesc('id')
                     ->lockForUpdate()
-                    ->get(['id','batch_number','current_inventory','available_pack','available_bag']);
+                    ->get(['id', 'batch_number', 'current_inventory', 'available_pack', 'available_bag']);
 
                 foreach ($batches as $p) {
                     if ($remaining <= 0) break;
+
                     $taken = $deductFromProd($p, $remaining);
                     $remaining -= $taken;
                 }
@@ -638,11 +749,11 @@ class Sale extends Model
                 $p = \App\Models\Production::lockForUpdate()->find($alloc->production_id);
                 if (!$p || $p->deleted_at) continue;
 
-                if ($alloc->mode === 'pack') {
+                if ($alloc->mode === self::UNIT_PACK) {
                     $p->available_pack = (float) ($p->available_pack ?? 0) + (float) $alloc->quantity_value;
                     $p->save();
                     $this->audit("Returned {$alloc->quantity_value} pack(s) to batch {$p->batch_number} (Production #{$p->id}).");
-                } elseif ($alloc->mode === 'bag') {
+                } elseif ($alloc->mode === self::UNIT_BAG) {
                     $p->available_bag = (float) ($p->available_bag ?? 0) + (float) $alloc->quantity_value;
                     $p->save();
                     $this->audit("Returned {$alloc->quantity_value} bag(s) to batch {$p->batch_number} (Production #{$p->id}).");
@@ -674,11 +785,13 @@ class Sale extends Model
         ]);
     }
 
-    /* ----------------------------- Invoicing utils ---------------------------- */
+    /* ----------------------------------------------------------------------
+     |  Invoicing utils
+     |-----------------------------------------------------------------------*/
 
     public static function generateInvoiceNumber(): string
     {
-        $ymd = now()->format('Ymd');
+        $ymd    = now()->format('Ymd');
         $prefix = 'INV-' . $ymd . '-';
 
         if (Schema::hasTable('invoice_sequences')) {
@@ -699,6 +812,7 @@ class Sale extends Model
                         $seq = 1;
                     } else {
                         $seq = (int) $row->last_seq + 1;
+
                         DB::table('invoice_sequences')
                             ->where('date_key', $ymd)
                             ->update([
@@ -714,10 +828,16 @@ class Sale extends Model
             }
         }
 
-        $dateCol   = Schema::hasColumn('sales', 'order_date') ? 'order_date' : (Schema::hasColumn('sales', 'date') ? 'date' : null);
-        $numberCol = Schema::hasColumn('sales', 'invoice_number') ? 'invoice_number' : (Schema::hasColumn('sales', 'order_number') ? 'order_number' : null);
+        $dateCol   = Schema::hasColumn('sales', 'order_date')
+            ? 'order_date'
+            : (Schema::hasColumn('sales', 'date') ? 'date' : null);
+
+        $numberCol = Schema::hasColumn('sales', 'invoice_number')
+            ? 'invoice_number'
+            : (Schema::hasColumn('sales', 'order_number') ? 'order_number' : null);
 
         $maxToday = null;
+
         if ($dateCol && $numberCol) {
             $maxToday = static::query()
                 ->whereDate($dateCol, Carbon::now()->toDateString())
@@ -726,6 +846,7 @@ class Sale extends Model
         }
 
         $next = 1;
+
         if ($maxToday) {
             $tail = substr((string) $maxToday, strlen($prefix));
             $next = (ctype_digit($tail) ? (int) $tail : 0) + 1;

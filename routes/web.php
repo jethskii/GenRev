@@ -20,7 +20,6 @@ use App\Http\Controllers\LoginActivityController;
 use App\Http\Controllers\DemandEventController;
 use App\Http\Controllers\ReservationController;
 
-
 use App\Http\Middleware\RoleMiddleware;
 use App\Http\Middleware\EnsureUserIsActive;
 
@@ -38,6 +37,7 @@ Route::pattern('allocation', '[0-9]+');
 Route::pattern('item', '[0-9]+');
 Route::pattern('line', '[0-9]+');
 Route::pattern('material', '[0-9]+'); // align with whereNumber('material')
+
 /*
 |--------------------------------------------------------------------------
 | reservations
@@ -45,25 +45,28 @@ Route::pattern('material', '[0-9]+'); // align with whereNumber('material')
 */
 Route::post('/reservations', [ReservationController::class, 'store'])
     ->name('reservations.store');
+
 /*
 |--------------------------------------------------------------------------
 | Landing
 |--------------------------------------------------------------------------
 */
 Route::redirect('/', '/dashboard')->name('home');
+
 /*
 |--------------------------------------------------------------------------
 | Demand Events
 |--------------------------------------------------------------------------
 */
 Route::prefix('demand-events')->name('demand-events.')->group(function () {
-    Route::get('/',          [DemandEventController::class, 'index'])->name('index');
-    Route::get('/calendar',  [DemandEventController::class, 'calendar'])->name('calendar');
-    Route::post('/',         [DemandEventController::class, 'store'])->name('store');
-    Route::get('/{demandEvent}', [DemandEventController::class, 'show'])->name('show');
-    Route::put('/{demandEvent}', [DemandEventController::class, 'update'])->name('update');
+    Route::get('/',               [DemandEventController::class, 'index'])->name('index');
+    Route::get('/calendar',       [DemandEventController::class, 'calendar'])->name('calendar');
+    Route::post('/',              [DemandEventController::class, 'store'])->name('store');
+    Route::get('/{demandEvent}',  [DemandEventController::class, 'show'])->name('show');
+    Route::put('/{demandEvent}',  [DemandEventController::class, 'update'])->name('update');
     Route::delete('/{demandEvent}', [DemandEventController::class, 'destroy'])->name('destroy');
 });
+
 /*
 |--------------------------------------------------------------------------
 | Guest (Auth)
@@ -97,6 +100,10 @@ Route::middleware(['auth', EnsureUserIsActive::class])->group(function () {
     // Dashboard
     Route::get('/dashboard',      [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/data', [DashboardController::class, 'data'])->name('dashboard.data');
+
+    // 🔹 NEW: Sales range endpoint for Sales Report card (AJAX)
+    Route::get('/dashboard/sales-range', [DashboardController::class, 'salesRange'])
+        ->name('dashboard.sales.range');
 
     // Settings (general + account)
     Route::get('/settings',                 [SettingsController::class, 'index'])->name('settings.index');
@@ -175,9 +182,9 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
 Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Production'])->group(function () {
 
     /*
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     | Products (catalog + BOM management)
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     */
 
     // Archived products page (for archived.blade.php)
@@ -218,9 +225,9 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
         ->name('production.archived');
 
     /*
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     | Production / Batches
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     */
     Route::prefix('production')->name('production.')->controller(ProductionController::class)->group(function () {
         Route::get('/',               'index')->name('index');
@@ -326,9 +333,9 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
 Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':Admin,Inventory'])->group(function () {
 
     /*
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     | Materials
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     */
     Route::prefix('materials')->name('materials.')->group(function () {
         Route::get('/',          [MaterialController::class, 'index'])->name('index');
@@ -348,13 +355,15 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
     Route::redirect('/materials-alias', '/materials')->name('materials');
 
     /*
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     | Inventory
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     */
     Route::prefix('inventory')->name('inventory.')->group(function () {
         Route::get('/',  [InventoryController::class, 'index'])->name('index');
         Route::post('/', [InventoryController::class, 'store'])->name('store');
+        Route::get('/inventory/export/pdf', [InventoryController::class, 'exportPdf'])
+            ->name('inventory.export.pdf'); 
 
         // export routes added here before parameter routes
         Route::get('/export/csv', [InventoryController::class, 'exportCsv'])->name('export.csv');
@@ -367,9 +376,9 @@ Route::middleware(['auth', EnsureUserIsActive::class, RoleMiddleware::class . ':
     Route::redirect('/inventory-alias', '/inventory')->name('inventory');
 
     /*
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     | Allocations
-    |----------------------------------------------------------------------
+    |--------------------------------------------------------------------------
     */
     Route::prefix('allocations')->name('allocations.')->group(function () {
         Route::patch('/{allocation}/approve',    [BatchAllocationController::class, 'approve'])

@@ -337,7 +337,7 @@
           <span class="pill pill-gray">Archived</span>
           <span class="pill pill-amber">Purge in 30 days</span>
           <span class="pill pill-green">Restorable</span>
-          <span class="pill pill-red">Delete Forever</span>
+          <span class="pill pill-red">Delete Permanently</span>
         </div>
       </form>
     </div>

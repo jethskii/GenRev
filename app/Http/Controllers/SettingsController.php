@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Setting;
+use App\Models\UserSetting;
+use App\Models\LoginActivity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use App\Models\Setting;
-use App\Models\UserSetting;
+
 class SettingsController extends Controller
 {
     /**
@@ -17,7 +19,7 @@ class SettingsController extends Controller
         // Load the first settings record (create one if none exists in the view)
         $settings = Setting::first();
 
-        // ✅ Point to the correct blade under /resources/views/settings/settings.blade.php
+        // Blade: resources/views/settings/settings.blade.php
         return view('settings.settings', compact('settings'));
     }
 
@@ -37,8 +39,9 @@ class SettingsController extends Controller
         $settings = Setting::firstOrNew([]);
         $settings->fill($validated)->save();
 
-        // ✅ Redirect to the correct named route
-        return redirect()->route('settings.index')->with('success', 'Settings saved successfully!');
+        return redirect()
+            ->route('settings.index')
+            ->with('success', 'Settings saved successfully!');
     }
 
     /**
@@ -46,7 +49,7 @@ class SettingsController extends Controller
      */
     public function account()
     {
-        // Blade: /resources/views/settings/account.blade.php
+        // Blade: resources/views/settings/account.blade.php
         return view('settings.account');
     }
 
@@ -75,7 +78,7 @@ class SettingsController extends Controller
 
         // Handle profile photo upload
         if ($request->hasFile('photo')) {
-            $path = $request->file('photo')->store('profile_photos', 'public');
+            $path       = $request->file('photo')->store('profile_photos', 'public');
             $user->photo = $path;
         }
 
@@ -86,11 +89,13 @@ class SettingsController extends Controller
 
         $user->save();
 
-        return redirect()->route('settings.account')->with('success', 'Account updated successfully!');
+        return redirect()
+            ->route('settings.account')
+            ->with('success', 'Account updated successfully!');
     }
 
     // -----------------------------
-    // Appearance (new)
+    // Appearance
     // -----------------------------
 
     /**
@@ -98,7 +103,7 @@ class SettingsController extends Controller
      */
     public function appearance()
     {
-        $userId = Auth::id();
+        $userId     = Auth::id();
         $appearance = UserSetting::appearanceFor($userId); // ['theme','accent','font_style']
 
         // Blade: resources/views/settings/appearance.blade.php
@@ -108,7 +113,7 @@ class SettingsController extends Controller
     /**
      * Save Appearance settings.
      */
-     public function appearanceUpdate(Request $request)
+    public function appearanceUpdate(Request $request)
     {
         $data = $request->validate([
             'theme'      => 'required|in:light,dark,system',
@@ -123,7 +128,9 @@ class SettingsController extends Controller
             ->with('status', 'Appearance saved ✅');
     }
 
-    /** Reset per-user Appearance */
+    /**
+     * Reset per-user Appearance.
+     */
     public function appearanceReset()
     {
         UserSetting::resetAppearance(Auth::id());
@@ -143,5 +150,48 @@ class SettingsController extends Controller
             'accent'     => '#3b82f6',
             'font_style' => 'default',
         ];
+    }
+
+    // -----------------------------
+    // Login Activity / Log Book
+    // -----------------------------
+
+    /**
+     * Show the Login Log Book with filters and search.
+     *
+     * Route name in Blade: route('settings.login-activity')
+     */
+    public function loginActivity(Request $request)
+    {
+        $status = $request->input('status');            // null | 'success' | 'failed'
+        $search = trim($request->input('search', ''));  // name or email
+
+        $query = LoginActivity::query()
+            ->with('user');
+
+        // Filter by status if provided
+        if (in_array($status, ['success', 'failed'], true)) {
+            $query->where('succeeded', $status === 'success');
+        }
+
+        // Filter by search (name/email on related user)
+        if ($search !== '') {
+            $query->whereHas('user', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        // Latest login first; paginate & keep query params
+        $activities = $query
+            ->orderByDesc('login_at')
+            ->paginate(15)
+            ->appends($request->query());
+
+        return view('settings.login-activity', compact(
+            'activities',
+            'status',
+            'search'
+        ));
     }
 }

@@ -184,8 +184,8 @@
             <p class="font-semibold truncate">{{ Auth::check() ? Auth::user()->name : 'Guest' }}</p>
             <p class="text-xs muted truncate">
               {{ Auth::check() && method_exists(Auth::user(), 'getRoleLabelAttribute')
-                    ? (Auth::user()->role_label ?? 'User')
-                    : (\Illuminate\Support\Str::headline(\Illuminate\Support\Str::lower((string) (Auth::user()->role ?? 'user')))) }}
+  ? (Auth::user()->role_label ?? 'User')
+  : (\Illuminate\Support\Str::headline(\Illuminate\Support\Str::lower((string) (Auth::user()->role ?? 'user')))) }}
             </p>
           </div>
         </div>
@@ -194,41 +194,43 @@
       <!-- Nav (role aware) -->
       <nav class="flex-1 mt-4 space-y-1 text-sm font-medium" role="navigation" aria-label="Primary navigation">
         @php
-          $modules = [];
-          if (Auth::check() && method_exists(Auth::user(), 'allowedModules')) {
-              $modules = (array) (Auth::user()->allowedModules() ?? []);
-          }
-          if (empty($modules)) {
-            $role = \Illuminate\Support\Str::lower((string) (Auth::user()->role ?? ''));
-            $fallback = [
-              'masters admin'      => ['dashboard','materials','production','sales','inventory','products','reports','settings','employee'],
-              'production manager' => ['dashboard','production','products','settings'],
-              'sales'              => ['dashboard','sales','settings'],
-              'inventory'          => ['dashboard','inventory','materials','settings'],
-            ];
-            $modules = $fallback[$role] ?? ['dashboard','settings'];
-          }
-          $menu = [
-            'dashboard'  => ['label'=>'Dashboard',  'route'=>'dashboard',           'active'=>['dashboard*'] ],
-            'production' => ['label'=>'Production', 'route'=>'production.index',    'active'=>['production.*'] ],
-            'sales'      => ['label'=>'Sales',      'route'=>'sales',               'active'=>['sales*','sales.*'] ],
-            'inventory'  => ['label'=>'Inventory',  'route'=>'inventory',           'active'=>['inventory*','inventory.*'] ],
-            'materials'  => ['label'=>'Materials',  'route'=>'materials',           'active'=>['materials*','materials.*','products.materials.*'] ],
-            'products'   => ['label'=>'Products',   'route'=>'products.index',      'active'=>['products*','products.*'] ],
-            'reports'    => ['label'=>'Reports',    'route'=>'reports.index',       'active'=>['reports*','reports.*'] ],
-            'employee'   => ['label'=>'Employee',   'route'=>'employees.index',     'active'=>['employees*','employees.*'] ],
-            'settings'   => ['label'=>'Settings',   'route'=>'settings.index',      'active'=>['settings*','settings.*'] ],
-          ];
-          $isActive = fn(array $patterns) => collect($patterns)->some(fn($p) => request()->routeIs($p));
+$modules = [];
+if (Auth::check() && method_exists(Auth::user(), 'allowedModules')) {
+  $modules = (array) (Auth::user()->allowedModules() ?? []);
+}
+if (empty($modules)) {
+  $role = \Illuminate\Support\Str::lower((string) (Auth::user()->role ?? ''));
+  $fallback = [
+    'masters admin' => ['dashboard', 'materials', 'production', 'sales', 'inventory', 'products', 'reports', 'settings', 'employee'],
+    'production manager' => ['dashboard', 'production', 'products', 'settings'],
+    'sales' => ['dashboard', 'sales', 'settings'],
+    'inventory' => ['dashboard', 'inventory', 'materials', 'settings'],
+  ];
+  $modules = $fallback[$role] ?? ['dashboard', 'settings'];
+}
+$menu = [
+  'dashboard' => ['label' => 'Dashboard', 'route' => 'dashboard', 'active' => ['dashboard*']],
+  'production' => ['label' => 'Production', 'route' => 'production.index', 'active' => ['production.*']],
+  'sales' => ['label' => 'Sales', 'route' => 'sales', 'active' => ['sales*', 'sales.*']],
+  'inventory' => ['label' => 'Inventory', 'route' => 'inventory', 'active' => ['inventory*', 'inventory.*']],
+  'materials' => ['label' => 'Materials', 'route' => 'materials', 'active' => ['materials*', 'materials.*', 'products.materials.*']],
+  'products' => ['label' => 'Products', 'route' => 'products.index', 'active' => ['products*', 'products.*']],
+  'reports' => ['label' => 'Reports', 'route' => 'reports.index', 'active' => ['reports*', 'reports.*']],
+  'employee' => ['label' => 'Employee', 'route' => 'employees.index', 'active' => ['employees*', 'employees.*']],
+  'settings' => ['label' => 'Settings', 'route' => 'settings.index', 'active' => ['settings*', 'settings.*']],
+];
+$isActive = fn(array $patterns) => collect($patterns)->some(fn($p) => request()->routeIs($p));
         @endphp
 
         @foreach ($modules as $key)
           @php
-            if (!isset($menu[$key])) continue;
-            $item = $menu[$key];
-            if (!\Illuminate\Support\Facades\Route::has($item['route'])) continue;
-            $active = $isActive($item['active']) ? 'side-link--active' : '';
-            $aria   = $active ? 'aria-current=page' : '';
+  if (!isset($menu[$key]))
+    continue;
+  $item = $menu[$key];
+  if (!\Illuminate\Support\Facades\Route::has($item['route']))
+    continue;
+  $active = $isActive($item['active']) ? 'side-link--active' : '';
+  $aria = $active ? 'aria-current=page' : '';
           @endphp
           <a href="{{ route($item['route']) }}" class="side-link {{ $active }}" {!! $aria !!}>{{ $item['label'] }}</a>
 
@@ -249,28 +251,6 @@
           <button id="sidebarToggle" class="lg:hidden text-2xl" aria-label="Open sidebar" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
           <h1 class="text-xl font-bold tracking-wide brand-title">Dashboard Overview</h1>
         </div>
-
-        <div class="flex flex-wrap items-center gap-4">
-          <label class="flex items-center gap-2 text-xs">
-            <input id="toggle3D" type="checkbox" checked class="sr-only" aria-controls="productionChart salesChart expiryChart">
-            <span class="px-2 py-1 rounded-full border border-[var(--line)] bg-white">
-              <span class="inline-block align-middle mr-1" id="dot3d"></span>
-              3D view
-            </span>
-          </label>
-
-          <label class="flex items-center gap-2 text-xs">
-            Depth
-            <input id="depthRange" type="range" min="0" max="24" value="10" class="w-28" aria-label="3D depth">
-            <span id="depthVal" class="tabular-nums">10</span>
-          </label>
-
-          <label class="flex items-center gap-2 text-xs">
-            Tilt
-            <input id="liftRange" type="range" min="-16" max="0" value="-6" class="w-28" aria-label="3D tilt">
-            <span id="liftVal" class="tabular-nums">-6</span>
-          </label>
-        </div>
       </header>
 
       <!-- Content -->
@@ -280,12 +260,12 @@
           <!-- Metrics Cards -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" aria-live="polite">
             @php
-              $metrics = [
-                ['label' => 'Finished Products',      'value' => $totalProducts,                          'note' => 'Meat items tracked in packs and bags', 'icon' => '🥩'],
-                ['label' => 'Materials On Hand (kg)', 'value' => number_format($totalMaterialsWeight, 2), 'note' => 'Raw meat and ingredients',             'icon' => '⚖️'],
-                ['label' => 'Total Revenue',          'value' => '₱' . number_format($totalRevenue, 2),   'note' => 'All recorded product sales',          'icon' => '💰'],
-                ['label' => 'Sales Transactions',     'value' => $totalSales,                             'note' => 'Total sales entries logged',          'icon' => '📈'],
-              ];
+$metrics = [
+  ['label' => 'Finished Products', 'value' => $totalProducts, 'note' => 'Meat items tracked in packs and bags', 'icon' => '🥩'],
+  ['label' => 'Materials On Hand (kg)', 'value' => number_format($totalMaterialsWeight, 2), 'note' => 'Raw meat and ingredients', 'icon' => '⚖️'],
+  ['label' => 'Total Revenue', 'value' => '₱' . number_format($totalRevenue, 2), 'note' => 'All recorded product sales', 'icon' => '💰'],
+  ['label' => 'Sales Transactions', 'value' => $totalSales, 'note' => 'Total sales entries logged', 'icon' => '📈'],
+];
             @endphp
             @foreach ($metrics as $metric)
               <div class="card p-5 rounded-2xl hover:shadow-lg transition">
@@ -301,48 +281,219 @@
             @endforeach
           </div>
 
-          <!-- Sales Report (Neon Ridge Sparkline) -->
-          <div class="card p-5 rounded-2xl">
-            <div class="flex items-center justify-between mb-4">
-              <div>
-                <h2 class="text-lg font-semibold mb-1">📈 Sales Report</h2>
-                <p class="text-xs muted">Meat product sales in finished units (packs and bags)</p>
-              </div>
-              <select id="salesRange" class="input w-40 py-1" aria-label="Sales range">
-                <option value="today">Today</option>
-                <option value="week" selected>This Week</option>
-                <option value="month">This Month</option>
-                <option value="7days">Last 7 Days</option>
-                <option value="30days">Last 30 Days</option>
-              </select>
-            </div>
+         <!-- Sales Report (Neon Ridge Sparkline) -->
+<div class="card p-5 rounded-2xl" 
+     id="salesReportCard"
+     data-sales-range-endpoint="{{ route('dashboard.sales.range') }}">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h2 class="text-lg font-semibold mb-1">📈 Sales Report</h2>
+      <p class="text-xs muted" id="salesRangeLabel">
+        Meat product sales in finished units (packs and bags) • This Week
+      </p>
+    </div>
+    <select id="salesRange" class="input w-40 py-1" aria-label="Sales range">
+      <option value="today">Today</option>
+      <option value="week" selected>This Week</option>
+      <option value="month">This Month</option>
+      <option value="7days">Last 7 Days</option>
+      <option value="30days">Last 30 Days</option>
+    </select>
+  </div>
 
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-              @php
-                $avgPrice = $totalSales > 0 ? ($totalRevenue / max($totalSales,1)) : 0;
-                $biggest = $biggestSalesDay ?? null;
-                $biggestLabel = $biggest ? $biggest : 'No data yet';
-                $salesStats = [
-                  ['label' => 'Total Revenue',      'value' => '₱' . number_format($totalRevenue, 2), 'icon' => '💰', 'color' => 'text-[var(--brand-red)]'],
-                  ['label' => 'Sales Count',        'value' => number_format($totalSales, 0),         'icon' => '📦', 'color' => 'text-[var(--blue)]'],
-                  ['label' => 'Average Price Unit', 'value' => '₱' . number_format($avgPrice, 2),     'icon' => '📊', 'color' => 'text-[var(--green)]'],
-                  ['label' => 'Strongest Sales Day','value' => $biggestLabel,                         'icon' => '🔥', 'color' => 'text-[var(--yellow)]'],
-                ];
-              @endphp
-              @foreach($salesStats as $stat)
-                <div class="text-center">
-                  <div class="text-2xl mb-1" aria-hidden="true">{{ $stat['icon'] }}</div>
-                  <div class="text-xs muted mb-1">{{ $stat['label'] }}</div>
-                  <div class="text-sm font-semibold {{ $stat['color'] }}">{{ $stat['value'] }}</div>
-                </div>
-              @endforeach
-            </div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+    @php
+      $avgPrice = $totalSales > 0 ? ($totalRevenue / max($totalSales, 1)) : 0;
+      $biggest = $biggestSalesDay ?? null;
+      $biggestLabel = $biggest ? $biggest : 'No data yet';
 
-            <div class="h-36 relative">
-              <p id="salesTrendsDesc" class="sr-only">Glassy neon ridge of revenue per day for finished meat products sold as packs and bags.</p>
-              <canvas id="salesTrendsChart" aria-label="Sales trend chart" aria-describedby="salesTrendsDesc"></canvas>
-            </div>
-          </div>
+      $salesStats = [
+        [
+          'key'   => 'total_revenue',
+          'label' => 'Total Revenue',
+          'value' => '₱' . number_format($totalRevenue, 2),
+          'icon'  => '💰',
+          'color' => 'text-[var(--brand-red)]',
+        ],
+        [
+          'key'   => 'total_sales',
+          'label' => 'Sales Count',
+          'value' => number_format($totalSales, 0),
+          'icon'  => '📦',
+          'color' => 'text-[var(--blue)]',
+        ],
+        [
+          'key'   => 'avg_price',
+          'label' => 'Average Price Unit',
+          'value' => '₱' . number_format($avgPrice, 2),
+          'icon'  => '📊',
+          'color' => 'text-[var(--green)]',
+        ],
+        [
+          'key'   => 'strongest_day',
+          'label' => 'Strongest Sales Day',
+          'value' => $biggestLabel,
+          'icon'  => '🔥',
+          'color' => 'text-[var(--yellow)]',
+        ],
+      ];
+    @endphp
+
+    @foreach($salesStats as $stat)
+      <div class="text-center">
+        <div class="text-2xl mb-1" aria-hidden="true">{{ $stat['icon'] }}</div>
+        <div class="text-xs muted mb-1">{{ $stat['label'] }}</div>
+        <div class="text-sm font-semibold {{ $stat['color'] }}"
+             data-sales-stat="{{ $stat['key'] }}">
+          {{ $stat['value'] }}
+        </div>
+      </div>
+    @endforeach
+  </div>
+
+  <div class="h-36 relative">
+    <p id="salesTrendsDesc" class="sr-only">
+      Glassy neon ridge of revenue per day for finished meat products sold as packs and bags.
+    </p>
+    <canvas id="salesTrendsChart"
+            aria-label="Sales trend chart"
+            aria-describedby="salesTrendsDesc"></canvas>
+  </div>
+</div>
+
+@push('scripts')
+<script>
+  (function () {
+    const ctx = document.getElementById('salesTrendsChart').getContext('2d');
+    const rangeSelect = document.getElementById('salesRange');
+    const rangeLabel  = document.getElementById('salesRangeLabel');
+    const card        = document.getElementById('salesReportCard');
+    const endpoint    = card.dataset.salesRangeEndpoint;
+
+    // Initial data from PHP (This Week)
+    const initialLabels = @json($labels ?? []);
+    const initialData   = @json($weeklySalesRevenueSeries ?? []);
+
+    // Helpers to format numbers the same way as Blade
+    function formatCurrency(value) {
+      const num = Number(value) || 0;
+      return '₱' + num.toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    }
+
+    function formatInteger(value) {
+      const num = Number(value) || 0;
+      return num.toLocaleString('en-PH', { maximumFractionDigits: 0 });
+    }
+
+    // Neon ridge line chart
+    const salesChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: initialLabels,
+        datasets: [{
+          label: 'Revenue',
+          data: initialData,
+          tension: 0.4,
+          fill: true,
+          borderWidth: 2,
+          // Neon ridge style (colors picked from CSS vars if you have them)
+          borderColor: 'rgba(0, 255, 255, 0.9)',
+          backgroundColor: 'rgba(0, 255, 255, 0.12)',
+          pointRadius: 0,
+          pointHitRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: {
+              maxTicksLimit: 7,
+            }
+          },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.06)' },
+            ticks: {
+              callback: (v) => '₱' + v.toLocaleString('en-PH')
+            }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              label: function (ctx) {
+                const val = ctx.parsed.y || 0;
+                return 'Revenue: ' + formatCurrency(val);
+              }
+            }
+          }
+        }
+      }
+    });
+
+    async function loadSalesRange(range) {
+      try {
+        const url = new URL(endpoint, window.location.origin);
+        url.searchParams.set('range', range);
+
+        const res = await fetch(url.toString(), {
+          headers: { 'Accept': 'application/json' }
+        });
+
+        if (!res.ok) {
+          console.error('Failed to load sales range', res.status);
+          return;
+        }
+
+        const data = await res.json();
+
+        // 1. Update label under title
+        if (data.label) {
+          rangeLabel.textContent = `Meat product sales in finished units (packs and bags) • ${data.label}`;
+        }
+
+        // 2. Update stats
+        if (data.stats) {
+          const stats = data.stats;
+
+          const totalRevenueEl = card.querySelector('[data-sales-stat="total_revenue"]');
+          const totalSalesEl   = card.querySelector('[data-sales-stat="total_sales"]');
+          const avgPriceEl     = card.querySelector('[data-sales-stat="avg_price"]');
+          const strongestEl    = card.querySelector('[data-sales-stat="strongest_day"]');
+
+          if (totalRevenueEl) totalRevenueEl.textContent = formatCurrency(stats.total_revenue || 0);
+          if (totalSalesEl)   totalSalesEl.textContent   = formatInteger(stats.total_sales || 0);
+          if (avgPriceEl)     avgPriceEl.textContent     = formatCurrency(stats.avg_price || 0);
+          if (strongestEl)    strongestEl.textContent    = stats.biggest_day || 'No data yet';
+        }
+
+        // 3. Update chart
+        if (data.chart) {
+          salesChart.data.labels = data.chart.labels || [];
+          salesChart.data.datasets[0].data = data.chart.data || [];
+          salesChart.update();
+        }
+
+      } catch (err) {
+        console.error('Error loading sales range', err);
+      }
+    }
+
+    // Change handler
+    rangeSelect.addEventListener('change', function () {
+      loadSalesRange(this.value);
+    });
+  })();
+</script>
+@endpush
 
           <!-- Most Sold Products and Types -->
           <div class="card p-5 rounded-2xl">
@@ -366,14 +517,14 @@
               <div class="space-y-3">
                 @foreach($topProducts as $index => $product)
                   @php
-                    $unitRaw = strtolower((string)($product->unit_type ?? 'pack'));
-                    if (!in_array($unitRaw, ['kg','pack','bag'], true)) {
-                        $unitRaw = 'pack';
-                    }
-                    $unitLabel = $unitRaw === 'bag'
-                        ? 'Bag'
-                        : ($unitRaw === 'kg' ? 'Kg' : 'Pack');
-                    $displayLabel = $product->display_label ?? ($product->product_name ?? 'Product');
+    $unitRaw = strtolower((string) ($product->unit_type ?? 'pack'));
+    if (!in_array($unitRaw, ['kg', 'pack', 'bag'], true)) {
+      $unitRaw = 'pack';
+    }
+    $unitLabel = $unitRaw === 'bag'
+      ? 'Bag'
+      : ($unitRaw === 'kg' ? 'Kg' : 'Pack');
+    $displayLabel = $product->display_label ?? ($product->product_name ?? 'Product');
                   @endphp
                   <div class="flex items-center gap-3 p-3 rounded-lg bg-[#fafafa] hover:bg-[#f3f4f6] transition">
                     <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white" style="background:var(--brand-red);" aria-label="Rank {{ $index + 1 }}">{{ $index + 1 }}</div>
@@ -427,13 +578,13 @@
               <tbody>
                 @forelse ($recentSales as $sale)
                   @php
-                    $utRaw = strtolower((string) ($sale->unit_type ?? 'pack'));
-                    if (!in_array($utRaw, ['kg','pack','bag'], true)) {
-                        $utRaw = 'pack';
-                    }
-                    $unitLabel = $utRaw === 'bag'
-                        ? 'Bag'
-                        : ($utRaw === 'kg' ? 'Kg' : 'Pack');
+  $utRaw = strtolower((string) ($sale->unit_type ?? 'pack'));
+  if (!in_array($utRaw, ['kg', 'pack', 'bag'], true)) {
+    $utRaw = 'pack';
+  }
+  $unitLabel = $utRaw === 'bag'
+    ? 'Bag'
+    : ($utRaw === 'kg' ? 'Kg' : 'Pack');
                   @endphp
                   <tr class="border-t">
                     <td class="py-2 px-3">{{ $sale->product_name }}</td>
@@ -490,213 +641,255 @@
           </div>
 
           @php
-            // Expiry quick stats for finished meat units
-            $expiryStats      = $expiryStats ?? [];
-            $totalExpiring    = $expiryStats['total_expiring'] ?? 0;
-            $criticalExpiring = $expiryStats['critical'] ?? 0;
-            $highExpiring     = $expiryStats['high'] ?? 0;
-            $mediumExpiring   = $expiryStats['medium'] ?? 0;
+// Expiry quick stats for finished meat units
+$expiryStats = $expiryStats ?? [];
+$totalExpiring = $expiryStats['total_expiring'] ?? 0;
+$criticalExpiring = $expiryStats['critical'] ?? 0;
+$highExpiring = $expiryStats['high'] ?? 0;
+$mediumExpiring = $expiryStats['medium'] ?? 0;
 
-            // Priority list for actions
-            $expiryPriority   = $expiryPriority ?? collect();
-          @endphp
+// Priority list for actions
+$expiryPriority = $expiryPriority ?? collect();
+@endphp
 
-          <!-- Expiration Trend · Predictive and Action Oriented -->
-          <div class="card p-5 rounded-2xl">
-            <div class="flex items-center justify-between mb-2">
-              <div>
-                <h2 class="text-base font-semibold">Expiration Risk and Actions</h2>
-                <p class="text-[11px] muted">
-                  Finished meat packs and bags that are closest to expiry and what to move first.
-                </p>
-              </div>
-              <div class="flex flex-col items-end gap-1 text-[11px]">
-                <div class="flex items-center gap-2">
-                  <span class="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-100 text-[10px] font-semibold">
-                    Packs or bags at risk
-                  </span>
-                  <span class="font-semibold tabular-nums">{{ number_format($totalExpiring, 0) }}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(248,113,113,.9)]"></span>
-                  <span class="muted">Critical (0 to 2 days)</span>
-                  <span class="font-semibold text-red-600 tabular-nums">{{ number_format($criticalExpiring, 0) }}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,.9)]"></span>
-                  <span class="muted">High (3 to 5 days)</span>
-                  <span class="font-semibold text-amber-600 tabular-nums">{{ number_format($highExpiring, 0) }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="h-56 relative">
-              <p id="expiryDesc" class="sr-only">
-                Bar chart of finished meat packs and bags that will expire in the next seven days by calendar day.
-              </p>
-              <canvas id="expiryChart" aria-label="Expiry chart" aria-describedby="expiryDesc"></canvas>
-              <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted text-center px-4">
-                No expiries this week. Meat inventory is safe based on current data.
-              </div>
-            </div>
+<!-- Expiration Trend · Predictive and Action Oriented -->
+<div class="card p-5 rounded-2xl">
+  <div class="flex items-center justify-between mb-2">
+    <div>
+      <h2 class="text-base font-semibold">Expiration Risk and Actions</h2>
+      <p class="text-[11px] muted">
+        Finished meat packs and bags that are closest to expiry and what to move first.
+      </p>
+    </div>
+    <div class="flex flex-col items-end gap-1 text-[11px]">
+      <div class="flex items-center gap-2">
+        <span class="px-2 py-0.5 rounded-full bg-yellow-50 border border-yellow-100 text-[10px] font-semibold">
+          Packs or bags at risk
+        </span>
+        <span class="font-semibold tabular-nums">{{ number_format($totalExpiring, 0) }}</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(248,113,113,.9)]"></span>
+        <span class="muted">Critical (0 to 2 days)</span>
+        <span class="font-semibold text-red-600 tabular-nums">{{ number_format($criticalExpiring, 0) }}</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,.9)]"></span>
+        <span class="muted">High (3 to 5 days)</span>
+        <span class="font-semibold text-amber-600 tabular-nums">{{ number_format($highExpiring, 0) }}</span>
+      </div>
+    </div>
+  </div>
 
-            <p class="text-[11px] muted mt-2">
-              Bars represent expiring packs and bags per day. Taller bars signal where promos, priority dispatch or slower production may be needed.
-            </p>
+  <div class="h-56 relative">
+    <p id="expiryDesc" class="sr-only">
+      Bar chart of finished meat packs and bags that will expire in the next seven days by calendar day.
+    </p>
+    <canvas id="expiryChart" aria-label="Expiry chart" aria-describedby="expiryDesc"></canvas>
+    <div id="expEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted text-center px-4">
+      No expiries this week. Meat inventory is safe based on current data.
+    </div>
+  </div>
 
-            <div class="border-t border-[var(--line)] mt-3 pt-3">
-              <div class="flex items-center justify-between mb-2">
-                <p class="text-xs font-semibold uppercase muted">Batches to move first</p>
-                <p class="text-[11px] muted hidden sm:block">
-                  Suggestions based on days left before expiry.
-                </p>
-              </div>
+  <p class="text-[11px] muted mt-2">
+    Bars represent expiring packs and bags per day. Taller bars signal where promos, priority dispatch or slower
+    production may be needed.
+  </p>
 
-              @if($expiryPriority instanceof \Illuminate\Support\Collection && $expiryPriority->isNotEmpty())
-                <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
-                  @foreach($expiryPriority as $row)
-                    @php
-                      $pName   = $row->product_name ?? $row['product_name'] ?? 'Product';
-                      $batch   = $row->batch_code ?? $row['batch_code'] ?? null;
-                      $variant = $row->variant_label ?? $row['variant_label'] ?? null;
-                      $days    = $row->days_left ?? $row['days_left'] ?? null;
-                      $units   = $row->units_at_risk ?? $row['units_at_risk'] ?? 0; // packs or bags
-                      $action  = $row->recommended_action ?? $row['recommended_action'] ?? null;
+  <div class="border-t border-[var(--line)] mt-3 pt-3">
+    <div class="flex items-center justify-between mb-2">
+      <p class="text-xs font-semibold uppercase muted">Batches to move first</p>
+      <p class="text-[11px] muted hidden sm:block">
+        Suggestions based on days left before expiry. Tap a row to inspect that day in the demand calendar.
+      </p>
+    </div>
 
-                      $badgeLabel = 'Monitor';
-                      $badgeClass = 'text-emerald-700 bg-emerald-50 border border-emerald-100';
-                      if (!is_null($days)) {
-                        $d = (int) $days;
-                        if ($d <= 0) {
-                          $badgeLabel = 'Very urgent';
-                          $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
-                        } elseif ($d <= 2) {
-                          $badgeLabel = 'Sell today';
-                          $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
-                        } elseif ($d <= 5) {
-                          $badgeLabel = 'Push this';
-                          $badgeClass = 'text-amber-700 bg-amber-50 border border-amber-100';
-                        }
-                      }
-                    @endphp
-                    <div class="flex items-start justify-between gap-3 text-xs">
-                      <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2 mb-0.5">
-                          <span class="font-medium truncate">{{ $pName }}</span>
-                          @if($variant)
-                            <span class="chip text-[10px]">{{ $variant }}</span>
-                          @endif
-                          @if($batch)
-                            <span class="chip text-[10px]">Batch {{ $batch }}</span>
-                          @endif
-                          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $badgeClass }}">
-                            {{ $badgeLabel }}
-                          </span>
-                        </div>
-                        <div class="muted text-[11px]">
-                          {{ number_format($units, 0) }} pack(s) or bag(s) at risk
-                          @if(!is_null($days))
-                            •
-                            @if($days <= 0)
-                              expiry reached
-                            @elseif($days === 1)
-                              1 day before expiry
-                            @else
-                              {{ $days }} days before expiry
-                            @endif
-                          @endif
-                        </div>
-                      </div>
-                      @if($action)
-                        <div class="text-right text-[11px]">
-                          <div class="muted">Suggested move</div>
-                          <div class="font-semibold">
-                            {{ $action }}
-                          </div>
-                        </div>
-                      @endif
-                    </div>
-                  @endforeach
-                </div>
-              @else
-                <p class="text-xs muted">
-                  When expiry risk appears, this list will show which meat batches to push first, how many packs or bags are at risk and the suggested operational move.
-                </p>
-              @endif
-            </div>
-          </div>
-
-          <!-- Weekly Production (units) -->
-          <div class="card p-5 rounded-2xl">
-            <div class="flex items-center justify-between mb-2">
-              <h2 class="text-base font-semibold">Weekly Production in Finished Units</h2>
-            </div>
-            <div class="h-56 relative">
-              <p id="prodDesc" class="sr-only">Bar chart of weekly finished meat units produced, combined view of packs and bags.</p>
-              <canvas id="productionChart" aria-label="Production chart" aria-describedby="prodDesc"></canvas>
-              <div id="prodEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
-            </div>
-          </div>
-
-          <!-- Weekly Sales with AI forecast -->
-          <div class="card p-5 rounded-2xl">
-            <div class="flex items-center justify-between mb-2">
-              <h2 class="text-base font-semibold">Weekly Sales in Finished Units</h2>
-              <div class="flex items-center gap-3">
-                <select id="weeklySalesMode" class="input w-48 py-1 text-xs" aria-label="Weekly sales view mode">
-                  <option value="quantity" selected>Quantity and revenue</option>
-                  <option value="profit">Revenue and profit</option>
-                  <option value="forecast">Next week forecast AI</option>
-                </select>
-              </div>
-            </div>
-            <div class="h-56 relative">
-              <p id="salesDesc" class="sr-only">
-                Combined chart of quantity sold in units for finished meat products, revenue, estimated profit and AI forecast.
-              </p>
-              <canvas id="salesChart" aria-label="Sales chart" aria-describedby="salesDesc"></canvas>
-              <div id="salesEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">No data for this week</div>
-            </div>
-            <p id="weeklySalesSummary" class="text-[11px] muted mt-2">
-              This week you recorded ₱{{ number_format($weekRevenue ?? 0, 2) }} in revenue.
-              Estimated profit is ₱{{ number_format($estimatedWeekProfit ?? 0, 2) }}
-              @if(!is_null($estimatedGrossMarginPct ?? null))
-                with about {{ $estimatedGrossMarginPct }}% gross margin.
-              @endif
-            </p>
-            <p id="weeklySalesInsights" class="text-[11px] muted mt-1"></p>
-          </div>
-
-          <!-- Predictive Analytics · Production Planning Assistant -->
+    @if($expiryPriority instanceof \Illuminate\Support\Collection && $expiryPriority->isNotEmpty())
+      <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
+        @foreach($expiryPriority as $row)
           @php
-            $forecastSummary       = $forecastSummary ?? [];
-            $forecastHorizonDays   = $forecastSummary['horizon_days'] ?? 30;
-            $globalStockoutDateRaw = $forecastSummary['global_stockout_date'] ?? null;
-            $globalStockoutLabel   = $globalStockoutDateRaw
-                ? \Carbon\Carbon::parse($globalStockoutDateRaw)->timezone('Asia/Manila')->format('M d, Y')
-                : 'No projected stockout';
+    // Safe access for array or object
+    $pName = data_get($row, 'product_name', 'Product');
+    $batchNumber = data_get($row, 'batch_number');           // canonical batch from Production
+    $batchCode = $batchNumber;                             // alias for tooltip
+    $batchDisplay = data_get($row, 'batch_display_number');   // 1,2,3... for UI
+    $variant = data_get($row, 'variant_label');
+    $days = data_get($row, 'days_left');
+    $units = (float) data_get($row, 'units_at_risk', 0); // packs or bags
+    $action = data_get($row, 'recommended_action');
 
-            $globalRecommendedProdUnits = $forecastSummary['total_recommended_production'] ?? null;
+    $productId = data_get($row, 'product_id');
+    $productionId = data_get($row, 'production_id');
 
-            $forecastTopProducts   = $forecastTopProducts ?? collect();
-            $productForecast       = $productForecast ?? collect();
+    // Badge logic
+    $badgeLabel = 'Monitor';
+    $badgeClass = 'text-emerald-700 bg-emerald-50 border border-emerald-100';
 
-            $atRiskCount = ($forecastTopProducts instanceof \Illuminate\Support\Collection)
-                ? $forecastTopProducts->count()
-                : 0;
-
-            $soonestDaysToStockout = null;
-            if ($forecastTopProducts instanceof \Illuminate\Support\Collection) {
-                foreach ($forecastTopProducts as $row) {
-                    $d = $row['days_to_stockout'] ?? null;
-                    if (!is_null($d)) {
-                        $d = (int) $d;
-                        if (is_null($soonestDaysToStockout) || $d < $soonestDaysToStockout) {
-                            $soonestDaysToStockout = $d;
-                        }
-                    }
-                }
-            }
+    if (!is_null($days)) {
+      $d = (int) $days;
+      if ($d <= 0) {
+        $badgeLabel = 'Very urgent';
+        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+      } elseif ($d <= 2) {
+        $badgeLabel = 'Sell today';
+        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+      } elseif ($d <= 5) {
+        $badgeLabel = 'Push this';
+        $badgeClass = 'text-amber-700 bg-amber-50 border border-amber-100';
+      }
+    }
           @endphp
+
+          <div
+            class="flex items-start justify-between gap-3 text-xs expiry-batch-row cursor-pointer hover:bg-[var(--hover)] rounded-md px-1 py-1 transition"
+            data-expiry-batch="true"
+            @if(!is_null($days)) data-days-left="{{ (int) $days }}" @endif
+            @if($productionId)  data-production-id="{{ $productionId }}" @endif
+            @if($productId)     data-product-id="{{ $productId }}"       @endif
+            @if($batchNumber)   data-batch-number="{{ $batchNumber }}"   @endif
+            title="Open this batch day in the demand calendar"
+          >
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-0.5">
+                <span class="font-medium truncate">{{ $pName }}</span>
+
+                @if($variant)
+                  <span class="chip text-[10px]">{{ $variant }}</span>
+                @endif
+
+                {{-- Updated batch chip: show Batch 1, 2, 3... but keep real batch_number in title --}}
+                @if($batchDisplay)
+                  <span
+                    class="chip text-[10px]"
+                    @if($batchCode)
+                      title="Actual batch number: {{ $batchCode }}"
+                    @endif
+                  >
+                    Batch {{ $batchDisplay }}
+                  </span>
+                @elseif($batchCode)
+                  <span class="chip text-[10px]">Batch {{ $batchCode }}</span>
+                @endif
+
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold {{ $badgeClass }}">
+                  {{ $badgeLabel }}
+                </span>
+              </div>
+
+              <div class="muted text-[11px]">
+                {{ number_format($units, 0) }} pack(s) or bag(s) at risk
+                @if(!is_null($days))
+                  •
+                  @php $d = (int) $days; @endphp
+                  @if($d <= 0)
+                    expiry reached
+                  @elseif($d === 1)
+                    1 day before expiry
+                  @else
+                    {{ $d }} days before expiry
+                  @endif
+                @endif
+              </div>
+            </div>
+
+            @if($action)
+              <div class="text-right text-[11px]">
+                <div class="muted">Suggested move</div>
+                <div class="font-semibold">
+                  {{ $action }}
+                </div>
+              </div>
+            @endif
+          </div>
+        @endforeach
+      </div>
+    @else
+      <p class="text-xs muted">
+        When expiry risk appears, this list will show which meat batches to push first, how many packs or bags are at risk and the suggested operational move.
+      </p>
+    @endif
+  </div>
+</div>
+
+<!-- Weekly Production (units) -->
+<div class="card p-5 rounded-2xl">
+  <div class="flex items-center justify-between mb-2">
+    <h2 class="text-base font-semibold">Weekly Production in Finished Units</h2>
+  </div>
+  <div class="h-56 relative">
+    <p id="prodDesc" class="sr-only">
+      Bar chart of weekly finished meat units produced, combined view of packs and bags.
+    </p>
+    <canvas id="productionChart" aria-label="Production chart" aria-describedby="prodDesc"></canvas>
+    <div id="prodEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">
+      No data for this week
+    </div>
+  </div>
+</div>
+
+<!-- Weekly Sales with AI forecast -->
+<div class="card p-5 rounded-2xl">
+  <div class="flex items-center justify-between mb-2">
+    <h2 class="text-base font-semibold">Weekly Sales in Finished Units</h2>
+    <div class="flex items-center gap-3">
+      <select id="weeklySalesMode" class="input w-48 py-1 text-xs" aria-label="Weekly sales view mode">
+        <option value="quantity" selected>Quantity and revenue</option>
+        <option value="profit">Revenue and profit</option>
+        <option value="forecast">Next week forecast AI</option>
+      </select>
+    </div>
+  </div>
+  <div class="h-56 relative">
+    <p id="salesDesc" class="sr-only">
+      Combined chart of quantity sold in units for finished meat products, revenue, estimated profit and AI forecast.
+    </p>
+    <canvas id="salesChart" aria-label="Sales chart" aria-describedby="salesDesc"></canvas>
+    <div id="salesEmpty" class="absolute inset-0 hidden items-center justify-center text-sm muted">
+      No data for this week
+    </div>
+  </div>
+  <p id="weeklySalesSummary" class="text-[11px] muted mt-2">
+    This week you recorded ₱{{ number_format($weekRevenue ?? 0, 2) }} in revenue.
+    Estimated profit is ₱{{ number_format($estimatedWeekProfit ?? 0, 2) }}
+    @if(!is_null($estimatedGrossMarginPct ?? null))
+      with about {{ $estimatedGrossMarginPct }}% gross margin.
+    @endif
+  </p>
+  <p id="weeklySalesInsights" class="text-[11px] muted mt-1"></p>
+</div>
+
+<!-- Predictive Analytics · Production Planning Assistant -->
+@php
+$forecastSummary = $forecastSummary ?? [];
+$forecastHorizonDays = $forecastSummary['horizon_days'] ?? 30;
+$globalStockoutDateRaw = $forecastSummary['global_stockout_date'] ?? null;
+$globalStockoutLabel = $globalStockoutDateRaw
+  ? \Carbon\Carbon::parse($globalStockoutDateRaw)->timezone('Asia/Manila')->format('M d, Y')
+  : 'No projected stockout';
+
+$globalRecommendedProdUnits = $forecastSummary['total_recommended_production'] ?? null;
+
+$forecastTopProducts = $forecastTopProducts ?? collect();
+$productForecast = $productForecast ?? collect();
+
+$atRiskCount = ($forecastTopProducts instanceof \Illuminate\Support\Collection)
+  ? $forecastTopProducts->count()
+  : 0;
+
+$soonestDaysToStockout = null;
+if ($forecastTopProducts instanceof \Illuminate\Support\Collection) {
+  foreach ($forecastTopProducts as $row) {
+    $d = $row['days_to_stockout'] ?? null;
+    if (!is_null($d)) {
+      $d = (int) $d;
+      if (is_null($soonestDaysToStockout) || $d < $soonestDaysToStockout) {
+        $soonestDaysToStockout = $d;
+      }
+    }
+  }
+}
+@endphp
+
 
           <div class="card glass-card p-5 rounded-2xl">
             <div class="flex items-center justify-between mb-3">
@@ -731,8 +924,8 @@
 
                 @if(!is_null($soonestDaysToStockout))
                   @php
-                    $urgencyClass = $soonestDaysToStockout <= 3 ? 'text-red-600' : ($soonestDaysToStockout <= 7 ? 'text-amber-600' : 'text-green-600');
-                    $soonestLabel = $soonestDaysToStockout <= 0 ? 'Already out of stock' : $soonestDaysToStockout . ' days';
+  $urgencyClass = $soonestDaysToStockout <= 3 ? 'text-red-600' : ($soonestDaysToStockout <= 7 ? 'text-amber-600' : 'text-green-600');
+  $soonestLabel = $soonestDaysToStockout <= 0 ? 'Already out of stock' : $soonestDaysToStockout . ' days';
                   @endphp
                   <div class="text-[10px] {{ $urgencyClass }}">
                     Earliest stockout: <span class="font-semibold">{{ $soonestLabel }}</span>
@@ -764,29 +957,29 @@
                 <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
                   @foreach($forecastTopProducts as $row)
                     @php
-                      $name       = $row['name'] ?? 'Product';
-                      $dailyUnits = $row['daily_demand'] ?? 0;
-                      $recUnits   = $row['recommended_production'] ?? null;
-                      $daysLeft   = $row['days_to_stockout'] ?? null;
-                      $unitType   = $row['unit_type'] ?? 'pack';
-                      $label      = $row['label'] ?? ($name . ' (' . $unitType . ')');
+    $name = $row['name'] ?? 'Product';
+    $dailyUnits = $row['daily_demand'] ?? 0;
+    $recUnits = $row['recommended_production'] ?? null;
+    $daysLeft = $row['days_to_stockout'] ?? null;
+    $unitType = $row['unit_type'] ?? 'pack';
+    $label = $row['label'] ?? ($name . ' (' . $unitType . ')');
 
-                      $badgeLabel = 'Planned';
-                      $badgeClass = 'text-green-700 bg-emerald-50 border border-emerald-100';
-                      if (!is_null($daysLeft)) {
-                          $d = (int) $daysLeft;
-                          if ($d <= 0) {
-                              $badgeLabel = 'Out of stock';
-                              $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
-                          } elseif ($d <= 3) {
-                              $badgeLabel = 'Urgent';
-                              $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
-                          } elseif ($d <= 7) {
-                              $badgeLabel = 'Produce this week';
-                              $badgeClass = 'text-amber-700 bg-amber-50 border border-amber-100';
-                          }
-                      }
-                      $targetWindow = (!is_null($daysLeft) && (int)$daysLeft > 0) ? (int)$daysLeft : 1;
+    $badgeLabel = 'Planned';
+    $badgeClass = 'text-green-700 bg-emerald-50 border border-emerald-100';
+    if (!is_null($daysLeft)) {
+      $d = (int) $daysLeft;
+      if ($d <= 0) {
+        $badgeLabel = 'Out of stock';
+        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+      } elseif ($d <= 3) {
+        $badgeLabel = 'Urgent';
+        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+      } elseif ($d <= 7) {
+        $badgeLabel = 'Produce this week';
+        $badgeClass = 'text-amber-700 bg-amber-50 border border-amber-100';
+      }
+    }
+    $targetWindow = (!is_null($daysLeft) && (int) $daysLeft > 0) ? (int) $daysLeft : 1;
                     @endphp
 
                     <div class="flex items-center justify-between text-xs gap-3">
@@ -850,33 +1043,33 @@
 
             @if($productForecast instanceof \Illuminate\Support\Collection && $productForecast->isNotEmpty())
               @php
-                $topToProduce = $productForecast->sortByDesc('suggested_production')->take(5);
+  $topToProduce = $productForecast->sortByDesc('suggested_production')->take(5);
               @endphp
               <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
                 @foreach($topToProduce as $row)
                   @php
-                    $pName              = $row['product_name'] ?? 'Product';
-                    $avgDemandUnits     = $row['avg_daily_demand'] ?? 0;
-                    $forecastTotalUnits = $row['forecast_total'] ?? 0;
-                    $stockUnits         = $row['current_inventory'] ?? 0;
-                    $suggestedUnits     = $row['suggested_production'] ?? 0;
-                    $daysLeft           = $row['days_to_stockout'] ?? null;
+    $pName = $row['product_name'] ?? 'Product';
+    $avgDemandUnits = $row['avg_daily_demand'] ?? 0;
+    $forecastTotalUnits = $row['forecast_total'] ?? 0;
+    $stockUnits = $row['current_inventory'] ?? 0;
+    $suggestedUnits = $row['suggested_production'] ?? 0;
+    $daysLeft = $row['days_to_stockout'] ?? null;
 
-                    $badgeLabel = 'Planned';
-                    $badgeClass = 'text-emerald-700 bg-emerald-50 border border-emerald-100';
-                    if (!is_null($daysLeft)) {
-                      $d = (int) $daysLeft;
-                      if ($d <= 0) {
-                        $badgeLabel = 'Out of stock';
-                        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
-                      } elseif ($d <= 3) {
-                        $badgeLabel = 'Urgent this week';
-                        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
-                      } elseif ($d <= 7) {
-                        $badgeLabel = 'Produce this week';
-                        $badgeClass = 'text-amber-700 bg-amber-50 border border-amber-100';
-                      }
-                    }
+    $badgeLabel = 'Planned';
+    $badgeClass = 'text-emerald-700 bg-emerald-50 border border-emerald-100';
+    if (!is_null($daysLeft)) {
+      $d = (int) $daysLeft;
+      if ($d <= 0) {
+        $badgeLabel = 'Out of stock';
+        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+      } elseif ($d <= 3) {
+        $badgeLabel = 'Urgent this week';
+        $badgeClass = 'text-red-700 bg-red-50 border border-red-100';
+      } elseif ($d <= 7) {
+        $badgeLabel = 'Produce this week';
+        $badgeClass = 'text-amber-700 bg-amber-50 border border-amber-100';
+      }
+    }
                   @endphp
 
                   <div class="flex items-start justify-between gap-3 text-xs">
@@ -933,11 +1126,11 @@
 
   <!-- Materials Used (full width, raw ingredients in kg) -->
   @php
-    use Carbon\Carbon;
+use Carbon\Carbon;
 
-    $rangeLabel = isset($filterStart, $filterEnd)
-        ? Carbon::parse($filterStart)->format('M d, Y') . ' to ' . Carbon::parse($filterEnd)->format('M d, Y')
-        : 'This week';
+$rangeLabel = isset($filterStart, $filterEnd)
+  ? Carbon::parse($filterStart)->format('M d, Y') . ' to ' . Carbon::parse($filterEnd)->format('M d, Y')
+  : 'This week';
   @endphp
 
   <div class="mx-8 my-6 card p-5 rounded-2xl">
@@ -1000,68 +1193,121 @@
     </span>
   </button>
 
-<!-- Reservation Modal -->
-<div id="reservationModal"
-     class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center">
-  <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-5">
-    <div class="flex items-center justify-between mb-3">
-      <h3 class="text-sm font-semibold">Add reservation</h3>
-      <button type="button"
-              class="text-xs px-2 py-1 rounded-full border border-gray-200 hover:bg-gray-100"
-              data-reservation-close="true">✕</button>
+  <!-- Reservation Modal -->
+  <div id="reservationModal"
+       class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full mx-4 p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-semibold">Add reservation</h3>
+        <button type="button"
+                class="text-xs px-2 py-1 rounded-full border border-gray-200 hover:bg-gray-100"
+                data-reservation-close="true">✕</button>
+      </div>
+
+            <form method="POST" action="{{ route('reservations.store') }}">
+        @csrf
+
+        {{-- hidden date used by controller --}}
+        <input type="hidden" name="reserved_date" id="reservation_date_input">
+
+        {{-- preserve current filter range so dashboard reload keeps same dates --}}
+        @if(request('start'))
+          <input type="hidden" name="start" value="{{ request('start') }}">
+        @endif
+        @if(request('end'))
+          <input type="hidden" name="end" value="{{ request('end') }}">
+        @endif
+
+        <div class="space-y-3 text-sm">
+  {{-- Date (read only label) --}}
+  <div>
+    <label class="block text-xs font-semibold mb-1">
+      Date
+    </label>
+    <input type="text"
+           id="reservation_date_label"
+           class="input bg-gray-100 cursor-not-allowed"
+           disabled>
+  </div>
+
+  {{-- Product (required → fixes product_id not null) --}}
+  <div>
+    <label class="block text-xs font-semibold mb-1">
+      Product
+      <span class="text-red-500">*</span>
+    </label>
+    <select name="product_id" class="input" required>
+      <option value="">Select meat product</option>
+      @foreach($products as $product)
+        <option value="{{ $product->id }}">
+          {{ $product->product_name }}
+        </option>
+      @endforeach
+    </select>
+  </div>
+
+  {{-- NEW: Type / Variant (optional, but selectable) --}}
+  <div>
+    <label class="block text-xs font-semibold mb-1">
+      Type / variant
+    </label>
+    <select name="type_label" id="reservation_type_select" class="input" required>
+      <option value="">Select type / variant</option>
+    </select>
+    <p class="text-[11px] muted mt-1">
+      Pick the exact variant for this reservation. It should match the production variant.
+    </p>
+  </div>
+
+  {{-- Unit type: per pack / per bag --}}
+  <div class="grid grid-cols-2 gap-2">
+    <div>
+      <label class="block text-xs font-semibold mb-1">
+        Units to reserve
+        <span class="text-red-500">*</span>
+      </label>
+      <input type="number"
+             name="units"
+             class="input"
+             min="1"
+             required>
     </div>
 
-    <form method="POST" action="{{ route('reservations.store') }}">
-      @csrf
-      <input type="hidden" name="reserved_date" id="reservation_date_input">
-      {{-- preserve current filter range --}}
-      @if(request('start'))
-        <input type="hidden" name="start" value="{{ request('start') }}">
-      @endif
-      @if(request('end'))
-        <input type="hidden" name="end" value="{{ request('end') }}">
-      @endif
+    <div>
+      <label class="block text-xs font-semibold mb-1">
+        Unit type
+      </label>
+      <select name="unit_type" class="input">
+        <option value="pack">Per pack</option>
+        <option value="bag">Per bag</option>
+      </select>
+    </div>
+  </div>
 
-      <div class="space-y-3 text-sm">
-        <div>
-          <label class="block text-xs font-semibold mb-1">
-            Date
-          </label>
-          <input type="text"
-                 id="reservation_date_label"
-                 class="input bg-gray-100 cursor-not-allowed"
-                 disabled>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold mb-1">
-            Units to reserve
-          </label>
-          <input type="number" name="units" class="input" min="1" required>
-        </div>
-
-        <div>
-          <label class="block text-xs font-semibold mb-1">
-            Reference / customer / note
-          </label>
-          <textarea name="notes" class="input min-h-[70px]" rows="3"
-                    placeholder="Ex: Reservation for Client X, party-size, channel, etc."></textarea>
-        </div>
-      </div>
-
-      <div class="mt-4 flex justify-end gap-2">
-        <button type="button"
-                data-reservation-close="true"
-                class="btn btn-ghost text-xs">
-          Cancel
-        </button>
-        <button type="submit" class="btn btn-primary text-xs">
-          Save reservation
-        </button>
-      </div>
-    </form>
+  <div>
+    <label class="block text-xs font-semibold mb-1">
+      Reference / customer / note
+    </label>
+    <textarea name="notes"
+              class="input min-h-[70px]"
+              rows="3"
+              placeholder="Ex: Reservation for Client X, supermarket order, etc."></textarea>
   </div>
 </div>
+
+        <div class="mt-4 flex justify-end gap-2">
+          <button type="button"
+                  data-reservation-close="true"
+                  class="btn btn-ghost text-xs">
+            Cancel
+          </button>
+          <button type="submit" class="btn btn-primary text-xs">
+            Save reservation
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Model Info Modal (shared for planning and top five AI) -->
   <div id="modelInfoModal"
@@ -1091,39 +1337,39 @@
   </div>
 
   @php
-      // Use the filter range (if any) to decide which month to show in the calendar
-      $filterStartDate = isset($filterStart) ? Carbon::parse($filterStart) : Carbon::today()->startOfMonth();
-      $filterEndDate   = isset($filterEnd)   ? Carbon::parse($filterEnd)   : Carbon::today();
+// Use the filter range (if any) to decide which month to show in the calendar
+$filterStartDate = isset($filterStart) ? Carbon::parse($filterStart) : Carbon::today()->startOfMonth();
+$filterEndDate = isset($filterEnd) ? Carbon::parse($filterEnd) : Carbon::today();
 
-      $calendarRef     = $filterStartDate->copy(); // month anchor
-      $calendarYear    = $calendarRef->year;
-      $calendarMonth   = $calendarRef->month;
+$calendarRef = $filterStartDate->copy(); // month anchor
+$calendarYear = $calendarRef->year;
+$calendarMonth = $calendarRef->month;
 
-      $calendarDemand  = $demandCalendar ?? [];
+$calendarDemand = $demandCalendar ?? [];
   @endphp
 
-  <!-- Demand Forecast Calendar Modal (dark theme) -->
+  <!-- Demand Forecast Calendar Modal (LIGHT theme, logo-inspired) -->
   <div
       id="demandCalendarModal"
-      class="fixed inset-0 z-40 hidden items-center justify-center bg-slate-900/70 backdrop-blur-sm"
+      class="fixed inset-0 z-40 hidden items-center justify-center bg-black/30 backdrop-blur-sm"
   >
-    <div class="w-full max-w-5xl mx-4 bg-slate-950 text-slate-100 rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden border border-slate-800/80">
+    <div class="w-full max-w-5xl mx-4 bg-[var(--card)] text-[var(--ink)] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden border border-[var(--line)]">
         <!-- LEFT: Calendar -->
-        <div class="w-full md:w-2/3 p-5 border-b md:border-b-0 md:border-r border-slate-800/80">
+        <div class="w-full md:w-2/3 p-5 border-b md:border-b-0 md:border-r border-[var(--line)] bg-[#fdfcf6]">
             <div class="flex items-center justify-between mb-4 gap-3">
                 <button
                     id="calendarPrevMonth"
                     type="button"
-                    class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-900/80 border border-slate-700/80 text-slate-200 hover:bg-slate-800 transition"
+                    class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-[var(--line)] text-[var(--ink)] hover:bg-[var(--hover)] transition"
                 >
                     ‹
                 </button>
 
                 <div class="text-center flex-1">
-                    <div id="calendarMonthLabel" class="text-sm font-semibold text-slate-100">
+                    <div id="calendarMonthLabel" class="text-sm font-semibold text-[var(--ink)]">
                         {{ \Carbon\Carbon::create($calendarYear, $calendarMonth, 1)->format('F Y') }}
                     </div>
-                    <div id="calendarSelectedRangeLabel" class="text-[11px] text-slate-400 mt-0.5">
+                    <div id="calendarSelectedRangeLabel" class="text-[11px] text-[var(--muted)] mt-0.5">
                         @if(isset($filterStart, $filterEnd))
                           {{ \Carbon\Carbon::parse($filterStart)->format('M d, Y') }} – {{ \Carbon\Carbon::parse($filterEnd)->format('M d, Y') }}
                         @else
@@ -1135,14 +1381,14 @@
                 <button
                     id="calendarNextMonth"
                     type="button"
-                    class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-900/80 border border-slate-700/80 text-slate-200 hover:bg-slate-800 transition"
+                    class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-[var(--line)] text-[var(--ink)] hover:bg-[var(--hover)] transition"
                 >
                     ›
                 </button>
             </div>
 
             <!-- Weekday header -->
-            <div class="grid grid-cols-7 text-[11px] font-medium text-slate-500 tracking-wide mb-1.5">
+            <div class="grid grid-cols-7 text-[11px] font-medium text-[var(--muted)] tracking-wide mb-1.5">
                 <div class="text-center">Mon</div>
                 <div class="text-center">Tue</div>
                 <div class="text-center">Wed</div>
@@ -1157,21 +1403,21 @@
 
             <!-- Legend and actions -->
             <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
-                <div class="flex flex-wrap gap-2 text-[11px] text-slate-400">
+                <div class="flex flex-wrap gap-2 text-[11px] text-[var(--muted)]">
                     <span class="inline-flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                        <span class="w-2 h-2 rounded-full bg-[var(--brand-yellow)]"></span>
                         High demand
                     </span>
                     <span class="inline-flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                        <span class="w-2 h-2 rounded-full bg-[#bbf7d0]"></span>
                         Low demand
                     </span>
                     <span class="inline-flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span class="w-2 h-2 rounded-full bg-[#22c55e]"></span>
                         Reservations
                     </span>
                     <span class="inline-flex items-center gap-1">
-                        <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                        <span class="w-2 h-2 rounded-full bg-[#fb923c]"></span>
                         Holidays and events
                     </span>
                 </div>
@@ -1180,14 +1426,14 @@
                     <button
                         id="demandCalendarReset"
                         type="button"
-                        class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-slate-700 text-[12px] text-slate-200 hover:bg-slate-900 transition"
+                        class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg border border-[var(--line)] bg-white text-[12px] text-[var(--ink)] hover:bg-[var(--hover)] transition"
                     >
                         Reset
                     </button>
                     <button
                         id="demandCalendarApply"
                         type="button"
-                        class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-blue-600 text-[12px] font-semibold text-white hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                        class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-[var(--brand-red)] text-[12px] font-semibold text-white hover:brightness-95 disabled:opacity-40 disabled:cursor-not-allowed transition"
                         disabled
                     >
                         Apply range
@@ -1197,88 +1443,107 @@
         </div>
 
         <!-- RIGHT: Day details -->
-        <div class="w-full md:w-1/3 p-5 space-y-3">
+        <div class="w-full md:w-1/3 p-5 space-y-3 bg-white">
             <div class="flex items-center justify-between">
                 <div class="space-y-0.5">
-                    <div class="text-[13px] font-semibold uppercase tracking-wide text-slate-400">
+                    <div class="text-[13px] font-semibold uppercase tracking-wide text-[var(--muted)]">
                         Day insights
                     </div>
-                    <div id="calendarDayTitle" class="text-base font-semibold text-slate-50">
+                    <div id="calendarDayTitle" class="text-base font-semibold text-[var(--ink)]">
                         Pick a day on the calendar
                     </div>
                 </div>
-        <div class="rounded-xl bg-slate-900/80 border border-slate-800/80 px-3 py-2.5">
-          <p id="calendarDayNotes" class="text-[11px] leading-relaxed text-slate-300">
-              Use the calendar on the left to inspect a day. High demand days are perfect for planning extra production and staffing.
-          </p>
 
-          <button
-              id="openReservationButton"
-              type="button"
-              class="mt-3 inline-flex items-center px-3 py-1.5 rounded-lg bg-emerald-600 text-[11px] font-semibold text-white hover:bg-emerald-500">
-              Add reservation for this day
-          </button>
-        </div>
-
-                <button
-                    id="demandCalendarClose"
-                    type="button"
-                    class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-900 text-slate-300 hover:bg-slate-800 transition"
-                >
-                    ✕
-                </button>
+            <button
+                id="demandCalendarClose"
+                type="button"
+                class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white border border-[var(--line)] text-[var(--muted)] hover:bg-[var(--hover)] transition"
+            >
+                ✕
+            </button>
             </div>
 
             <div id="calendarDayBadges" class="flex flex-wrap gap-1.5 text-[10px]"></div>
 
             <dl class="space-y-2 text-[11px]">
-                <div class="flex items-center justify-between">
-                    <dt class="text-slate-400">Forecast demand</dt>
-                    <dd id="calendarDayDemand" class="font-semibold text-slate-50">–</dd>
-                </div>
-                <div class="flex items-center justify-between">
-                    <dt class="text-slate-400">Forecast remaining stock</dt>
-                    <dd id="calendarDayInventory" class="font-semibold text-slate-50">–</dd>
-                </div>
-                <div class="flex items-center justify-between">
-                    <dt class="text-slate-400">Reserved units</dt>
-                    <dd id="calendarDayReserved" class="font-semibold text-slate-50">–</dd>
-                </div>
-                <div class="flex items-center justify-between">
-                    <dt class="text-slate-400">Net available</dt>
-                    <dd id="calendarDayNet" class="font-semibold text-slate-50">–</dd>
-                </div>
-            </dl>
 
-            <div class="rounded-xl bg-slate-900/80 border border-slate-800/80 px-3 py-2.5">
-                <p id="calendarDayNotes" class="text-[11px] leading-relaxed text-slate-300">
+    <!-- Forecast Demand -->
+    <div class="flex items-center justify-between">
+      <dt class="text-[var(--muted)]">Forecast demand</dt>
+      <dd id="calendarDayDemand" class="font-semibold text-[var(--ink)]">–</dd>
+    </div>
+    
+    <!-- Forecast Remaining -->
+    <div class="flex items-center justify-between">
+      <dt class="text-[var(--muted)]">Forecast remaining stock</dt>
+      <dd id="calendarDayInventory" class="font-semibold text-[var(--ink)]">–</dd>
+    </div>
+    
+    <!-- Reserved Units -->
+    <div class="flex items-center justify-between">
+      <dt class="text-[var(--muted)]">Reserved units</dt>
+      <dd id="calendarDayReserved" class="font-semibold text-[var(--ink)]">–</dd>
+    </div>
+    
+    <!-- Net Available -->
+    <div class="flex items-center justify-between">
+      <dt class="text-[var(--muted)]">Net available</dt>
+      <dd id="calendarDayNet" class="font-semibold text-[var(--ink)]">–</dd>
+    </div>
+    
+    <!-- NEW: Product -->
+    <div class="flex items-center justify-between">
+      <dt class="text-[var(--muted)]">Product</dt>
+      <dd id="calendarDayProduct" class="font-semibold text-[var(--ink)] truncate max-w-[140px]">–</dd>
+    </div>
+    
+    <!-- NEW: Unit Type -->
+    <div class="flex items-center justify-between">
+      <dt class="text-[var(--muted)]">Unit type</dt>
+      <dd id="calendarDayUnitType" class="font-semibold text-[var(--ink)]">–</dd>
+    </div>
+    
+    <!-- NEW: Reference / Notes -->
+    <div class="flex items-center justify-between">
+      <dt class="text-[var(--muted)]">Reference / notes</dt>
+      <dd id="calendarDayNotesDetails" class="font-semibold text-[var(--ink)] text-right truncate max-w-[140px]">–</dd>
+    </div>
+    
+    </dl>
+
+
+            <div class="rounded-xl bg-[var(--brand-yellow-06)] border border-[var(--brand-yellow-40)] px-3 py-2.5">
+                <p id="calendarDayNotes" class="text-[11px] leading-relaxed text-[var(--muted)]">
                     Use the calendar on the left to inspect a day. High demand days are perfect for planning extra production and staffing.
                 </p>
+
+                <button
+                    id="openReservationButton"
+                    type="button"
+                    class="mt-3 inline-flex items-center px-3 py-1.5 rounded-lg bg-[var(--brand-red)] text-[11px] font-semibold text-white hover:brightness-95">
+                    Add reservation for this day
+                </button>
             </div>
         </div>
     </div>
   </div>
 
   <!-- ===========================
-       SCRIPTS (Unified & Updated)
-       =========================== -->
-  <script>
+     SCRIPTS (Unified & Updated)
+     =========================== -->
+<script>
   document.addEventListener('DOMContentLoaded', () => {
     /* ============================================================
      * 0. SHARED CONSTANTS + HELPERS
      * ============================================================ */
     const C_RED        = 'rgba(239,68,68,1)';
     const C_RED_SOFT   = 'rgba(248,113,113,0.6)';
-    const C_RED_30     = 'rgba(248,113,113,0.3)';
     const C_GREEN      = 'rgba(34,197,94,1)';
     const C_GREEN_SOFT = 'rgba(34,197,94,0.6)';
-    const C_GREEN_30   = 'rgba(34,197,94,0.3)';
     const C_BLUE       = 'rgba(37,99,235,1)';
     const TICK_COLOR   = '#64748b';
     const GRID_COLOR   = 'rgba(148,163,184,0.16)';
     const BAR_RADIUS   = 10;
-
-    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const palette = [
       'rgba(248,113,113,0.9)',
@@ -1312,27 +1577,48 @@
     };
 
     const mk = (id, cfg) => {
+      if (typeof Chart === 'undefined') return null;
       const canvas = document.getElementById(id);
       if (!canvas) return null;
       const ctx = canvas.getContext('2d');
       return new Chart(ctx, cfg);
     };
 
+    let debounceTimer;
+    const debounce = (fn, ms = 120) => (...a) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => fn(...a), ms);
+    };
+
+    // 💰 Shared number formatters (used by Sales Report + charts)
+    const formatCurrency = (value) => {
+      const num = Number(value) || 0;
+      return '₱' + num.toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+    };
+
+    const formatInteger = (value) => {
+      const num = Number(value) || 0;
+      return num.toLocaleString('en-PH', { maximumFractionDigits: 0 });
+    };
+
     /* ============================================================
      * 1. BACK-END DATA (Blade → JS)
      * ============================================================ */
-    const filterStart    = @json($filterStart ?? null);
-    const filterEnd      = @json($filterEnd ?? null);
-    const calendarEvents = @json($calendarEvents ?? []);
+    const filterStart       = @json($filterStart ?? null);
+    const filterEnd         = @json($filterEnd ?? null);
+    const calendarEventsRaw = @json($calendarEvents ?? []);
 
-    const labels   = @json($labels ?? []);                         // Mon..Sun
-    const prod     = @json($weeklyProductionSeries ?? []);         // production units
-    const qty      = @json($weeklySalesQtySeries ?? []);           // sales units
-    const rev      = @json($weeklySalesRevenueSeries ?? []);       // revenue
-    const profit   = @json($weeklySalesProfitSeries ?? []);        // profit
+    const labels   = @json($labels ?? []);
+    const prod     = @json($weeklyProductionSeries ?? []);
+    const qty      = @json($weeklySalesQtySeries ?? []);
+    const rev      = @json($weeklySalesRevenueSeries ?? []);
+    const profit   = @json($weeklySalesProfitSeries ?? []);
 
-    const expiryLabels = @json($expiryLabels ?? []);               // Mon..Sun
-    const exp          = @json($weeklyExpirySeries ?? []);         // expiring packs/bags
+    const expiryLabels = @json($expiryLabels ?? []);
+    const exp          = @json($weeklyExpirySeries ?? []);
 
     const forecastLabels    = @json($forecastLabels ?? []);
     const forecastDemand    = @json($forecastDemandSeries ?? []);
@@ -1346,25 +1632,42 @@
     const estimatedWeekProfitJS = @json($estimatedWeekProfit ?? 0);
     const estimatedMarginJS     = @json($estimatedGrossMarginPct ?? null);
 
-    // 3D controls (visual only)
-    const toggle3D        = document.getElementById('toggle3D');
-    const depthRange      = document.getElementById('depthRange');
-    const liftRange       = document.getElementById('liftRange');
-    const depthVal        = document.getElementById('depthVal');
-    const liftVal         = document.getElementById('liftVal');
-    const dot3d           = document.getElementById('dot3d');
+    // API route for reservation type picker
+    const typesApiUrl = @json(\Illuminate\Support\Facades\Route::has('sales.api.types') ? route('sales.api.types') : null);
 
-    let debounceTimer;
-    const debounce = (fn, ms = 120) => (...a) => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => fn(...a), ms);
-    };
+    // Normalize calendar events into { 'YYYY-MM-DD': meta }
+    const calendarEvents = {};
+    (calendarEventsRaw || []).forEach(item => {
+      if (!item || !item.date) return;
+      const key = item.date;
 
-    /* ----------------------------------------
+      calendarEvents[key] = {
+        ...item,
+
+        // demand level
+        level: item.demand_level || item.level || null,
+
+        // numeric metrics
+        demand_units:    item.demand_units    ?? item.demand    ?? null,
+        inventory_units: item.inventory_units ?? item.inventory ?? null,
+        net_available:   item.net_available   ?? null,
+        reservations:    item.reservations    ?? item.reserved_units ?? 0,
+
+        // product / unit / summary
+        product_name:        item.product_name ?? item.product_label ?? item.product ?? null,
+        unit_type:           item.unit_type ?? item.unit ?? null,
+        reservation_summary: item.reservation_summary ?? item.reference ?? null,
+
+        // text notes
+        notes: item.note ?? item.notes ?? null,
+      };
+    });
+
+    /* ============================================================
      * 2. CHARTS
-     * -------------------------------------- */
+     * ============================================================ */
     function initCharts() {
-      // Production
+      // Production chart
       setEmptyBanner(prod, 'prodEmpty');
       const productionChart = mk('productionChart', {
         type: 'bar',
@@ -1411,7 +1714,7 @@
         }
       });
 
-      // Sales with AI
+      // Sales with AI (actual and forecast)
       setEmptyBanner([...qty, ...rev], 'salesEmpty');
       const salesChart = mk('salesChart', {
         data: {
@@ -1575,20 +1878,20 @@
         }
       });
 
-      // Sales sparkline
-      mk('salesTrendsChart', {
+      // Sales sparkline (small trend) – now stored so we can update it via range selector
+      const salesSparklineChart = mk('salesTrendsChart', {
         type: 'line',
         data: {
           labels,
           datasets: [{
             label: 'Revenue',
             data: rev,
-            borderColor: C_RED,
-            backgroundColor: C_RED,
+            borderColor: 'rgba(34,211,238,0.95)',        // neon cyan
+            backgroundColor: 'rgba(34,211,238,0.16)',    // soft glow
             borderWidth: 2,
-            tension: 0.35,
+            tension: 0.4,
             pointRadius: 0,
-            fill: false
+            fill: true
           }]
         },
         options: {
@@ -1643,7 +1946,7 @@
         }
       });
 
-      // Forecast chart
+      // Forecast chart (global)
       setEmptyBanner([...forecastDemand, ...forecastInventory], 'forecastEmpty');
       mk('forecastChart', {
         type: 'bar',
@@ -1693,7 +1996,7 @@
         }
       });
 
-      // Forecast insights text
+      /* ---------- Forecast insights (text under chart) ---------- */
       const forecastInsightsEl = document.getElementById('forecastInsights');
       const updateForecastInsights = () => {
         if (!forecastInsightsEl) return;
@@ -1709,6 +2012,7 @@
           : 'Day';
         const bestVal = bestIdx >= 0 ? forecastDemand[bestIdx] : 0;
 
+        // pseudo minimum: invert values and use maxIndex
         const minStockIdx = maxIndex(forecastInventory.map(v => v === 0 ? -Infinity : -v));
         const minStockLabel = minStockIdx >= 0 && forecastLabels[minStockIdx] !== undefined
           ? forecastLabels[minStockIdx]
@@ -1728,7 +2032,7 @@
       };
       updateForecastInsights();
 
-      // Weekly sales mode + insights
+      /* ---------- Weekly sales mode + insights ---------- */
       const weeklySalesMode     = document.getElementById('weeklySalesMode');
       const weeklySalesInsights = document.getElementById('weeklySalesInsights');
 
@@ -1839,7 +2143,7 @@
           setHidden(dsRevF, !hasForecast);
           setHidden(dsProfitF, !hasForecast);
 
-          salesChart.options.plugins.title.text = 'Weekly sales next week forecast AI';
+          salesChart.options.plugins.title.text = 'Weekly sales forecast for next week (AI)';
         }
 
         salesChart.update();
@@ -1849,12 +2153,75 @@
       weeklySalesMode?.addEventListener('change', updateWeeklySalesMode);
       updateWeeklySalesMode();
 
+      /* ---------- 📈 Sales Report Range + Sparkline wiring ---------- */
+      const salesReportCard  = document.getElementById('salesReportCard');
+      const salesRangeSelect = document.getElementById('salesRange');
+      const salesRangeLabel  = document.getElementById('salesRangeLabel');
+      const salesRangeEndpoint = salesReportCard?.dataset.salesRangeEndpoint || null;
+
+      async function loadSalesRange(range) {
+        if (!salesRangeEndpoint || !salesSparklineChart) return;
+
+        try {
+          const url = new URL(salesRangeEndpoint, window.location.origin);
+          url.searchParams.set('range', range);
+
+          const res = await fetch(url.toString(), {
+            headers: { 'Accept': 'application/json' }
+          });
+
+          if (!res.ok) {
+            console.error('Failed to load sales range', res.status);
+            return;
+          }
+
+          const data = await res.json();
+
+          // Update label under title
+          if (data.label && salesRangeLabel) {
+            salesRangeLabel.textContent =
+              `Meat product sales in finished units (packs and bags) • ${data.label}`;
+          }
+
+          // Update stats in the card
+          if (data.stats && salesReportCard) {
+            const stats = data.stats;
+
+            const totalRevenueEl = salesReportCard.querySelector('[data-sales-stat="total_revenue"]');
+            const totalSalesEl   = salesReportCard.querySelector('[data-sales-stat="total_sales"]');
+            const avgPriceEl     = salesReportCard.querySelector('[data-sales-stat="avg_price"]');
+            const strongestEl    = salesReportCard.querySelector('[data-sales-stat="strongest_day"]');
+
+            if (totalRevenueEl) totalRevenueEl.textContent = formatCurrency(stats.total_revenue || 0);
+            if (totalSalesEl)   totalSalesEl.textContent   = formatInteger(stats.total_sales || 0);
+            if (avgPriceEl)     avgPriceEl.textContent     = formatCurrency(stats.avg_price || 0);
+            if (strongestEl)    strongestEl.textContent    = stats.biggest_day || 'No data yet';
+          }
+
+          // Update sparkline chart
+          if (data.chart) {
+            salesSparklineChart.data.labels = data.chart.labels || [];
+            salesSparklineChart.data.datasets[0].data = data.chart.data || [];
+            salesSparklineChart.update();
+          }
+        } catch (err) {
+          console.error('Error loading sales range', err);
+        }
+      }
+
+      // Hook change event
+      if (salesRangeSelect) {
+        salesRangeSelect.addEventListener('change', function () {
+          loadSalesRange(this.value);
+        });
+      }
+
       return { productionChart, salesChart };
     }
 
-    /* ----------------------------------------
+    /* ============================================================
      * 3. MODEL INFO MODAL
-     * -------------------------------------- */
+     * ============================================================ */
     function initModelInfoModal() {
       const modelInfoModal = document.getElementById('modelInfoModal');
       const modelInfoTitle = document.getElementById('modelInfoTitle');
@@ -1890,9 +2257,9 @@
       });
     }
 
-    /* ----------------------------------------
+    /* ============================================================
      * 4. SIDEBAR
-     * -------------------------------------- */
+     * ============================================================ */
     function initSidebar() {
       const sidebar       = document.getElementById('sidebar');
       const sidebarToggle = document.getElementById('sidebarToggle');
@@ -1907,9 +2274,32 @@
       });
     }
 
-    /* ----------------------------------------
-     * 5. DEMAND CALENDAR (DARK MODAL)
-     * -------------------------------------- */
+    /* ============================================================
+     * 5. RESERVATION MODAL (OPEN/CLOSE)
+     * ============================================================ */
+    function initReservationModal() {
+      const modal = document.getElementById('reservationModal');
+      if (!modal) return;
+
+      const closeModal = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      };
+
+      modal.querySelectorAll('[data-reservation-close="true"]').forEach(btn => {
+        btn.addEventListener('click', closeModal);
+      });
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          closeModal();
+        }
+      });
+    }
+
+    /* ============================================================
+     * 6. DEMAND CALENDAR (LIGHT THEME + RESERVATION HOOK)
+     * ============================================================ */
     function initDemandCalendar() {
       const modal     = document.getElementById('demandCalendarModal');
       const openBtn   = document.getElementById('demandCalendarButton');
@@ -1929,6 +2319,12 @@
       const dayRes    = document.getElementById('calendarDayReserved');
       const dayNet    = document.getElementById('calendarDayNet');
       const dayNotes  = document.getElementById('calendarDayNotes');
+
+      const dayProduct   = document.getElementById('calendarDayProduct');
+      const dayUnitType  = document.getElementById('calendarDayUnitType');
+      const dayNotesDet  = document.getElementById('calendarDayNotesDetails');
+
+      const openReservationButton = document.getElementById('openReservationButton');
 
       if (!modal || !grid) return;
 
@@ -1964,7 +2360,7 @@
       const updateRangeLabel = () => {
         if (!rangeLbl) return;
         if (selectedStart && selectedEnd) {
-          rangeLbl.textContent = `${formatDateLabel(selectedStart)} – ${formatDateLabel(selectedEnd)}`;
+          rangeLbl.textContent = `${formatDateLabel(selectedStart)} to ${formatDateLabel(selectedEnd)}`;
         } else if (selectedStart) {
           rangeLbl.textContent = formatDateLabel(selectedStart);
         } else {
@@ -1982,29 +2378,55 @@
         selectedDay = d;
         const key   = dateKey(d);
         const meta  = eventsMeta[key] || {};
+
         if (dayTitle) dayTitle.textContent = formatFullDate(d);
 
+        // badges: demand level + extra labels
         if (dayBadges) {
           dayBadges.innerHTML = '';
-          const badges = [];
+          const badgeChips = [];
 
-          const level = meta.level || meta.demand || 'normal';
-          if (level === 'high') {
-            badges.push({ label: 'High demand', class: 'bg-amber-500/20 text-amber-300 border border-amber-500/40' });
+          const level = meta.level || meta.demand_level || 'normal';
+
+          if (level === 'high' || level === 'forecast_high') {
+            badgeChips.push({
+              label: 'High demand day',
+              class: 'bg-[var(--brand-yellow-40)] text-[var(--ink)] border border-[var(--brand-red-30)]'
+            });
+          } else if (level === 'forecast_medium') {
+            badgeChips.push({
+              label: 'Forecast medium demand day',
+              class: 'bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe]'
+            });
           } else if (level === 'low') {
-            badges.push({ label: 'Low demand', class: 'bg-sky-500/20 text-sky-300 border border-sky-500/40' });
+            badgeChips.push({
+              label: 'Low demand day',
+              class: 'bg-[#ecfdf3] text-[#166534] border border-[#6ee7b7]'
+            });
           } else {
-            badges.push({ label: 'Normal demand', class: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' });
+            badgeChips.push({
+              label: 'Normal demand',
+              class: 'bg-[#eff6ff] text-[#1d4ed8] border border-[#bfdbfe]'
+            });
+          }
+
+          if (Array.isArray(meta.badges)) {
+            meta.badges.forEach(label => {
+              badgeChips.push({
+                label,
+                class: 'bg-[#f9fafb] text-[#374151] border border-[#e5e7eb]'
+              });
+            });
           }
 
           if (meta.reservations && meta.reservations > 0) {
-            badges.push({ label: 'Has reservations', class: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' });
-          }
-          if (meta.event) {
-            badges.push({ label: meta.event, class: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' });
+            badgeChips.push({
+              label: 'Has reservations',
+              class: 'bg-[#f0f9ff] text-[#0369a1] border border-[#7dd3fc]'
+            });
           }
 
-          badges.forEach(b => {
+          badgeChips.forEach(b => {
             const span = document.createElement('span');
             span.className = `px-2 py-0.5 rounded-full ${b.class}`;
             span.textContent = b.label;
@@ -2012,11 +2434,22 @@
           });
         }
 
-        if (dayDemand) dayDemand.textContent   = meta.demand_units   != null ? `${meta.demand_units} unit(s)` : '–';
-        if (dayInv)    dayInv.textContent      = meta.inventory_units!= null ? `${meta.inventory_units} unit(s)` : '–';
-        if (dayRes)    dayRes.textContent      = meta.reservations   != null ? `${meta.reservations} unit(s)` : '–';
-        if (dayNet)    dayNet.textContent      = meta.net_available  != null ? `${meta.net_available} unit(s)` : '–';
-        if (dayNotes)  dayNotes.textContent    = meta.notes || 'Use this day to plan production and staffing based on the expected demand.';
+        const demandUnits = meta.demand_units    != null ? `${meta.demand_units} unit(s)`    : '–';
+        const invUnits    = meta.inventory_units != null ? `${meta.inventory_units} unit(s)` : '–';
+        const resUnits    = meta.reservations    != null ? `${meta.reservations} unit(s)`    : '–';
+        const netUnits    = meta.net_available   != null ? `${meta.net_available} unit(s)`   : '–';
+        const notesText   = meta.notes || 'Use this day to plan production and staffing based on expected or forecast demand.';
+
+        if (dayDemand) dayDemand.textContent = demandUnits;
+        if (dayInv)    dayInv.textContent    = invUnits;
+        if (dayRes)    dayRes.textContent    = resUnits;
+        if (dayNet)    dayNet.textContent    = netUnits;
+        if (dayNotes)  dayNotes.textContent  = notesText;
+
+        // Product / unit type / summary in side panel
+        if (dayProduct)  dayProduct.textContent  = meta.product_name        || '–';
+        if (dayUnitType) dayUnitType.textContent = meta.unit_type           || '–';
+        if (dayNotesDet) dayNotesDet.textContent = meta.reservation_summary || meta.notes || '–';
       };
 
       const isSameDay = (a, b) => (
@@ -2036,8 +2469,8 @@
 
       const renderMonth = () => {
         const firstOfMonth = new Date(currentYear, currentMonth - 1, 1);
-        const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-        const weekdayIndex = (firstOfMonth.getDay() + 6) % 7; // make Monday=0
+        const daysInMonth  = new Date(currentYear, currentMonth, 0).getDate();
+        const weekdayIndex = (firstOfMonth.getDay() + 6) % 7; // Monday=0
 
         if (monthLbl) {
           monthLbl.textContent = firstOfMonth.toLocaleDateString(undefined, {
@@ -2047,6 +2480,7 @@
 
         grid.innerHTML = '';
 
+        // leading blanks
         for (let i = 0; i < weekdayIndex; i++) {
           const empty = document.createElement('div');
           grid.appendChild(empty);
@@ -2056,18 +2490,18 @@
           const d = new Date(currentYear, currentMonth - 1, day);
           const key = dateKey(d);
           const meta = eventsMeta[key] || {};
-          const level = meta.level || meta.demand || 'normal';
+          const level = meta.level || meta.demand_level || 'normal';
 
           const btn = document.createElement('button');
           btn.type  = 'button';
           btn.dataset.date = key;
-          btn.className = 'flex flex-col items-center justify-center py-2 rounded-lg border text-xs cursor-pointer select-none transition bg-slate-900/80 border-slate-700 text-slate-200 hover:bg-slate-800';
+          btn.className = 'flex flex-col items-center justify-center py-2 rounded-lg border text-xs cursor-pointer select-none transition bg-white border-[var(--line)] text-[var(--ink)] hover:bg-[var(--hover)]';
 
-          let colorClass = 'bg-emerald-900/30 border-emerald-700/40 text-emerald-100';
-          if (level === 'high') {
-            colorClass = 'bg-amber-900/40 border-amber-600/50 text-amber-100';
-          } else if (level === 'low') {
-            colorClass = 'bg-sky-900/40 border-sky-600/50 text-sky-100';
+          let colorClass = 'bg-white border-[var(--line)]';
+          if (level === 'high' || level === 'forecast_high') {
+            colorClass = 'bg-[var(--brand-yellow-20)] border-[var(--brand-red-30)]';
+          } else if (level === 'forecast_medium') {
+            colorClass = 'bg-[#eff6ff] border-[#bfdbfe]';
           }
           btn.className += ' ' + colorClass;
 
@@ -2076,15 +2510,15 @@
           const isEnd   = selectedEnd   && isSameDay(d, selectedEnd);
 
           if (inRange) {
-            btn.className += ' ring-1 ring-blue-400/80 ring-offset-1 ring-offset-slate-950';
+            btn.className += ' ring-1 ring-blue-400/80 ring-offset-1 ring-offset-[var(--card)]';
           }
           if (isStart || isEnd) {
-            btn.className += ' font-semibold bg-blue-900/60 border-blue-400';
+            btn.className += ' font-semibold bg-[var(--brand-yellow)] text-[#1f2937] border-[var(--brand-red)]';
           }
 
           const weekdayLabel = d.toLocaleDateString(undefined, { weekday:'short' });
           btn.innerHTML = `
-            <span class="text-[11px] mb-0.5 text-slate-400">${weekdayLabel}</span>
+            <span class="text-[11px] mb-0.5 text-[var(--muted)]">${weekdayLabel}</span>
             <span class="text-sm font-semibold">${day}</span>
           `;
 
@@ -2103,14 +2537,13 @@
             updateRangeLabel();
             updateApplyState();
             updateDayDetails(d);
-            renderMonth(); // re-render to refresh highlight
+            renderMonth(); // refresh highlight
           });
 
           grid.appendChild(btn);
         }
       };
 
-      // Open/close
       const openModal = () => {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
@@ -2118,6 +2551,7 @@
         updateRangeLabel();
         updateApplyState();
       };
+
       const closeModal = () => {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
@@ -2156,13 +2590,16 @@
         selectedDay   = null;
         updateRangeLabel();
         updateApplyState();
-        if (dayTitle) dayTitle.textContent = 'Pick a day on the calendar';
-        if (dayBadges) dayBadges.innerHTML = '';
+        if (dayTitle)    dayTitle.textContent    = 'Pick a day on the calendar';
+        if (dayBadges)   dayBadges.innerHTML     = '';
         if (dayDemand)   dayDemand.textContent   = '–';
         if (dayInv)      dayInv.textContent      = '–';
         if (dayRes)      dayRes.textContent      = '–';
         if (dayNet)      dayNet.textContent      = '–';
-        if (dayNotes)    dayNotes.textContent    = 'Use the calendar on the left to inspect a day. High demand days are perfect for planning extra production and staffing.';
+        if (dayNotes)    dayNotes.textContent    = 'Use the calendar on the left to inspect a day. High or forecast demand days are ideal for planning extra production and staffing.';
+        if (dayProduct)  dayProduct.textContent  = '–';
+        if (dayUnitType) dayUnitType.textContent = '–';
+        if (dayNotesDet) dayNotesDet.textContent = '–';
         renderMonth();
       });
 
@@ -2178,16 +2615,57 @@
         window.location.href = url.toString();
       });
 
+      // "Add reservation for this day" → open reservation modal with prefilled date
+      if (openReservationButton) {
+        openReservationButton.addEventListener('click', () => {
+          const reservationModal = document.getElementById('reservationModal');
+          const dateInput = document.getElementById('reservation_date_input');
+          const dateLabel = document.getElementById('reservation_date_label');
+
+          // If no day selected yet, default to today
+          if (!selectedDay) {
+            selectedDay = new Date();
+            updateDayDetails(selectedDay);
+          }
+
+          const key = dateKey(selectedDay);
+
+          if (dateInput) {
+            dateInput.value = key;
+          }
+          if (dateLabel) {
+            dateLabel.value = selectedDay.toLocaleDateString(undefined, {
+              weekday:'long',
+              month:'long',
+              day:'2-digit',
+              year:'numeric'
+            });
+          }
+
+          if (reservationModal) {
+            reservationModal.classList.remove('hidden');
+            reservationModal.classList.add('flex');
+          }
+        });
+      }
+
       // Auto-open day details if filterStart exists
       if (selectedStart) {
         updateDayDetails(selectedStart);
       }
     }
 
-    /* ----------------------------------------
-     * 6. 3D TOGGLE (visual only)
-     * -------------------------------------- */
+    /* ============================================================
+     * 7. 3D TOGGLE (visual only)
+     * ============================================================ */
     function init3DControls() {
+      const toggle3D   = document.getElementById('toggle3D');
+      const depthRange = document.getElementById('depthRange');
+      const liftRange  = document.getElementById('liftRange');
+      const depthVal   = document.getElementById('depthVal');
+      const liftVal    = document.getElementById('liftVal');
+      const dot3d      = document.getElementById('dot3d');
+
       const update = () => {
         if (depthVal && depthRange) depthVal.textContent = depthRange.value;
         if (liftVal && liftRange)   liftVal.textContent  = liftRange.value;
@@ -2202,13 +2680,83 @@
       update();
     }
 
-    // Boot
+    /* ============================================================
+     * 8. RESERVATION TYPE PICKER (product → variants)
+     * ============================================================ */
+    function initReservationTypePicker() {
+      const modal = document.getElementById('reservationModal');
+      if (!modal) return;
+
+      const productSelect = modal.querySelector('select[name="product_id"]');
+      const typeSelect    = document.getElementById('reservation_type_select');
+      if (!productSelect || !typeSelect) return;
+
+      const defaultLabel = 'Select type or variant (optional)';
+
+      const resetTypeOptions = () => {
+        typeSelect.innerHTML = '';
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = defaultLabel;
+        typeSelect.appendChild(opt);
+      };
+
+      resetTypeOptions();
+
+      const loadTypes = (productId) => {
+        if (!typesApiUrl || !productId) {
+          resetTypeOptions();
+          typeSelect.disabled = !productId;
+          return;
+        }
+
+        typeSelect.disabled = true;
+
+        fetch(typesApiUrl + '?product_id=' + encodeURIComponent(productId))
+          .then(res => res.ok ? res.json() : Promise.reject())
+          .then(data => {
+            resetTypeOptions();
+            const list = (data && Array.isArray(data.list)) ? data.list : [];
+
+            list.forEach(label => {
+              const opt = document.createElement('option');
+              opt.value = label;
+              opt.textContent = label;
+              typeSelect.appendChild(opt);
+            });
+
+            typeSelect.disabled = false;
+          })
+          .catch(() => {
+            // fail gracefully
+            resetTypeOptions();
+            typeSelect.disabled = false;
+          });
+      };
+
+      productSelect.addEventListener('change', (e) => {
+        const productId = e.target.value;
+        loadTypes(productId);
+      });
+
+      // If a product might be preselected
+      if (productSelect.value) {
+        loadTypes(productSelect.value);
+      }
+    }
+
+    /* ============================================================
+     * 9. BOOT EVERYTHING
+     * ============================================================ */
     initCharts();
     initModelInfoModal();
     initSidebar();
+    initReservationModal();
     initDemandCalendar();
     init3DControls();
+    initReservationTypePicker();
   });
-  </script>
+</script>
+
 </body>
 </html>

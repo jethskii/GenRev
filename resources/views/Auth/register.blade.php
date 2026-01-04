@@ -296,7 +296,6 @@
                 aria-invalid="@error('role') true @else false @enderror"
                 aria-describedby="@error('role') roleHelp @enderror">
           <option value="" disabled {{ old('role') ? '' : 'selected' }}>Select a role</option>
-          <option value="masters admin" {{ old('role')==='masters admin'?'selected':'' }}>Masters Admin</option>
           <option value="production manager" {{ old('role')==='production manager'?'selected':'' }}>Production Manager</option>
           <option value="sales" {{ old('role')==='sales'?'selected':'' }}>Sales</option>
           <option value="inventory" {{ old('role')==='inventory'?'selected':'' }}>Inventory</option>

@@ -343,7 +343,7 @@
         {{-- Customer + Notes --}}
         <div class="grid-2">
           <div>
-            <label class="label" for="customer_name">Customer (optional)</label>
+            <label class="label" for="customer_name">Customers Name (optional)</label>
             <input type="text" name="customer_name" id="customer_name" class="input"
                    value="{{ $sale->customer_name }}" data-initial="{{ $sale->customer_name }}">
           </div>

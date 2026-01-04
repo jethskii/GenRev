@@ -12,21 +12,20 @@
 
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inria+Sans:wght@300;400;700&display=swap" rel="stylesheet">
-  {{-- Added: fonts used by Appearance (no removal) --}}
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Jost:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   @yield('head')
   @stack('head')
 
-  {{-- Added: read per-user appearance (kept everything else) --}}
   @php
-    $g = $appearanceGlobals ?? ['theme'=>'light','accent'=>'#3b82f6','font_style'=>'default'];
-    $__fontFamily = $g['font_style']==='rounded'
+    $g = $appearanceGlobals ?? ['theme' => 'light', 'accent' => '#3b82f6', 'font_style' => 'default'];
+    $__fontFamily = $g['font_style'] === 'rounded'
         ? 'Jost'
-        : ($g['font_style']==='mono' ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'Inter');
+        : ($g['font_style'] === 'mono'
+            ? 'ui-monospace, SFMono-Regular, Menlo, monospace'
+            : 'Inter');
   @endphp
 
-  {{-- Added: apply accent early (kept your original style below) --}}
   <style>
     :root { --accent: {{ $g['accent'] }}; }
   </style>
@@ -45,53 +44,151 @@
       --sidebar-bg:rgba(255,255,255,0.08); --sidebar-hover:rgba(255,255,255,0.12); --sidebar-active:#0f172a; --brand-pill:#91EAAF;
     }
     html,body{height:100%}
-    body{min-height:100vh;font-family:'Inria Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text);background:var(--bg-page);overflow-x:hidden}
-    .card{background:var(--bg-card);border:1px solid var(--line);border-radius:1rem;box-shadow:0 8px 20px rgba(0,0,0,.05)}
-    .header-bar{background:#fff;border-bottom:1px solid var(--line);position:relative}
-    .header-bar::after{content:'';position:absolute;left:0;bottom:0;height:3px;width:100%;background:linear-gradient(90deg,var(--accent-red),var(--accent-green))}
-    .sidebar{background:var(--sidebar-bg);border-right:1px solid var(--line);color:var(--text)}
-    .nav-link{display:block;padding:.75rem 1.5rem;border-radius:9999px 0 0 9999px;transition:background-color .2s,color .2s;color:var(--text)}
+    body{
+      min-height:100vh;
+      font-family: {{ $__fontFamily }}, system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      color:var(--text);
+      background:var(--bg-page);
+      overflow-x:hidden;
+    }
+    .card{
+      background:var(--bg-card);
+      border:1px solid var(--line);
+      border-radius:1rem;
+      box-shadow:0 8px 20px rgba(0,0,0,.05)
+    }
+    .header-bar{
+      background:#fff;
+      border-bottom:1px solid var(--line);
+      position:relative
+    }
+    .header-bar::after{
+      content:'';
+      position:absolute;
+      left:0;
+      bottom:0;
+      height:3px;
+      width:100%;
+      background:linear-gradient(90deg,var(--accent-red),var(--accent-green))
+    }
+    .sidebar{
+      background:var(--sidebar-bg);
+      border-right:1px solid var(--line);
+      color:var(--text)
+    }
+    .nav-link{
+      display:block;
+      padding:.75rem 1.5rem;
+      border-radius:9999px 0 0 9999px;
+      transition:background-color .2s,color .2s;
+      color:var(--text)
+    }
     .nav-link:hover{background:var(--sidebar-hover)}
-    .nav-active{background:var(--sidebar-active);color:#991b1b;font-weight:700;position:relative}
-    .nav-active::before{content:'';position:absolute;left:0;top:0;height:100%;width:4px;border-radius:0 4px 4px 0;background:var(--accent-green)}
-    .btn{font-weight:600;border-radius:.75rem;padding:.5rem .9rem;border:1px solid transparent}
+    .nav-active{
+      background:var(--sidebar-active);
+      color:#991b1b;
+      font-weight:700;
+      position:relative
+    }
+    .nav-active::before{
+      content:'';
+      position:absolute;
+      left:0;
+      top:0;
+      height:100%;
+      width:4px;
+      border-radius:0 4px 4px 0;
+      background:var(--accent-green)
+    }
+    .btn{
+      font-weight:600;
+      border-radius:.75rem;
+      padding:.5rem .9rem;
+      border:1px solid transparent
+    }
     .btn:disabled{opacity:.6;cursor:not-allowed}
-    .btn-primary{background:var(--accent-red);color:#fff;box-shadow:0 6px 14px rgba(239,68,68,.25)}
+    .btn-primary{
+      background:var(--accent-red);
+      color:#fff;
+      box-shadow:0 6px 14px rgba(239,68,68,.25)
+    }
     .btn-primary:hover{filter:brightness(1.05)}
-    .btn-secondary-green{background:#ecfdf5;color:#065f46;border-color:#a7f3d0;border-width:1px}
+    .btn-secondary-green{
+      background:#ecfdf5;
+      color:#065f46;
+      border-color:#a7f3d0;
+      border-width:1px
+    }
     .btn-secondary-green:hover{background:#d1fae5}
-    .btn-secondary-blue{background:#eff6ff;color:#1e40af;border-color:#bfdbfe;border-width:1px}
+    .btn-secondary-blue{
+      background:#eff6ff;
+      color:#1e40af;
+      border-color:#bfdbfe;
+      border-width:1px
+    }
     .btn-secondary-blue:hover{background:#dbeafe}
-    .btn-ghost{background:#f3f4f6;color:#374151;border:1px solid var(--line)}
+    .btn-ghost{
+      background:#f3f4f6;
+      color:#374151;
+      border:1px solid var(--line)
+    }
     .btn-ghost:hover{background:#e5e7eb}
-    .dropdown{background:#fff;color:var(--text);border:1px solid var(--line);box-shadow:0 16px 32px rgba(0,0,0,.08);border-radius:.75rem;overflow:hidden}
-    @media (max-width:1024px){aside{position:fixed;z-index:50;transform:translateX(-100%);transition:transform .3s ease}aside.open{transform:translateX(0)}}
+    .dropdown{
+      background:#fff;
+      color:var(--text);
+      border:1px solid var(--line);
+      box-shadow:0 16px 32px rgba(0,0,0,.08);
+      border-radius:.75rem;
+      overflow:hidden
+    }
+    @media (max-width:1024px){
+      aside{
+        position:fixed;
+        z-index:50;
+        transform:translateX(-100%);
+        transition:transform .3s ease
+      }
+      aside.open{transform:translateX(0)}
+    }
     .chart-palette{--c1:var(--chart-1);--c2:var(--chart-2);--c3:var(--chart-3);--c4:var(--chart-4)}
-    .skip-link{position:absolute;left:50%;transform:translateX(-50%);top:-40px;background:#000;color:#fff;padding:.5rem .75rem;border-radius:.5rem;transition:top .2s ease;z-index:100}
+    .skip-link{
+      position:absolute;
+      left:50%;
+      transform:translateX(-50%);
+      top:-40px;
+      background:#000;
+      color:#fff;
+      padding:.5rem .75rem;
+      border-radius:.5rem;
+      transition:top .2s ease;
+      z-index:100
+    }
     .skip-link:focus{top:.5rem;outline:2px solid var(--accent-green)}
-    :where(a,button,[role="menuitem"],.nav-link,.btn):focus{outline:2px solid var(--accent-green);outline-offset:2px}
-  </style>
-
-  {{-- Added: override font-family based on per-user font_style (non-breaking) --}}
-  <style>
-    body { font-family: {{ $__fontFamily }}, system-ui, -apple-system, Segoe UI, Roboto, sans-serif !important; }
+    :where(a,button,[role="menuitem"],.nav-link,.btn):focus{
+      outline:2px solid var(--accent-green);
+      outline-offset:2px
+    }
   </style>
 
   @yield('styles')
   @stack('styles')
 
-  {{-- Added: apply theme before paint to prevent flash (keeps your dark-mode class logic) --}}
   <script>
+    // Apply theme as early as possible to avoid flash
     (function(){
       try{
-        var cfg = @json($g);
+        var cfg   = @json($g);
         var theme = cfg.theme || 'light';
         if(theme === 'system'){
-          theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
         }
         if(theme === 'dark'){
           document.documentElement.classList.add('js-applied-dark');
-          document.addEventListener('DOMContentLoaded', function(){ document.body.classList.add('dark-mode'); });
+          document.addEventListener('DOMContentLoaded', function(){
+            document.body.classList.add('dark-mode');
+          });
         }
       }catch(e){}
     })();
@@ -104,52 +201,51 @@
   {{-- SIMPLE/AUTH MODE: no header/sidebar; supports a background layer --}}
   @if (View::hasSection('simple') || View::hasSection('auth_page'))
     <div class="relative min-h-screen">
-      {{-- Optional background (e.g., your video) --}}
       @yield('background')
+
       <main id="main" class="relative min-h-screen flex items-center justify-center p-6" role="main">
         @yield('content')
       </main>
     </div>
   @else
+    @php
+      $user = Auth::user();
+
+      $modules = [];
+      if ($user) {
+          $modules = method_exists($user, 'allowedModules') ? (array) ($user->allowedModules() ?? []) : [];
+          if (empty($modules)) {
+              $role = \Illuminate\Support\Str::lower((string) ($user->role ?? ''));
+              $fallback = [
+                'masters admin'      => ['dashboard','materials','production','sales','inventory','products','employee','settings'],
+                'production manager' => ['dashboard','production','products','settings'],
+                'sales'              => ['dashboard','sales','settings'],
+                'inventory'          => ['dashboard','inventory','materials','products','settings'],
+              ];
+              $modules = $fallback[$role] ?? ['dashboard','settings'];
+          }
+      } else {
+          $modules = ['dashboard'];
+      }
+
+      $can  = fn(string $m) => in_array($m, $modules, true);
+      $isOn = fn($patterns) => request()->routeIs(...(array) $patterns);
+      $cls  = fn($patterns) => $isOn($patterns) ? 'nav-active' : '';
+      $aria = fn($patterns) => $isOn($patterns) ? 'aria-current=page' : '';
+
+      $roleRaw   = (string) ($user->role ?? 'masters admin');
+      $roleLower = \Illuminate\Support\Str::lower($roleRaw);
+
+      // Only Masters Admin and Production Manager can see Archive
+      $canSeeArchive = in_array($roleLower, ['masters admin', 'production manager'], true);
+
+      $roleLabel = \Illuminate\Support\Str::headline(
+        \Illuminate\Support\Str::lower((string) ($user->role ?? 'masters admin'))
+      );
+    @endphp
+
     <div class="flex min-h-screen overflow-hidden">
       <!-- Sidebar -->
-      @php
-        $user = Auth::user();
-
-        // Resolve modules (prefer model method; fallback so links never vanish)
-        $modules = [];
-        if ($user) {
-            $modules = method_exists($user, 'allowedModules') ? (array) ($user->allowedModules() ?? []) : [];
-            if (empty($modules)) {
-                $role = \Illuminate\Support\Str::lower((string) ($user->role ?? ''));
-                $fallback = [
-                  'masters admin'      => ['dashboard','materials','production','sales','inventory','products','employee','settings'],
-                  'production manager' => ['dashboard','production','products','settings'],
-                  'sales'              => ['dashboard','sales','settings'],
-                  'inventory'          => ['dashboard','inventory','materials','products','settings'],
-                ];
-                $modules = $fallback[$role] ?? ['dashboard','settings'];
-            }
-        } else {
-            $modules = ['dashboard'];
-        }
-
-        $can  = fn(string $m) => in_array($m, $modules, true);
-        $isOn = fn($patterns) => request()->routeIs(...(array)$patterns);
-        $cls  = fn($patterns) => $isOn($patterns) ? 'nav-active' : '';
-        $aria = fn($patterns) => $isOn($patterns) ? 'aria-current=page' : '';
-
-        $roleRaw   = (string) ($user->role ?? 'masters admin');
-        $roleLower = \Illuminate\Support\Str::lower($roleRaw);
-
-        // Only Masters Admin and Production Manager can see Archive
-        $canSeeArchive = in_array($roleLower, ['masters admin', 'production manager'], true);
-
-        $roleLabel = \Illuminate\Support\Str::headline(
-          \Illuminate\Support\Str::lower((string) ($user->role ?? 'masters admin'))
-        );
-      @endphp
-
       <aside id="sidebar" class="w-64 sidebar flex-shrink-0 flex flex-col" aria-label="Primary">
         <!-- Sidebar Brand with Logo -->
         <div class="px-6 py-5 border-b flex items-center justify-between" style="border-color:var(--line)">
@@ -182,7 +278,7 @@
           </div>
         </div>
 
-        {{-- ===== Role-aware NAV (with fallback) ===== --}}
+        {{-- NAV --}}
         <nav class="flex-1 mt-4 space-y-1 text-sm font-medium" role="navigation">
           @if($can('dashboard'))
             <a href="{{ route('dashboard') }}" class="nav-link {{ $cls(['dashboard','dashboard*']) }}" {{ $aria(['dashboard','dashboard*']) }}>Dashboard</a>
@@ -192,7 +288,6 @@
           @if($can('production'))
             <a href="{{ route('production.index') }}" class="nav-link {{ $cls('production.*') }}" {{ $aria('production.*') }}>Production</a>
 
-            {{-- Archive visible only to Masters Admin and Production Manager --}}
             @if($canSeeArchive)
               <a href="{{ route('production.archived') }}"
                  class="nav-link {{ $cls('production.archived') }}"
@@ -204,7 +299,7 @@
           @endif
 
           @if($can('sales'))
-            <a href="{{ route('sales.index') }}" class="nav-link {{ $cls('sales.*') }}" {{ $aria('sales.*') }}">Sales</a>
+            <a href="{{ route('sales.index') }}" class="nav-link {{ $cls('sales.*') }}" {{ $aria('sales.*') }}>Sales</a>
           @endif
 
           @if($can('inventory'))
@@ -248,14 +343,13 @@
           </div>
 
           <div class="flex items-center gap-4">
-            {{-- Archive button visible only to Masters Admin and Production Manager --}}
             @if($canSeeArchive)
               <a href="{{ route('production.archived') }}"
                  class="btn btn-secondary-green"
                  title="View archived production orders">
                 Archive
               </a>
-            @endif>
+            @endif
 
             <!-- Theme Toggle -->
             <div class="relative" title="Toggle Light/Dark Mode">
@@ -309,36 +403,56 @@
   <script>
     (function () {
       const byId = (id) => document.getElementById(id);
-      function openDialog(dlg){ if(!dlg) return; try{ dlg.showModal(); }catch{ dlg.setAttribute('open','open'); } }
-      function closeDialog(dlg){ if(!dlg) return; try{ dlg.close(); }catch{ dlg.removeAttribute('open'); } }
+
+      function openDialog(dlg){
+        if(!dlg) return;
+        try{ dlg.showModal(); }catch{ dlg.setAttribute('open','open'); }
+      }
+      function closeDialog(dlg){
+        if(!dlg) return;
+        try{ dlg.close(); }catch{ dlg.removeAttribute('open'); }
+      }
 
       const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
       window.csrfFetch = (url, opts = {}) => {
         const headers = new Headers(opts.headers || {});
         if (!headers.has('X-Requested-With')) headers.set('X-Requested-With', 'XMLHttpRequest');
-        if (!headers.has('X-CSRF-TOKEN')) headers.set('X-CSRF-TOKEN', token || '');
-        if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+        if (!headers.has('X-CSRF-TOKEN'))   headers.set('X-CSRF-TOKEN', token || '');
+        if (!headers.has('Accept'))         headers.set('Accept', 'application/json');
         return fetch(url, { credentials: 'same-origin', ...opts, headers });
       };
 
       document.addEventListener('click', (e) => {
-        const openTarget = e.target.closest?.('[data-open]');
+        const openTarget  = e.target.closest?.('[data-open]');
         const closeTarget = e.target.closest?.('[data-close]');
         const clickedDialogShell = e.target instanceof Element && e.target.matches('dialog[open]');
-        if (openTarget){ openDialog(byId(openTarget.getAttribute('data-open'))); e.preventDefault(); e.stopPropagation(); return; }
-        if (closeTarget){ closeDialog(closeTarget.closest('dialog')); e.preventDefault(); e.stopPropagation(); return; }
-        if (clickedDialogShell){ closeDialog(e.target); e.preventDefault(); e.stopPropagation(); }
+
+        if (openTarget){
+          openDialog(byId(openTarget.getAttribute('data-open')));
+          e.preventDefault(); e.stopPropagation(); return;
+        }
+        if (closeTarget){
+          closeDialog(closeTarget.closest('dialog'));
+          e.preventDefault(); e.stopPropagation(); return;
+        }
+        if (clickedDialogShell){
+          closeDialog(e.target);
+          e.preventDefault(); e.stopPropagation();
+        }
       }, { capture:true });
 
       document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') document.querySelectorAll('dialog[open]').forEach(closeDialog);
+        if (e.key === 'Escape') {
+          document.querySelectorAll('dialog[open]').forEach(closeDialog);
+        }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'enter') {
-          const openDlg = document.querySelector('dialog[open]'); openDlg?.querySelector('form')?.requestSubmit();
+          const openDlg = document.querySelector('dialog[open]');
+          openDlg?.querySelector('form')?.requestSubmit();
         }
       });
 
       // User dropdown
-      const userMenuBtn = byId('userMenuButton');
+      const userMenuBtn  = byId('userMenuButton');
       const userDropdown = byId('userDropdown');
       userMenuBtn?.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -360,19 +474,30 @@
 
       // Theme toggle (persist + label)
       const themeToggle = byId('themeToggle');
-      const themeLabel = byId('themeLabel');
-      const setLabel = () => themeLabel && (themeLabel.textContent = document.body.classList.contains('dark-mode') ? 'Dark' : 'Light');
+      const themeLabel  = byId('themeLabel');
+      const setLabel = () => {
+        if (!themeLabel) return;
+        themeLabel.textContent = document.body.classList.contains('dark-mode') ? 'Dark' : 'Light';
+      };
 
       const saved = localStorage.getItem('theme');
-      if (saved === 'dark'){ document.body.classList.add('dark-mode'); themeToggle && (themeToggle.checked = true); }
+      if (saved === 'dark'){
+        document.body.classList.add('dark-mode');
+        if (themeToggle) themeToggle.checked = true;
+      }
       setLabel();
 
       themeToggle?.addEventListener('change', function(){
-        if (this.checked){ document.body.classList.add('dark-mode'); localStorage.setItem('theme','dark'); }
-        else { document.body.classList.remove('dark-mode'); localStorage.setItem('theme','light'); }
+        if (this.checked){
+          document.body.classList.add('dark-mode');
+          localStorage.setItem('theme','dark');
+        } else {
+          document.body.classList.remove('dark-mode');
+          localStorage.setItem('theme','light');
+        }
         setLabel();
 
-        // Added: sync with per-user appearance if route exists
+        // sync with per-user appearance if route exists
         try {
           const cfg = @json($g);
           const data = new URLSearchParams({
@@ -380,8 +505,10 @@
             accent: cfg.accent || '#3b82f6',
             font_style: cfg.font_style || 'default'
           });
-          // Fire-and-forget
-          window.csrfFetch("{{ route('settings.appearance.update') }}", { method: 'POST', body: data }).catch(()=>{});
+          window.csrfFetch("{{ route('settings.appearance.update') }}", {
+            method: 'POST',
+            body: data
+          }).catch(()=>{});
         } catch(e) {}
       });
 

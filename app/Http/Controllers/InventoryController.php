@@ -342,24 +342,69 @@ class InventoryController extends Controller
     }
 
     /**
-     * Export filtered products as PDF (tabular inventory snapshot).
+     * Export full inventory dashboard as PDF (KPIs + products + batches + materials).
      * View: resources/views/inventory/export_pdf.blade.php
      */
     public function exportPdf(Request $request)
     {
-        $q   = trim((string) $request->get('q', ''));
-        $cat = $request->get('cat');
+        $q         = trim((string) $request->get('q', ''));
+        $cat       = $request->get('cat');
+        $lowThresh = (float) $request->get('low_material_threshold', 5.0);
 
-        // Same filters as index
+        $hasSalesOrderTbl     = Schema::hasTable('sales_orders');
+        $hasSalesOrderItemTbl = Schema::hasTable('sales_order_items');
+        $hasSaleTbl           = Schema::hasTable('sales');
+
+        /* ========================= KPIs ========================= */
+
+        $totalProducts        = (int) Product::count();
+        $totalMaterialsWeight = (float) (Material::sum('quantity_kg') ?? 0.0);
+
+        // Sales count (orders or rows)
+        if ($hasSalesOrderTbl) {
+            $totalSales = (int) DB::table('sales_orders')->whereNull('deleted_at')->count();
+        } elseif ($hasSaleTbl) {
+            $totalSales = (int) DB::table('sales')->whereNull('deleted_at')->count();
+        } else {
+            $totalSales = 0;
+        }
+
+        // Revenue (prefer items.total_price; fallback to qty*price)
+        if ($hasSalesOrderItemTbl) {
+            $totalRevenue = (float) (DB::table('sales_order_items')
+                ->whereNull('deleted_at')
+                ->selectRaw('SUM(COALESCE(total_price, (COALESCE(quantity,0) * COALESCE(unit_price,0)))) as rev')
+                ->value('rev') ?? 0.0);
+        } elseif ($hasSaleTbl) {
+            // legacy: prefer total_price, then total, then qty*price
+            $totalRevenue = (float) (DB::table('sales')
+                ->whereNull('deleted_at')
+                ->selectRaw('SUM(COALESCE(total_price, COALESCE(total, (COALESCE(quantity_kg, quantity, 0) * COALESCE(unit_price, price, 0))))) as rev')
+                ->value('rev') ?? 0.0);
+        } else {
+            $totalRevenue = 0.0;
+        }
+
+        // Batch counts
+        $batchesQuery         = Production::query()->whereNull('deleted_at');
+        $batchesInProduction  = (int) (clone $batchesQuery)->count();
+        $batchesReleased      = (int) (clone $batchesQuery)->where('current_inventory', '>', 0)->count();
+        $batchesExpiringSoon  = (int) (clone $batchesQuery)
+            ->whereDate('expiration_date', '<=', now()->addDays(7)->toDateString())
+            ->count();
+
+        /* ==================== Product listing ==================== */
+
         $productsBase = Product::query()
             ->when($q,   fn($qq) => $qq->where('product_name', 'like', "%{$q}%"))
             ->when($cat, fn($qq) => $qq->where('category', $cat))
             ->orderBy('product_name');
 
+        // For PDF we want the full list, not paginated
         $products   = $productsBase->get();
         $productIds = $products->pluck('id');
 
-        // Available stock
+        // Available stock (kg) = live batch balance sum per product
         $batchBalances = Production::query()
             ->whereNull('deleted_at')
             ->whereIn('product_id', $productIds)
@@ -372,12 +417,101 @@ class InventoryController extends Controller
             return $p;
         });
 
+        /* ==================== Materials list ===================== */
+
+        $hasNameCol = Schema::hasColumn('materials', 'name');
+        $materials = Material::query()
+            ->when($q, function ($qq) use ($q, $hasNameCol) {
+                $qq->where(function ($w) use ($q, $hasNameCol) {
+                    $w->where('material_name', 'like', "%{$q}%");
+                    if ($hasNameCol) {
+                        $w->orWhere('name', 'like', "%{$q}%");
+                    }
+                });
+            })
+            ->orderBy('quantity_kg')
+            ->get();
+
+        /* ===================== Expiry / recent ==================== */
+
+        $expiringSoon = Production::whereNull('deleted_at')
+            ->whereDate('expiration_date', '<=', now()->addDays(7)->toDateString())
+            ->orderBy('expiration_date')
+            ->with('product:id,product_name')
+            ->limit(20)
+            ->get();
+
+        $recentBatches = Production::with('product:id,product_name')
+            ->whereNull('deleted_at')
+            ->orderByDesc('production_date')
+            ->orderByDesc('id')
+            ->limit(20)
+            ->get()
+            ->map(function (Production $b) {
+                $b->batch_code     = $b->batch_number;
+                $b->produced_at    = $b->production_date;
+                $b->expiry_date    = $b->expiration_date;
+                $b->qty_total      = (float) ($b->quantity ?? 0);
+                $b->qty_available  = (float) ($b->current_inventory ?? 0);
+                $b->status         = $b->qty_available > 0 ? 'RELEASED' : 'CREATED';
+                $b->available_pack = (int) ($b->available_pack ?? 0);
+                $b->available_bag  = (int) ($b->available_bag ?? 0);
+                return $b;
+            });
+
+        /* ===================== Material usage ===================== */
+
+        $start = Carbon::now()->startOfWeek()->toDateString();
+        $end   = Carbon::now()->endOfWeek()->toDateString();
+        $materialsUsage = $this->inventory->materialUsage($start, $end);
+        $materialsUsageTotals = [
+            'qty'  => (float) ($materialsUsage->sum('qty_used') ?? 0),
+            'cost' => (float) ($materialsUsage->sum('cost_used') ?? 0),
+        ];
+
+        /* ===================== Forecast badges ==================== */
+
         $stockForecasting = $this->buildStockForecasting($products);
-        $forecastMap      = collect($stockForecasting)->keyBy('product_id');
+
+        /* ===================== Production alarms ================== */
+
+        $productionAlarms = [];
+        foreach ($expiringSoon as $b) {
+            $dte = property_exists($b, 'days_to_expiry') || isset($b->days_to_expiry)
+                ? $b->days_to_expiry
+                : (isset($b->expiration_date)
+                    ? Carbon::now()->diffInDays($b->expiration_date, false)
+                    : null);
+
+            $sev  = ($dte !== null && $dte <= 3) ? 'critical' : 'warning';
+            $left = $dte !== null ? $dte : 'N/A';
+
+            $productionAlarms[] = [
+                'severity' => $sev,
+                'message'  => "{$b->product?->product_name} ({$b->batch_number}) expiring in {$left} day(s).",
+            ];
+        }
 
         $pdf = Pdf::loadView('inventory.export_pdf', [
-            'products'      => $products,
-            'forecastMap'   => $forecastMap,
+            'search'               => $q,
+            'lowThresh'            => $lowThresh,
+
+            'products'             => $products,
+            'materials'            => $materials,
+            'recentBatches'        => $recentBatches,
+            'expiringSoon'         => $expiringSoon,
+            'materialsUsage'       => $materialsUsage,
+            'materialsUsageTotals' => $materialsUsageTotals,
+            'stockForecasting'     => $stockForecasting,
+            'productionAlarms'     => $productionAlarms,
+
+            'totalProducts'        => $totalProducts,
+            'totalMaterialsWeight' => $totalMaterialsWeight,
+            'totalSales'           => $totalSales,
+            'totalRevenue'         => $totalRevenue,
+            'batchesInProduction'  => $batchesInProduction,
+            'batchesReleased'      => $batchesReleased,
+            'batchesExpiringSoon'  => $batchesExpiringSoon,
         ])->setPaper('a4', 'landscape');
 
         $fileName = 'inventory_' . now()->format('Ymd_His') . '.pdf';

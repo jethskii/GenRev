@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Models\Product;
 use App\Models\Material;
+use App\Models\Product;
 use App\Models\ProductRecipe;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Intervention\Image\Laravel\Facades\Image;
 
@@ -19,7 +19,9 @@ class ProductController extends Controller
 {
     /* ============================== LIST / SHOW ============================== */
 
-    /** Products index with filters, sort, and pagination (with latest production snapshot). */
+    /**
+     * Products index with filters, sort, and pagination (with latest production snapshot).
+     */
     public function index(Request $request)
     {
         $perPage  = max(1, (int) $request->integer('per_page', 10));
@@ -94,13 +96,16 @@ class ProductController extends Controller
             ]);
         }
 
+        // You are reusing the 'production' view here – intentional
         return view('production', [
             'products' => $products,
             'search'   => $search,
         ]);
     }
 
-    /** Single product page with batches, recipe, variants. */
+    /**
+     * Single product page with batches, recipe, variants.
+     */
     public function show(Product $product, Request $request)
     {
         $product->load([
@@ -162,14 +167,19 @@ class ProductController extends Controller
             return response()->json(['ok' => true, 'product' => $product->fresh()], 201);
         }
 
-        return redirect()->route('products.show', $product)->with('success', 'Product created.');
+        return redirect()
+            ->route('products.show', $product)
+            ->with('success', 'Product created.');
     }
 
     public function edit(Product $product)
     {
         return view('products.edit', [
             'product'       => $product,
-            'parents'       => Product::roots()->where('id', '<>', $product->id)->orderBy('product_name')->get(['id', 'product_name']),
+            'parents'       => Product::roots()
+                ->where('id', '<>', $product->id)
+                ->orderBy('product_name')
+                ->get(['id', 'product_name']),
             'categories'    => Product::query()->whereNotNull('category')->distinct()->orderBy('category')->pluck('category'),
             'unitOptions'   => ['kg' => 'Kilograms', 'pcs' => 'Pieces', 'lt' => 'Liters'],
             'statusOptions' => ['active' => 'Active', 'inactive' => 'Inactive', 'pending' => 'Pending', 'on_sale' => 'On Sale'],
@@ -180,6 +190,7 @@ class ProductController extends Controller
     {
         $data = $this->validateProduct($request, $product->id);
 
+        // Prevent self-parenting
         if (!empty($data['parent_id']) && (int) $data['parent_id'] === (int) $product->id) {
             unset($data['parent_id']);
         }
@@ -195,7 +206,9 @@ class ProductController extends Controller
             return response()->json(['ok' => true, 'product' => $product->fresh()]);
         }
 
-        return redirect()->route('products.show', $product)->with('success', 'Product updated.');
+        return redirect()
+            ->route('products.show', $product)
+            ->with('success', 'Product updated.');
     }
 
     /**
@@ -230,7 +243,10 @@ class ProductController extends Controller
 
             return redirect($redirectUrl)->with('success', 'Product archived.');
         } catch (\Throwable $e) {
-            Log::error('ARCHIVE FAILED', ['id' => $product->id, 'error' => $e->getMessage()]);
+            Log::error('ARCHIVE FAILED', [
+                'id'    => $product->id,
+                'error' => $e->getMessage(),
+            ]);
 
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['ok' => false, 'error' => 'Archive failed'], 500);
@@ -250,7 +266,9 @@ class ProductController extends Controller
         if ($name === '') {
             return $request->wantsJson()
                 ? response()->json(['ok' => false, 'message' => 'Product name is required'], 422)
-                : back()->withErrors(['name' => 'Product name is required'])->withInput();
+                : back()
+                    ->withErrors(['product_name' => 'Product name is required'])
+                    ->withInput();
         }
 
         $validated = $request->validate([
@@ -261,9 +279,12 @@ class ProductController extends Controller
 
         if (Product::where('product_name', $name)->exists()) {
             $msg = 'Product name already exists.';
+
             return $request->wantsJson()
                 ? response()->json(['ok' => false, 'message' => $msg], 422)
-                : back()->withErrors(['name' => $msg])->withInput();
+                : back()
+                    ->withErrors(['product_name' => $msg])
+                    ->withInput();
         }
 
         $product = Product::create([
@@ -332,6 +353,7 @@ class ProductController extends Controller
                     'quantity_per_unit'   => $qty,
                     'wastage_pct'         => $wst,
                 ];
+
                 if (!is_null($unt)) {
                     $payload['unit'] = $unt;
                 }
@@ -377,6 +399,7 @@ class ProductController extends Controller
         if ((int) $line->product_id !== (int) $product->id) {
             abort(404);
         }
+
         $line->delete();
 
         if ($request->ajax() || $request->wantsJson()) {
@@ -414,24 +437,24 @@ class ProductController extends Controller
     protected function validateProduct(Request $request, ?int $productId = null): array
     {
         $rules = [
-            'parent_id'          => ['nullable', 'integer', Rule::exists('products', 'id')->whereNull('deleted_at')],
-            'product_name'       => ['required', 'string', 'max:255', Rule::unique('products', 'product_name')->ignore($productId)],
-            'category'           => ['nullable', 'string', 'max:100'],
-            'unit'               => ['nullable', Rule::in(['kg', 'pcs', 'lt'])],
-            'status'             => ['nullable', Rule::in(['active', 'inactive', 'pending', 'on_sale'])],
-            'default_price'      => ['nullable', 'numeric', 'min:0'],
-            'shelf_life_days'    => ['nullable', 'integer', 'min:0'],
-            'yield_rate'         => ['nullable', 'numeric', 'min:0', 'max:100'],
-            'standard_batch_size'=> ['nullable', 'numeric', 'min:0'],
-            'lead_time_days'     => ['nullable', 'integer', 'min:0'],
-            'min_run_qty'        => ['nullable', 'numeric', 'min:0'],
-            'max_run_qty'        => ['nullable', 'numeric', 'min:0'],
-            'storage_zone'       => ['nullable', Rule::in(['chiller', 'freezer', 'ambient'])],
-            'unit_cost'          => ['nullable', 'numeric', 'min:0'],
-            'last_cost_date'     => ['nullable', 'date'],
-            'temp_requirements'  => ['nullable', 'string', 'max:2000'],
-            'line_constraints'   => ['nullable'],
-            'image'              => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
+            'parent_id'           => ['nullable', 'integer', Rule::exists('products', 'id')->whereNull('deleted_at')],
+            'product_name'        => ['required', 'string', 'max:255', Rule::unique('products', 'product_name')->ignore($productId)],
+            'category'            => ['nullable', 'string', 'max:100'],
+            'unit'                => ['nullable', Rule::in(['kg', 'pcs', 'lt'])],
+            'status'              => ['nullable', Rule::in(['active', 'inactive', 'pending', 'on_sale'])],
+            'default_price'       => ['nullable', 'numeric', 'min:0'],
+            'shelf_life_days'     => ['nullable', 'integer', 'min:0'],
+            'yield_rate'          => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'standard_batch_size' => ['nullable', 'numeric', 'min:0'],
+            'lead_time_days'      => ['nullable', 'integer', 'min:0'],
+            'min_run_qty'         => ['nullable', 'numeric', 'min:0'],
+            'max_run_qty'         => ['nullable', 'numeric', 'min:0'],
+            'storage_zone'        => ['nullable', Rule::in(['chiller', 'freezer', 'ambient'])],
+            'unit_cost'           => ['nullable', 'numeric', 'min:0'],
+            'last_cost_date'      => ['nullable', 'date'],
+            'temp_requirements'   => ['nullable', 'string', 'max:2000'],
+            'line_constraints'    => ['nullable'],
+            'image'               => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
         ];
 
         if (Schema::hasColumn('products', 'product_code')) {
@@ -443,21 +466,15 @@ class ProductController extends Controller
             ];
         }
 
-        return $request->validate($rules);
+        return $request->validate(
+            $rules,
+            [
+                'product_name.required' => 'The product name field is required.',
+            ]
+        );
     }
 
     /* ============================== HELPERS ============================== */
-
-    private function totalsSnapshot(): array
-    {
-        $products        = Product::all();
-        $forecasted      = (float) $products->sum('forecasted_demand');
-        $actualInventory = (float) $products->sum('quantity');
-        $shortfall       = max($forecasted - $actualInventory, 0.0);
-        $recommendedProd = $shortfall;
-
-        return [$forecasted, $actualInventory, $shortfall, $recommendedProd];
-    }
 
     private function normMoney($v): float
     {
@@ -494,6 +511,7 @@ class ProductController extends Controller
 
         $s = (string) $v;
         $s = preg_replace('/[\s,]+/u', '', $s);
+
         if ($s !== '' && str_contains($s, ',') && !str_contains($s, '.')) {
             $s = str_replace(',', '.', $s);
         }
@@ -506,7 +524,9 @@ class ProductController extends Controller
         if (is_null($v) || $v === '') {
             return 0.00;
         }
+
         $num = is_numeric($v) ? (float) $v : 0.00;
+
         return round(min(max($num, 0.00), 100.00), 2);
     }
 

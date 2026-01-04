@@ -703,16 +703,6 @@
         </div>
       </div>
 
-      {{-- quick chips --}}
-      <div class="mt-3 flex flex-wrap gap-2">
-        <a href="{{ route('materials.index', array_filter(array_merge($currentQuery, ['category'=>null]))) }}"
-           class="chip {{ $cat ? '' : 'b-blue' }}">All</a>
-        @foreach($categoryCatalog as $_c)
-          @php $active = $cat === $_c ? 'b-green' : 'b-gray'; @endphp
-          <a href="{{ route('materials.index', array_merge($currentQuery, ['category'=>$_c])) }}"
-             class="badge {{ $active }}">{{ $_c }}</a>
-        @endforeach
-      </div>
     </form>
 
     {{-- Table --}}

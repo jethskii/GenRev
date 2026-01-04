@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\Production;
 use App\Models\Sale;
+use App\Models\Reservation; // ✅ NEW: for reservation → sale conversion
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -558,6 +559,166 @@ class SalesController extends Controller
                 return response()->json(['ok' => false, 'message' => $e->getMessage()], 500);
             }
             return back()->with('error', $e->getMessage())->withInput();
+        }
+    }
+
+    /**
+     * ✅ NEW: Convert a Reservation into a Sale.
+     * - Uses reserved_date as order_date
+     * - Uses units + unit_type (pack/bag) from reservation
+     * - Auto-deducts inventory via Sale model hooks
+     * - Marks reservation as converted & links sale_id
+     */
+    public function convertReservation(Request $request, Reservation $reservation)
+    {
+        if (!$reservation->isReserved()) {
+            return $this->respondValidationError($request, [
+                'reservation' => 'This reservation is not in reserved status.',
+            ]);
+        }
+
+        if (!$reservation->product_id) {
+            return $this->respondValidationError($request, [
+                'product_id' => 'Reservation has no product linked.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'production_id' => ['nullable','integer','exists:productions,id'],
+            'unit_price'    => ['nullable','numeric','min:0'],
+            'status'        => ['nullable','string','in:Pending,Completed,Cancelled,Paid'],
+            'notes'         => ['nullable','string','max:2000'],
+            'customer_name' => ['nullable','string','max:255'],
+        ]);
+
+        $product = Product::select('id','product_name','shelf_life_days','default_price','unit_cost')
+            ->findOrFail($reservation->product_id);
+
+        $orderDate = $reservation->reserved_date
+            ? Carbon::parse($reservation->reserved_date)->toDateString()
+            : now()->toDateString();
+
+        $unitType = $reservation->unit_type; // pack | bag
+        $qty      = (float) (int) ($reservation->units ?? 0);
+
+        if ($qty <= 0) {
+            return $this->respondValidationError($request, [
+                'units' => 'Reservation units must be greater than zero to create a sale.',
+            ]);
+        }
+
+        $resolvedProductionId = $validated['production_id'] ?? $reservation->production_id;
+        if (!empty($resolvedProductionId)) {
+            $batchCheck = Production::select('id','product_id')->findOrFail($resolvedProductionId);
+            if ((int)$batchCheck->product_id !== (int)$product->id) {
+                return $this->respondValidationError($request, [
+                    'production_id' => 'Selected batch does not belong to the reservation product.',
+                ]);
+            }
+        }
+
+        // If no explicit batch, resolve based on product + reserved date
+        if (empty($resolvedProductionId)) {
+            $resolved = $this->resolveProductionByProductAndDate((int)$product->id, $orderDate);
+            $resolvedProductionId = $resolved ? $resolved->id : null;
+        }
+        $batch = $resolvedProductionId ? Production::find($resolvedProductionId) : null;
+
+        // Pricing: allow override from request, else batch/product-based
+        $overridePrice = $validated['unit_price'] ?? null;
+        $unit          = $this->determineUnitPrice($product, $batch, $unitType, $overridePrice);
+        $total         = round($qty * $unit, 2);
+        $status        = $validated['status'] ?? 'Completed';
+
+        $typeLabel = null;
+        if ($batch && !empty($batch->product_name_snapshot)) {
+            $typeLabel = (string)$batch->product_name_snapshot;
+        }
+
+        $invoice   = $this->nextInvoiceNumber();
+        $debugUuid = (string) Str::uuid();
+        Log::info("[sales.convertReservation] START {$debugUuid}", [
+            'reservation_id' => $reservation->id,
+            'request'        => $request->all(),
+        ]);
+
+        try {
+            $createdSale = null;
+
+            DB::transaction(function () use ($reservation, $product, $batch, $orderDate, $unitType, $qty, $unit, $total, $status, $typeLabel, $invoice, $validated, $debugUuid, &$createdSale) {
+                $payload = [
+                    'product_id'    => (int) $product->id,
+                    'production_id' => $batch ? $batch->id : null,
+                    'status'        => $status,
+                ];
+
+                $map = [
+                    'order_number'    => $invoice,
+                    'invoice_number'  => $invoice,
+                    'order_date'      => $orderDate,
+                    'date'            => $orderDate,
+                    'product'         => $product->product_name,
+                    'type_label'      => $typeLabel,
+                    'quantity_kg'     => $qty,    // treat as "units" for pack/bag mode
+                    'quantity'        => $qty,
+                    'unit_price'      => $unit,
+                    'price'           => $unit,
+                    'total_price'     => $total,
+                    'total'           => $total,
+                    $this->unitTypeColumn() => $unitType,
+                    'customer_name'   => $validated['customer_name'] ?? $reservation->customer_name,
+                    'notes'           => $validated['notes'] ?? $reservation->notes,
+                    'production_date' => $batch->production_date ?? null,
+                    'expiration_date' => $batch->expiration_date ?? null,
+                ];
+
+                foreach ($map as $col => $val) {
+                    if ($col && Schema::hasColumn('sales', $col)) {
+                        $payload[$col] = $val;
+                    }
+                }
+
+                Log::info("[sales.convertReservation] PAYLOAD {$debugUuid}", $payload);
+
+                // 🔥 This will validate stock and deduct from Production via Sale model hooks
+                $createdSale = Sale::create($payload);
+
+                // 🔗 Link back + mark reservation as converted
+                $reservation->markAsConverted($createdSale);
+                Log::info("[sales.convertReservation] SALE_CREATED {$debugUuid}", ['sale_id' => $createdSale->id]);
+
+                // Recompute product stock
+                $this->recomputeProductBalance((int)$product->id);
+            });
+
+            Log::info("[sales.convertReservation] COMMIT {$debugUuid}");
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'ok'          => true,
+                    'message'     => 'Reservation converted to sale successfully.',
+                    'sale_id'     => $createdSale->id ?? null,
+                    'reservation' => $reservation->fresh(),
+                ]);
+            }
+
+            return redirect()
+                ->route('sales')
+                ->with('success', 'Reservation converted to sale and stock updated.');
+        } catch (\Throwable $e) {
+            Log::error("[sales.convertReservation] FAIL {$debugUuid}", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'ok'      => false,
+                    'message' => $e->getMessage(),
+                ], 500);
+            }
+
+            return back()->with('error', $e->getMessage());
         }
     }
 

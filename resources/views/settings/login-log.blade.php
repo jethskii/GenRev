@@ -134,7 +134,9 @@
     gap:.25rem;
   }
   .badge-dot{
-    width:.4rem;height:.4rem;border-radius:999px;
+    width:.4rem;
+    height:.4rem;
+    border-radius:999px;
   }
 </style>
 @endsection
@@ -176,92 +178,94 @@
 
       {{-- Table --}}
       <div class="table-shell">
-        <table class="login-table">
-          <thead>
-            <tr>
-              <th>When</th>
-              <th>User</th>
-              <th>Role</th>
-              <th>IP</th>
-              <th>Time In</th>
-              <th>Time Out</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            @forelse ($activities as $log)
+        <div class="overflow-x-auto">
+          <table class="login-table">
+            <thead>
               <tr>
-                {{-- When: date only --}}
-                <td>
-                  {{ optional($log->login_at)->format('M d, Y') }}
-                </td>
-
-                {{-- User --}}
-                <td>
-                  @if ($log->user)
-                    <div class="user-name">{{ $log->user->name }}</div>
-                    <div class="user-email">{{ $log->user->email }}</div>
-                  @else
-                    <span class="text-gray-400 italic">Unknown user</span>
-                  @endif
-                </td>
-
-                {{-- Role (from linked user) --}}
-                <td>
-                  @if ($log->user && $log->user->role)
-                    <span class="soft-pill">
-                      {{ ucwords($log->user->role) }}
-                    </span>
-                  @else
-                    <span class="text-gray-400">—</span>
-                  @endif
-                </td>
-
-                {{-- IP --}}
-                <td>
-                  {{ $log->ip_address ?: '—' }}
-                </td>
-
-                {{-- Time In (login_at time) --}}
-                <td>
-                  {{ optional($log->login_at)->format('H:i:s') ?: '—' }}
-                </td>
-
-                {{-- Time Out (logout_at time) --}}
-                <td>
-                  {{ optional($log->logout_at)->format('H:i:s') ?: '—' }}
-                </td>
-
-                {{-- Status --}}
-                <td>
-                  @if ($log->succeeded)
-                    <span class="status-pill-success">
-                      <span class="badge-dot" style="background:#16a34a"></span>
-                      Success
-                    </span>
-                  @else
-                    <span class="status-pill-failed">
-                      <span class="badge-dot" style="background:#dc2626"></span>
-                      Failed
-                    </span>
-                  @endif
-                </td>
+                <th>When</th>
+                <th>User</th>
+                <th>Role</th>
+                <th>IP</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>Status</th>
               </tr>
-            @empty
-              <tr>
-                <td colspan="7" class="py-4 text-center text-gray-500">
-                  No login activity recorded yet.
-                </td>
-              </tr>
-            @endforelse
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              @forelse ($activities as $log)
+                <tr>
+                  {{-- When: date only --}}
+                  <td>
+                    {{ optional($log->login_at)->format('M d, Y') ?: '—' }}
+                  </td>
+
+                  {{-- User --}}
+                  <td>
+                    @if ($log->user)
+                      <div class="user-name">{{ $log->user->name }}</div>
+                      <div class="user-email">{{ $log->user->email }}</div>
+                    @else
+                      <span class="text-gray-400 italic">Unknown user</span>
+                    @endif
+                  </td>
+
+                  {{-- Role (from linked user) --}}
+                  <td>
+                    @if ($log->user && $log->user->role)
+                      <span class="soft-pill">
+                        {{ ucwords($log->user->role) }}
+                      </span>
+                    @else
+                      <span class="text-gray-400">—</span>
+                    @endif
+                  </td>
+
+                  {{-- IP --}}
+                  <td>
+                    {{ $log->ip_address ?: '—' }}
+                  </td>
+
+                  {{-- Time In (login_at time) --}}
+                  <td>
+                    {{ optional($log->login_at)->format('H:i:s') ?: '—' }}
+                  </td>
+
+                  {{-- Time Out (logout_at time) --}}
+                  <td>
+                    {{ optional($log->logout_at)->format('H:i:s') ?: '—' }}
+                  </td>
+
+                  {{-- Status --}}
+                  <td>
+                    @if ($log->succeeded)
+                      <span class="status-pill-success">
+                        <span class="badge-dot" style="background:#16a34a"></span>
+                        Success
+                      </span>
+                    @else
+                      <span class="status-pill-failed">
+                        <span class="badge-dot" style="background:#dc2626"></span>
+                        Failed
+                      </span>
+                    @endif
+                  </td>
+                </tr>
+              @empty
+                <tr>
+                  <td colspan="7" class="py-4 text-center text-gray-500">
+                    No login activity recorded yet.
+                  </td>
+                </tr>
+              @endforelse
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {{-- Pagination --}}
+      {{-- Pagination (keeps filters & search) --}}
       <div class="mt-4">
-        {{ $activities->links() }}
+        {{ $activities->appends(request()->query())->links() }}
       </div>
     </div>
   </div>
