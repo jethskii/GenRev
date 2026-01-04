@@ -1,4 +1,4 @@
-{{-- resources/views/sales/index.blade.php (LIGHT THEME + PACK/BAG PRICES + FIXED CHART INIT + PDF EXPORT + MULTI-SELECT + FLASH POPUP) --}}
+{{-- resources/views/sales/index.blade.php (LIGHT THEME + PACK/BAG PRICES + FIXED CHART INIT + PDF EXPORT + MULTI-SELECT + FLASH POPUP + SCROLLABLE ADD-SALE MODAL) --}}
 @php
     /** @var \Illuminate\Support\Collection|\App\Models\Sale[] $sales */
     $statusColors = [
@@ -174,6 +174,16 @@
     opacity:0;
     pointer-events:none;
     transform:translateY(-10px) scale(.98);
+  }
+
+  /* SCROLLABLE ADD-SALE MODAL
+     This keeps the modal panel within the viewport and allows its content to scroll */
+  #addSaleModal {
+    overflow-y: auto;
+  }
+  #addSaleModal > div {
+    max-height: calc(100vh - 3rem);
+    overflow-y: auto;
   }
 
   @media print{
@@ -559,6 +569,9 @@ document.addEventListener('DOMContentLoaded', function () {
     el.classList.toggle('flex', open);
 
     if (open) {
+      // ensure modal scroll starts at the top
+      el.scrollTop = 0;
+
       const form = el.querySelector('form');
       if (form) {
         // keep old input when coming from validation error

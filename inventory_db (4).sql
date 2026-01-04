@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Nov 26, 2025 at 05:07 PM
+-- Generation Time: Jan 04, 2026 at 10:59 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -52,15 +52,17 @@ CREATE TABLE `app_users` (
 --
 
 INSERT INTO `app_users` (`id`, `name`, `email`, `alt_email`, `email_verified_at`, `password`, `remember_token`, `role`, `is_active`, `website`, `photo`, `bio`, `job_title`, `created_at`, `updated_at`, `deleted_at`, `last_login_at`) VALUES
-(1, 'Jethro k. Mandalones', 'jethrom@gmail.com', NULL, NULL, '$2y$12$ey9Mury8kX90c.z8sBx./.vwISFJTH.MiUrDnQBFrCjQPvQ5zhgte', 'mmqfqvkwsySxf46SQZA03nPGiwZYacF47gYZF154B78240yERdiKymPMl0T7', 'masters admin', 1, NULL, NULL, NULL, NULL, '2025-11-14 04:27:06', '2025-11-26 06:40:49', NULL, '2025-11-26 06:40:49'),
+(1, 'Jethro k. Mandalones', 'jethrom@gmail.com', NULL, NULL, '$2y$12$ey9Mury8kX90c.z8sBx./.vwISFJTH.MiUrDnQBFrCjQPvQ5zhgte', '962bVHTUz2Pc8d2wEl98rct83Rq5Sbxjrwzpbe2wqZ4B67obhdZsjUVw5woR', 'masters admin', 1, NULL, NULL, NULL, NULL, '2025-11-14 04:27:06', '2025-12-16 23:13:02', NULL, '2025-12-16 23:13:02'),
 (2, 'Jeankyla Cortuna', 'jeank@gmail.com', NULL, NULL, '$2y$12$5MnDqMemZ39pVnPZASkS9ebIVueHU9yK4ZVpfuCbNuMLQ3n7O.OKy', NULL, 'production manager', 1, NULL, NULL, NULL, NULL, '2025-11-14 05:52:47', '2025-11-14 12:12:58', NULL, '2025-11-14 12:12:58'),
 (3, 'Jeankyla Cortuna', 'jeankk@gmail.com', NULL, NULL, '$2y$12$uSgWg8DNIvFBywlj7E/mVOak9FzWpillIoGqOB4NR3eRA7Y8BDJum', NULL, 'production manager', 0, NULL, NULL, NULL, NULL, '2025-11-14 11:31:32', '2025-11-16 06:11:28', NULL, NULL),
 (4, 'Jethro k. Mandalones', 'danicab@gmail.com', NULL, NULL, '$2y$12$uAShhKEVPVFaJWz01GwGc.E.m6UvUXUEd2u0C4wkTZMPDwMUDtV7.', NULL, 'sales', 1, NULL, NULL, NULL, NULL, '2025-11-15 05:27:01', '2025-11-15 05:27:01', NULL, NULL),
-(5, 'Elizabeth Guran', 'elizabethg@gmail.com', NULL, NULL, '$2y$12$Ye0eyKqCjxP1lhCbx75Ru.0v2/nZbwYZo8WW.C0k/To2IAOE7UFVa', NULL, 'sales', 1, NULL, NULL, NULL, NULL, '2025-11-15 07:37:05', '2025-11-16 06:12:54', NULL, '2025-11-16 06:12:54'),
+(5, 'Elizabeth Guran', 'elizabethg@gmail.com', NULL, NULL, '$2y$12$Ye0eyKqCjxP1lhCbx75Ru.0v2/nZbwYZo8WW.C0k/To2IAOE7UFVa', NULL, 'sales', 1, NULL, NULL, NULL, NULL, '2025-11-15 07:37:05', '2025-12-05 05:30:56', NULL, '2025-12-05 05:30:56'),
 (6, 'Jimboy Arvesu', 'jimboya@gmail.com', NULL, NULL, '$2y$12$lZqco.sMCcYLA7BNw8pXs.xyX7kEO00jvb0N9Nh3uKze11zMxazZi', NULL, 'inventory', 1, NULL, NULL, NULL, NULL, '2025-11-15 07:42:21', '2025-11-15 07:42:32', NULL, '2025-11-15 07:42:32'),
-(7, 'Jimboy Arvesu', 'jimboyaa@gmail.com', NULL, NULL, '$2y$12$rPM2EefKnV/ge.E26gCkdeV7jTeSV3.6iYRrN22uPdP9j5QN9aCeG', NULL, 'production manager', 1, NULL, NULL, NULL, NULL, '2025-11-16 05:46:16', '2025-11-16 05:46:16', NULL, NULL),
+(7, 'Jimboy Arvesu', 'jimboyaa@gmail.com', NULL, NULL, '$2y$12$rPM2EefKnV/ge.E26gCkdeV7jTeSV3.6iYRrN22uPdP9j5QN9aCeG', NULL, 'production manager', 1, NULL, NULL, NULL, NULL, '2025-11-16 05:46:16', '2025-11-28 17:24:44', NULL, '2025-11-28 17:24:44'),
 (8, 'Danica Ballesteros', 'danicabbb@gmail.com', NULL, NULL, '$2y$12$BqgR2UWP4D1HhpGK577MTOvNL126TdPkPj5L1Qn/s/s7tHzduTwI6', NULL, 'production manager', 1, NULL, NULL, NULL, NULL, '2025-11-16 06:14:58', '2025-11-20 04:08:08', NULL, '2025-11-16 06:15:07'),
-(9, 'Ecco Nonee', 'ecconn@gmail.com', NULL, NULL, '$2y$12$OjJ958xemznYIb3c9yj7duBtP4TOhr7Gv4X1eQe62bMAkPW2SCSA6', NULL, 'masters admin', 1, NULL, NULL, NULL, NULL, '2025-11-20 03:44:31', '2025-11-20 04:09:29', NULL, '2025-11-20 03:44:47');
+(9, 'Ecco Nonee', 'ecconn@gmail.com', NULL, NULL, '$2y$12$OjJ958xemznYIb3c9yj7duBtP4TOhr7Gv4X1eQe62bMAkPW2SCSA6', NULL, 'masters admin', 1, NULL, NULL, NULL, NULL, '2025-11-20 03:44:31', '2025-11-20 04:09:29', NULL, '2025-11-20 03:44:47'),
+(10, 'jevier Jefferson Del Mundo', 'jevierj@gmail.com', NULL, NULL, '$2y$12$Vsc2kLhSR4dFWybbMaYVm.Ih/RpQBDGMGMV0xXXt/4K6CfVX80S7G', NULL, 'production manager', 1, NULL, NULL, NULL, NULL, '2025-11-28 15:57:41', '2025-11-28 15:57:41', NULL, NULL),
+(11, 'Allysa Averion', 'allysaa@gmail.com', NULL, NULL, '$2y$12$HCMhuc3wDoQk.O3//eMtweZtWuglZQJwOXPn37IBxqgvVE6TlNpvu', NULL, 'production manager', 1, NULL, NULL, NULL, NULL, '2025-12-05 04:32:01', '2025-12-05 05:30:08', NULL, '2025-12-05 05:30:08');
 
 -- --------------------------------------------------------
 
@@ -109,13 +111,45 @@ CREATE TABLE `batch_allocations` (
 --
 
 INSERT INTO `batch_allocations` (`id`, `sale_id`, `order_item_id`, `production_id`, `mode`, `quantity_value`, `created_at`, `updated_at`, `deleted_at`) VALUES
-(29, 48, NULL, 42, 'pack', 5.000, '2025-11-23 10:43:25', '2025-11-23 10:43:25', NULL),
-(30, 49, NULL, 44, 'pack', 2.000, '2025-11-23 10:54:58', '2025-11-23 10:54:58', NULL),
-(31, 50, NULL, 42, 'bag', 3.000, '2025-11-23 10:55:54', '2025-11-23 10:55:54', NULL),
-(32, 51, NULL, 46, 'bag', 2.000, '2025-11-23 10:58:12', '2025-11-23 10:58:12', NULL),
-(33, 52, NULL, 46, 'pack', 5.000, '2025-11-23 21:09:44', '2025-11-23 21:11:19', '2025-11-23 21:11:19'),
-(34, 52, NULL, 46, 'pack', 5.000, '2025-11-23 21:11:19', '2025-11-23 21:11:19', NULL),
-(35, 53, NULL, 57, 'pack', 39.000, '2025-11-25 07:01:03', '2025-11-25 07:01:03', NULL);
+(39, 57, NULL, 91, 'pack', 5.000, '2025-11-28 01:32:33', '2025-11-28 01:32:33', NULL),
+(40, 58, NULL, 84, 'bag', 5.000, '2025-11-28 01:32:53', '2025-11-28 01:32:53', NULL),
+(41, 59, NULL, 87, 'bag', 5.000, '2025-11-28 01:46:41', '2025-11-28 03:17:42', '2025-11-28 03:17:42'),
+(42, 59, NULL, 87, 'bag', 3.000, '2025-11-28 03:17:43', '2025-11-28 03:18:23', '2025-11-28 03:18:23'),
+(43, 59, NULL, 87, 'bag', 4.000, '2025-11-28 03:18:23', '2025-11-28 18:30:10', '2025-11-28 18:30:10'),
+(44, 60, NULL, 91, 'pack', 3.000, '2025-12-05 03:33:20', '2025-12-05 03:33:20', NULL),
+(45, 61, NULL, 84, 'bag', 3.000, '2025-12-05 03:34:01', '2025-12-05 04:18:44', '2025-12-05 04:18:44'),
+(46, 61, NULL, 84, 'bag', 3.000, '2025-12-05 04:18:44', '2025-12-05 04:18:44', NULL),
+(47, 62, NULL, 84, 'pack', 5.000, '2025-12-05 04:21:12', '2025-12-05 04:21:12', NULL),
+(48, 63, NULL, 98, 'pack', 5.000, '2025-12-05 05:13:34', '2025-12-05 05:14:25', '2025-12-05 05:14:25'),
+(49, 63, NULL, 98, 'pack', 5.000, '2025-12-05 05:14:25', '2025-12-05 05:17:29', '2025-12-05 05:17:29'),
+(50, 64, NULL, 87, 'bag', 2.000, '2025-12-05 05:33:38', '2025-12-05 05:54:32', '2025-12-05 05:54:32'),
+(51, 65, NULL, 99, 'pack', 3.000, '2025-12-05 05:59:27', '2025-12-05 05:59:48', '2025-12-05 05:59:48'),
+(52, 66, NULL, 98, 'pack', 2.000, '2025-12-16 23:05:59', '2025-12-16 23:05:59', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `demand_events`
+--
+
+CREATE TABLE `demand_events` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `event_type` varchar(30) NOT NULL DEFAULT 'reservation',
+  `title` varchar(190) NOT NULL,
+  `description` text DEFAULT NULL,
+  `product_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date NOT NULL,
+  `reserved_qty` decimal(12,3) NOT NULL DEFAULT 0.000,
+  `expected_multiplier` decimal(6,3) NOT NULL DEFAULT 1.000,
+  `color` varchar(20) DEFAULT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'planned',
+  `customer_name` varchar(190) DEFAULT NULL,
+  `customer_contact` varchar(190) DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -149,12 +183,12 @@ CREATE TABLE `employees` (
 INSERT INTO `employees` (`id`, `user_id`, `first_name`, `last_name`, `position`, `email`, `username`, `password`, `remember_token`, `email_verified_at`, `status`, `avatar_path`, `phone`, `hire_date`, `created_at`, `updated_at`) VALUES
 (1, 1, 'Jethro', 'k. Mandalones', 'Masters Admin', 'jethrom@gmail.com', 'jethrom', NULL, NULL, NULL, 'active', NULL, NULL, NULL, '2025-11-14 04:27:06', '2025-11-14 04:27:06'),
 (3, 3, 'Jeankyla', 'Cortuna', 'Production Manager', 'jeankk@gmail.com', 'jeank', NULL, NULL, NULL, 'inactive', 'avatars/5xgK6zPFLfNMXBStxSxX346bFnfE6gkl5u1BTWiB.jpg', NULL, NULL, '2025-11-14 11:31:32', '2025-11-21 03:48:54'),
-(4, 4, 'Jethro', 'k. Mandalones', NULL, 'danicab@gmail.com', 'danicab', NULL, NULL, NULL, 'active', 'avatars/2rFXfk8Ebh028jZjB56IoCjkFW7dJoSXd5Awu751.jpg', NULL, NULL, '2025-11-15 05:27:01', '2025-11-21 03:39:19'),
 (5, 5, 'Elizabeth', 'Guran', NULL, 'elizabethg@gmail.com', 'elizabethg', NULL, NULL, NULL, 'active', NULL, NULL, NULL, '2025-11-15 07:37:05', '2025-11-15 07:37:05'),
 (6, 6, 'Jimboy', 'Arvesu', NULL, 'jimboya@gmail.com', 'jimboya', NULL, NULL, NULL, 'active', NULL, NULL, NULL, '2025-11-15 07:42:21', '2025-11-15 07:42:21'),
 (7, 7, 'Jimboy', 'Arvesu', NULL, 'jimboyaa@gmail.com', 'jimboyaa', NULL, NULL, NULL, 'active', NULL, NULL, NULL, '2025-11-16 05:46:16', '2025-11-16 05:46:16'),
 (8, 8, 'Danica', 'Ballesteros', NULL, 'danicabbb@gmail.com', 'danicabb', NULL, NULL, NULL, 'active', 'avatars/AbJxZAgpMubIkEe94mYTBoEDZProe6gMtpSKAsHi.jpg', NULL, NULL, '2025-11-16 06:14:59', '2025-11-21 03:38:41'),
-(9, 9, 'Ecco', 'None', NULL, 'ecconn@gmail.com', 'ecconone', NULL, NULL, NULL, 'active', NULL, NULL, NULL, '2025-11-20 03:44:31', '2025-11-20 03:44:31');
+(10, 10, 'jevier', 'Jefferson Del Mundo', NULL, 'jevierj@gmail.com', 'jevierj', NULL, NULL, NULL, 'active', NULL, NULL, NULL, '2025-11-28 15:57:41', '2025-11-28 15:57:41'),
+(11, 11, 'Allysa', 'Averion', NULL, 'allysaa@gmail.com', 'allysaa', NULL, NULL, NULL, 'active', NULL, NULL, NULL, '2025-12-05 04:32:01', '2025-12-05 04:32:01');
 
 -- --------------------------------------------------------
 
@@ -228,7 +262,12 @@ INSERT INTO `invoice_sequences` (`id`, `date_key`, `last_seq`, `created_at`, `up
 (6, '2025-11-22', 2, '2025-11-21 23:26:08', '2025-11-21 23:46:23'),
 (7, '2025-11-23', 6, '2025-11-23 04:28:10', '2025-11-23 10:58:12'),
 (8, '2025-11-24', 1, '2025-11-23 21:09:44', '2025-11-23 21:09:44'),
-(9, '2025-11-25', 1, '2025-11-25 07:01:00', '2025-11-25 07:01:00');
+(9, '2025-11-25', 1, '2025-11-25 07:01:00', '2025-11-25 07:01:00'),
+(10, '2025-11-26', 2, '2025-11-26 09:28:34', '2025-11-26 09:58:49'),
+(11, '2025-11-27', 2, '2025-11-27 12:25:42', '2025-11-27 13:02:48'),
+(12, '2025-11-28', 3, '2025-11-28 01:32:30', '2025-11-28 01:46:41'),
+(13, '2025-12-05', 8, '2025-12-05 03:33:16', '2025-12-05 05:59:41'),
+(14, '2025-12-17', 1, '2025-12-16 23:05:56', '2025-12-16 23:05:56');
 
 -- --------------------------------------------------------
 
@@ -296,7 +335,43 @@ INSERT INTO `login_activities` (`id`, `user_id`, `email`, `ip_address`, `user_ag
 (39, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-23 21:08:00', NULL, 1, NULL, '2025-11-23 21:08:00', '2025-11-23 21:08:00'),
 (40, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-25 02:34:18', '2025-11-25 04:50:44', 1, NULL, '2025-11-25 02:34:18', '2025-11-25 04:50:44'),
 (41, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-25 04:50:55', NULL, 1, NULL, '2025-11-25 04:50:55', '2025-11-25 04:50:55'),
-(42, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-26 06:40:49', NULL, 1, NULL, '2025-11-26 06:40:49', '2025-11-26 06:40:49');
+(42, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-26 06:40:49', NULL, 1, NULL, '2025-11-26 06:40:49', '2025-11-26 06:40:49'),
+(43, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-26 17:20:35', NULL, 1, NULL, '2025-11-26 17:20:35', '2025-11-26 17:20:35'),
+(44, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-26 21:30:08', NULL, 1, NULL, '2025-11-26 21:30:08', '2025-11-26 21:30:08'),
+(45, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-27 08:09:25', '2025-11-27 09:05:56', 1, NULL, '2025-11-27 08:09:25', '2025-11-27 09:05:56'),
+(46, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-27 09:07:51', NULL, 1, NULL, '2025-11-27 09:07:51', '2025-11-27 09:07:51'),
+(47, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-27 20:47:04', NULL, 1, NULL, '2025-11-27 20:47:04', '2025-11-27 20:47:04'),
+(48, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-28 15:57:51', '2025-11-28 17:24:17', 1, NULL, '2025-11-28 15:57:51', '2025-11-28 17:24:17'),
+(49, 4, 'danicab@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-28 17:24:26', NULL, 0, 'invalid_credentials', '2025-11-28 17:24:26', '2025-11-28 17:24:26'),
+(50, 4, 'danicab@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-28 17:24:31', NULL, 0, 'invalid_credentials', '2025-11-28 17:24:31', '2025-11-28 17:24:31'),
+(51, 7, 'jimboyaa@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-28 17:24:44', '2025-11-28 17:25:09', 1, NULL, '2025-11-28 17:24:44', '2025-11-28 17:25:09'),
+(52, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-28 17:25:16', '2025-11-28 18:07:43', 1, NULL, '2025-11-28 17:25:16', '2025-11-28 18:07:43'),
+(53, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0', '2025-11-28 18:10:23', NULL, 1, NULL, '2025-11-28 18:10:23', '2025-11-28 18:10:23'),
+(54, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 03:14:42', '2025-12-05 04:29:24', 1, NULL, '2025-12-05 03:14:42', '2025-12-05 04:29:24'),
+(55, 11, 'allysaa@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 04:32:11', '2025-12-05 04:32:40', 1, NULL, '2025-12-05 04:32:11', '2025-12-05 04:32:40'),
+(56, 4, 'danicab@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 04:32:49', NULL, 0, 'invalid_credentials', '2025-12-05 04:32:49', '2025-12-05 04:32:49'),
+(57, 4, 'danicab@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 04:32:53', NULL, 0, 'invalid_credentials', '2025-12-05 04:32:53', '2025-12-05 04:32:53'),
+(58, 4, 'danicab@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 04:33:15', NULL, 0, 'invalid_credentials', '2025-12-05 04:33:15', '2025-12-05 04:33:15'),
+(59, 5, 'elizabethg@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 04:33:29', '2025-12-05 04:33:49', 1, NULL, '2025-12-05 04:33:29', '2025-12-05 04:33:49'),
+(60, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 04:35:59', NULL, 0, 'invalid_credentials', '2025-12-05 04:35:59', '2025-12-05 04:35:59'),
+(61, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 04:40:46', '2025-12-05 05:29:15', 1, NULL, '2025-12-05 04:40:46', '2025-12-05 05:29:15'),
+(62, 11, 'allysaa@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 05:30:08', '2025-12-05 05:30:42', 1, NULL, '2025-12-05 05:30:08', '2025-12-05 05:30:42'),
+(63, 5, 'elizabethg@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 05:30:56', '2025-12-05 05:31:27', 1, NULL, '2025-12-05 05:30:56', '2025-12-05 05:31:27'),
+(64, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 05:31:42', '2025-12-05 05:49:08', 1, NULL, '2025-12-05 05:31:42', '2025-12-05 05:49:08'),
+(65, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 05:51:10', '2025-12-05 05:56:03', 1, NULL, '2025-12-05 05:51:10', '2025-12-05 05:56:03'),
+(66, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-05 05:57:26', '2025-12-05 06:02:19', 1, NULL, '2025-12-05 05:57:26', '2025-12-05 06:02:19'),
+(67, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-11 01:49:41', '2025-12-11 01:49:50', 1, NULL, '2025-12-11 01:49:41', '2025-12-11 01:49:50'),
+(68, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-11 01:59:54', '2025-12-11 02:12:08', 1, NULL, '2025-12-11 01:59:54', '2025-12-11 02:12:08'),
+(69, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-11 02:20:48', NULL, 1, NULL, '2025-12-11 02:20:48', '2025-12-11 02:20:48'),
+(70, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-15 02:08:29', NULL, 0, 'invalid_credentials', '2025-12-15 02:08:29', '2025-12-15 02:08:29'),
+(71, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-15 02:08:30', NULL, 0, 'invalid_credentials', '2025-12-15 02:08:30', '2025-12-15 02:08:30'),
+(72, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-15 02:08:31', NULL, 0, 'invalid_credentials', '2025-12-15 02:08:31', '2025-12-15 02:08:31'),
+(73, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-15 02:08:32', NULL, 0, 'invalid_credentials', '2025-12-15 02:08:32', '2025-12-15 02:08:32'),
+(74, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-15 02:08:33', NULL, 0, 'invalid_credentials', '2025-12-15 02:08:33', '2025-12-15 02:08:33'),
+(75, NULL, 'JethroM@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-15 02:08:33', NULL, 0, 'too_many_attempts', '2025-12-15 02:08:33', '2025-12-15 02:08:33'),
+(76, NULL, 'jethroM@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-15 02:09:14', NULL, 0, 'too_many_attempts', '2025-12-15 02:09:14', '2025-12-15 02:09:14'),
+(77, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-16 20:13:21', '2025-12-16 23:10:43', 1, NULL, '2025-12-16 20:13:21', '2025-12-16 23:10:43'),
+(78, 1, 'jethrom@gmail.com', '127.0.0.1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0', '2025-12-16 23:13:02', NULL, 1, NULL, '2025-12-16 23:13:02', '2025-12-16 23:13:02');
 
 -- --------------------------------------------------------
 
@@ -336,7 +411,10 @@ INSERT INTO `materials` (`id`, `material_name`, `category`, `unit`, `sku`, `supp
 (3, 'MDM', 'Meat Cuts & Trimmings', 'kg', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 400.00, 200.000, 200.000, 'low', '2025-11-16 06:09:11', '2025-11-16 06:09:11', NULL),
 (4, 'Flour', 'Packaging Films & Bags', 'kg', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 50.00, 500.000, 500.000, 'low', '2025-11-20 04:05:11', '2025-11-20 04:05:11', NULL),
 (5, 'Vinegar', 'Spices & Seasonings', 'lt', NULL, NULL, 'MAT-20251125-467', NULL, NULL, NULL, NULL, NULL, 30.00, 10.000, 10.000, 'low', '2025-11-25 07:04:22', '2025-11-25 07:04:22', NULL),
-(6, 'Soy Sauce', 'Spices & Seasonings', 'lt', NULL, 'Jethro Mandalones', 'MAT-20251125-157', 'chiller', '2025-11-25', '2025-11-25', '2025-12-25', 'hi', 30.00, 20.000, 20.000, 'low', '2025-11-25 07:33:03', '2025-11-25 07:33:03', NULL);
+(6, 'Soy Sauce', 'Spices & Seasonings', 'lt', NULL, 'Jethro Mandalones', 'MAT-20251125-157', 'chiller', '2025-11-25', '2025-11-25', '2025-12-25', 'hi', 30.00, 20.000, 20.000, 'low', '2025-11-25 07:33:03', '2025-11-25 07:33:03', NULL),
+(7, 'Tomato Sauce', 'Spices & Seasonings', 'tray', NULL, 'Genrev Meat Products', 'MAT-20251205-432', 'chiller', NULL, '2025-12-05', '2025-12-26', NULL, 30.00, 30.000, 30.000, 'low', '2025-12-05 03:53:47', '2025-12-05 03:53:47', NULL),
+(8, 'Tomato Sauce', NULL, 'kg', NULL, 'Genrev Meat Products', 'MAT-20251217-502', NULL, NULL, '2025-12-05', '2025-12-26', NULL, 0.00, 0.000, 30.000, 'low', '2025-12-16 20:25:32', '2025-12-16 20:25:32', NULL),
+(9, 'Tomato Sauce', 'Meat Cuts & Trimmings', 'kg', '44', 'Genrev Meat Products', 'MAT-20251217-773', 'freezer', '2025-12-11', '2025-12-05', '2025-12-26', NULL, 22.00, 33.000, 30.000, 'in_stock', '2025-12-16 21:07:24', '2025-12-16 21:07:24', NULL);
 
 -- --------------------------------------------------------
 
@@ -392,37 +470,39 @@ CREATE TABLE `productions` (
 --
 
 INSERT INTO `productions` (`id`, `product_id`, `parent_product_id`, `product_name_snapshot`, `batch_number`, `quantity`, `forecasted_demand`, `current_inventory`, `unit_cost`, `unit_price_pack`, `unit_price_bag`, `available_pack`, `available_bag`, `remarks`, `image_disk`, `image_path`, `image_medium_path`, `image_thumb_path`, `production_date`, `expiration_date`, `created_at`, `updated_at`, `deleted_at`, `archived_at`, `archived_reason`, `output_qty_kg`) VALUES
-(41, 5, 5, 'Sweet Ham', '1', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-11-30', '2025-11-23 10:07:05', '2025-11-25 06:55:53', '2025-11-25 06:55:53', NULL, NULL, 0.000),
-(42, 2, 2, 'Pork', '1', 20, 300.00, 20, 0.00, 30.00, 540.00, 5, 7, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 10:36:46', '2025-11-23 10:55:54', NULL, NULL, NULL, 0.000),
-(44, 2, 2, 'Pork', '2', 15, 20.00, 15, 0.00, 30.00, 540.00, 3, 10, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 10:41:34', '2025-11-23 10:54:58', NULL, NULL, NULL, 0.000),
 (45, 3, 3, 'Pork', '1', 15, 0.00, 15, 0.00, 27.00, 540.00, 10, 5, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 10:50:31', '2025-11-23 10:50:31', NULL, NULL, NULL, 0.000),
-(46, 2, 2, 'Chicken', '3', 15, 20.00, 15, 0.00, 31.00, 620.00, 5, 3, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 10:57:51', '2025-11-23 21:11:19', NULL, NULL, NULL, 0.000),
-(47, 6, 6, 'Pork Tapa', '1', 20, 0.00, 20, 0.00, 50.00, 1000.00, 10, 10, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:18:28', '2025-11-23 11:18:28', NULL, NULL, NULL, 0.000),
-(48, 6, 6, 'Pork Tapa', '2', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:19:57', '2025-11-23 11:19:57', NULL, NULL, NULL, 0.000),
-(49, 6, 6, 'Pork Tapa', '3', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:23:01', '2025-11-23 11:23:01', NULL, NULL, NULL, 0.000),
-(50, 6, 6, 'Pork Tapa', '4', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:32:17', '2025-11-23 11:32:17', NULL, NULL, NULL, 0.000),
-(51, 6, 6, 'Pork Tapa', '5', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:34:12', '2025-11-23 11:34:12', NULL, NULL, NULL, 0.000),
-(52, 6, 6, 'Pork Tapa', '6', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:34:43', '2025-11-23 11:34:43', NULL, NULL, NULL, 0.000),
-(53, 6, 6, 'Pork Tapa', '7', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:35:29', '2025-11-23 11:35:29', NULL, NULL, NULL, 0.000),
-(54, 2, 2, 'Chicken', '4', 0, 20.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:39:14', '2025-11-25 09:30:36', '2025-11-25 09:30:36', NULL, NULL, 0.000),
-(55, 2, 2, 'Chicken', '5', 0, 11.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:54:58', '2025-11-25 09:30:31', '2025-11-25 09:30:31', NULL, NULL, 0.000),
-(56, 2, 2, 'Pork', '6', 274, 11.00, 274, 0.00, 24.00, 23.00, 242, 32, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-11-26', '2025-11-23 21:13:08', '2025-11-23 21:13:08', NULL, NULL, NULL, 0.000),
-(57, 5, 5, 'Sweet Ham', '1', 271, 0.00, 271, 0.00, 27.00, 239.00, 200, 32, '', 'public', NULL, NULL, NULL, '2025-11-25', '2025-11-28', '2025-11-25 06:56:26', '2025-11-25 07:01:03', NULL, NULL, NULL, 0.000),
-(58, 2, 2, 'Pork', '7', 0, 16.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-11-26', '2025-11-25 09:34:08', '2025-11-25 09:35:08', '2025-11-25 09:35:08', NULL, NULL, 0.000),
-(59, 2, 2, 'Pork', '7', 0, 16.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-11-26', '2025-11-26 07:01:57', '2025-11-26 07:01:57', NULL, NULL, NULL, 0.000),
-(60, 2, 2, 'Pork', '8', 0, 16.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-11-26', '2025-11-26 07:04:50', '2025-11-26 07:04:50', NULL, NULL, NULL, 0.000),
-(61, 2, 2, 'Pork', '9', 0, 16.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-11-26', '2025-11-26 07:13:42', '2025-11-26 07:13:42', NULL, NULL, NULL, 0.000),
-(62, 2, 2, 'Pork', '10', 0, 16.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-11-26', '2025-11-26 07:17:18', '2025-11-26 07:17:18', NULL, NULL, NULL, 0.000),
+(47, 6, 6, 'Pork Tapa', '1', 20, 0.00, 20, 0.00, 50.00, 1000.00, 10, 10, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:18:28', '2025-11-26 09:37:12', NULL, NULL, NULL, 0.000),
+(48, 6, 6, 'Pork Tapa', '2', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-23 11:19:57', '2025-11-26 18:35:42', NULL, NULL, NULL, 0.000),
 (63, 3, 3, 'Pork', '2', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-26 07:18:05', '2025-11-26 07:18:05', NULL, NULL, NULL, 0.000),
-(64, 2, 2, 'Pork', '11', 0, 16.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-11-26', '2025-11-26 07:25:54', '2025-11-26 07:25:54', NULL, NULL, NULL, 0.000),
-(65, 6, 6, 'Pork Tapa', '8', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-26 07:28:16', '2025-11-26 07:28:16', NULL, NULL, NULL, 0.000),
 (66, 5, 5, 'Sweet Ham', '2', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-25', '2025-11-28', '2025-11-26 07:28:35', '2025-11-26 07:28:35', NULL, NULL, NULL, 0.000),
-(67, 1, 1, 'Garlic', '1', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-26', '2025-12-03', '2025-11-26 07:33:01', '2025-11-26 07:33:01', NULL, NULL, NULL, 0.000),
-(68, 2, 2, 'Pork', '12', 0, 16.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-11-26', '2025-11-26 07:37:02', '2025-11-26 07:37:02', NULL, NULL, NULL, 0.000),
-(69, 1, 1, 'Garlic', '2', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-26', '2025-12-03', '2025-11-26 07:37:32', '2025-11-26 08:05:29', '2025-11-26 08:05:29', NULL, NULL, 0.000),
 (70, 5, 5, 'Sweet Ham', '3', 0, 36.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-25', '2025-11-28', '2025-11-26 07:39:46', '2025-11-26 07:39:46', NULL, NULL, NULL, 0.000),
-(71, 6, 6, 'Pork Tapa', '9', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-26 07:40:15', '2025-11-26 07:40:15', NULL, NULL, NULL, 0.000),
-(72, 4, 4, 'Pork', '1', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-26', '2025-12-03', '2025-11-26 08:04:36', '2025-11-26 08:04:36', NULL, NULL, NULL, 0.000);
+(72, 4, 4, 'Pork', '1', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-26', '2025-12-03', '2025-11-26 08:04:36', '2025-11-26 08:04:36', NULL, NULL, NULL, 0.000),
+(73, 3, 3, 'Pork', '3', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-26 10:08:08', '2025-11-26 10:08:08', NULL, NULL, NULL, 0.000),
+(74, 3, 3, 'Pork', '4', 0, 0.00, 0, 0.00, 0.00, 0.00, 0, 0, '', 'public', NULL, NULL, NULL, '2025-11-23', '2025-12-24', '2025-11-26 10:08:25', '2025-11-26 10:08:25', NULL, NULL, NULL, 0.000),
+(77, 1, 1, 'Special', '1', 50, 0.00, 50, 0.00, 22.00, 440.00, 30, 20, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:16:39', '2025-11-28 01:16:39', NULL, NULL, NULL, 0.000),
+(78, 1, 1, 'Regular', '2', 20, 0.00, 20, 0.00, 22.00, 440.00, 10, 10, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:17:28', '2025-11-28 01:17:28', NULL, NULL, NULL, 0.000),
+(79, 1, 1, 'Chicken', '3', 50, 0.00, 50, 0.00, 22.00, 440.00, 20, 30, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:17:55', '2025-11-28 01:17:55', NULL, NULL, NULL, 0.000),
+(80, 1, 1, 'Hamonado', '4', 20, 0.00, 20, 0.00, 22.00, 440.00, 10, 10, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:18:22', '2025-11-28 01:18:22', NULL, NULL, NULL, 0.000),
+(81, 1, 1, 'Garlic', '5', 50, 0.00, 50, 0.00, 22.00, 440.00, 20, 30, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:18:53', '2025-11-28 01:18:53', NULL, NULL, NULL, 0.000),
+(82, 1, 1, 'Beef', '6', 50, 0.00, 50, 0.00, 22.00, 440.00, 20, 30, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:19:20', '2025-11-28 01:19:20', NULL, NULL, NULL, 0.000),
+(83, 2, 2, 'Pork', '1', 30, 19.00, 30, 0.00, 30.00, 600.00, 20, 10, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:20:33', '2025-11-28 01:20:33', NULL, NULL, NULL, 0.000),
+(84, 2, 2, 'Chicken', '2', 30, 19.00, 30, 0.00, 31.00, 620.00, 15, 2, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:21:11', '2025-12-05 04:21:12', NULL, NULL, NULL, 0.000),
+(86, 7, 7, 'Pork', '1', 50, 0.00, 50, 0.00, 27.00, 540.00, 20, 30, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:24:46', '2025-11-28 01:24:46', NULL, NULL, NULL, 0.000),
+(87, 7, 7, 'Chicken', '2', 50, 0.00, 50, 0.00, 27.00, 540.00, 30, 20, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:25:40', '2025-12-05 05:58:54', NULL, NULL, NULL, 0.000),
+(88, 8, 8, 'Pork', '1', 30, 0.00, 30, 0.00, 50.00, 1000.00, 20, 10, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:27:53', '2025-11-28 01:27:53', NULL, NULL, NULL, 0.000),
+(89, 8, 8, 'Pork', '2', 35, 0.00, 35, 0.00, 50.00, 1000.00, 30, 5, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:28:21', '2025-11-28 01:28:21', NULL, NULL, NULL, 0.000),
+(90, 8, 8, 'Pork', '3', 30, 0.00, 30, 0.00, 50.00, 1000.00, 10, 20, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-02', '2025-11-28 01:29:04', '2025-12-05 03:34:56', '2025-12-05 03:34:56', NULL, NULL, 0.000),
+(91, 2, 2, 'Pork', '3', 30, 19.00, 30, 0.00, 30.00, 600.00, 2, 20, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-01', '2025-11-28 01:31:33', '2025-12-05 03:33:20', NULL, NULL, NULL, 0.000),
+(92, 9, 9, 'Pork', '1', 23, 0.00, 23, 0.00, 33.00, 660.00, 20, 3, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-28', '2025-11-28 01:37:40', '2025-11-28 01:37:40', NULL, NULL, NULL, 0.000),
+(93, 9, 9, 'Pork', '2', 30, 0.00, 30, 0.00, 33.00, 660.00, 20, 10, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-11-30', '2025-11-28 01:42:16', '2025-11-28 01:42:16', NULL, NULL, NULL, 0.000),
+(94, 9, 9, 'Pork', '3', 30, 0.00, 30, 0.00, 33.00, 660.00, 20, 10, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-11-30', '2025-11-28 01:44:58', '2025-11-28 01:44:58', NULL, NULL, NULL, 0.000),
+(95, 10, 10, 'Pork', '1', 3, 0.00, 3, 0.00, 45.00, 900.00, 2, 1, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-02', '2025-11-28 01:46:04', '2025-12-05 03:34:35', '2025-12-05 03:34:35', NULL, NULL, 0.000),
+(96, 10, 10, 'Pork', '1', 9, 0.00, 9, 0.00, 27.00, 500.00, 4, 5, '', 'public', NULL, NULL, NULL, '2025-12-05', '2025-12-08', '2025-12-05 03:36:13', '2025-12-16 21:46:02', '2025-12-16 21:46:02', NULL, NULL, 0.000),
+(97, 7, 7, 'Pork', '3', 60, 0.00, 60, 0.00, 27.00, 450.00, 30, 30, '', 'public', NULL, NULL, NULL, '2025-11-28', '2026-01-06', '2025-12-05 04:15:17', '2025-12-05 04:16:09', '2025-12-05 04:16:09', NULL, NULL, 0.000),
+(98, 2, 2, 'Pork', '4', 35, 19.00, 35, 0.00, 27.00, 450.00, 28, 5, '', 'public', NULL, NULL, NULL, '2025-11-28', '2026-01-05', '2025-12-05 05:11:01', '2025-12-16 23:05:59', NULL, NULL, NULL, 0.000),
+(99, 2, 2, 'Pork', '5', 256, 20.00, 256, 0.00, 23.00, 1233.00, 233, 23, '', 'public', NULL, NULL, NULL, '2025-11-28', '2026-01-05', '2025-12-05 05:53:04', '2025-12-05 05:59:48', '2025-12-05 05:59:48', NULL, 'from_sale', 0.000),
+(100, 2, 2, 'Pork', '5', 20, 20.00, 20, 0.00, 27.00, 450.00, 10, 10, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-08', '2025-12-16 23:07:23', '2025-12-16 23:07:23', NULL, NULL, NULL, 0.000),
+(101, 2, 2, 'Pork', '6', 15, 21.00, 15, 0.00, 27.00, 459.00, 5, 10, '', 'public', NULL, NULL, NULL, '2025-11-28', '2025-12-20', '2025-12-16 23:08:07', '2025-12-16 23:08:07', NULL, NULL, NULL, 0.000);
 
 -- --------------------------------------------------------
 
@@ -475,12 +555,16 @@ CREATE TABLE `products` (
 --
 
 INSERT INTO `products` (`id`, `parent_id`, `name`, `product_name`, `product_code`, `price`, `batch_number`, `category`, `image_disk`, `image_path`, `image_medium_path`, `image_thumb_path`, `production_date`, `quantity`, `current_inventory`, `unit_cost`, `last_cost_date`, `default_price`, `forecasted_demand`, `image_url`, `card_image_url`, `card_image_srcset`, `stock_status`, `status`, `unit`, `created_at`, `updated_at`, `deleted_at`, `shelf_life_days`, `temp_requirements`, `storage_zone`, `yield_rate`, `standard_batch_size`, `lead_time_days`, `min_run_qty`, `max_run_qty`, `line_constraints`) VALUES
-(1, NULL, NULL, 'Skinless longganisa', NULL, NULL, NULL, 'Garlic', 'public', 'products/1/skinless-longganisa.webp', NULL, NULL, '2025-11-26', 0, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/1/skinless-longganisa.webp', 'http://localhost:8000/storage/products/1/skinless-longganisa.webp', NULL, 'out_of_stock', NULL, NULL, '2025-11-14 04:56:06', '2025-11-26 07:37:32', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-(2, NULL, NULL, 'Bologna', NULL, NULL, NULL, 'Pork', 'public', 'products/2/bologna.png', '', '', '2025-11-23', 290, NULL, 940.00, NULL, NULL, 16, 'http://localhost:8000/storage/products/2/bologna.png', 'http://localhost:8000/storage/products/2/bologna.png', NULL, 'in_stock', NULL, NULL, '2025-11-15 08:03:09', '2025-11-26 07:37:02', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-(3, NULL, NULL, 'Embutido', NULL, NULL, NULL, 'Pork', 'public', 'products/3/embutido.png', NULL, NULL, '2025-11-23', 15, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/3/embutido.png', 'http://localhost:8000/storage/products/3/embutido.png', NULL, 'in_stock', NULL, NULL, '2025-11-15 09:04:27', '2025-11-26 07:18:05', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-(4, NULL, NULL, 'Salami', NULL, NULL, NULL, 'Pork', 'public', 'products/4/salami.png', NULL, NULL, '2025-11-26', 0, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/4/salami.png', 'http://localhost:8000/storage/products/4/salami.png', NULL, 'out_of_stock', NULL, NULL, '2025-11-22 00:05:22', '2025-11-26 08:04:36', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-(5, NULL, NULL, 'Sweet ham', NULL, NULL, NULL, 'Sweet Ham', 'public', 'products/5/sweet-ham.png', '', '', '2025-11-25', 193, NULL, 0.00, NULL, NULL, 36, 'http://localhost:8000/storage/products/5/sweet-ham.png', 'http://localhost:8000/storage/products/5/sweet-ham.png', NULL, 'in_stock', NULL, NULL, '2025-11-23 06:23:08', '2025-11-26 07:39:46', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-(6, NULL, NULL, 'Pork tapa', NULL, NULL, NULL, 'Pork Tapa', 'public', 'products/6/pork-tapa.png', '', '', '2025-11-23', 20, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/6/pork-tapa.png', 'http://localhost:8000/storage/products/6/pork-tapa.png', NULL, 'in_stock', NULL, NULL, '2025-11-23 11:18:27', '2025-11-26 07:40:15', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+(1, NULL, NULL, 'Skinless longganisa', NULL, NULL, NULL, 'Beef', 'public', 'products/1/skinless-longganisa.webp', NULL, NULL, '2025-11-28', 240, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/1/skinless-longganisa.webp', 'http://localhost:8000/storage/products/1/skinless-longganisa.webp', NULL, 'in_stock', NULL, NULL, '2025-11-14 04:56:06', '2025-11-28 01:19:20', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(2, NULL, NULL, 'Bologna', NULL, NULL, NULL, 'Pork', 'public', 'products/2/bologna.png', '', '', '2025-11-28', 114, NULL, 1790.00, NULL, NULL, 21, 'http://localhost:8000/storage/products/2/bologna.png', 'http://localhost:8000/storage/products/2/bologna.png', NULL, 'in_stock', NULL, NULL, '2025-11-15 08:03:09', '2025-12-16 23:08:07', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(3, NULL, NULL, 'Embutido', NULL, NULL, NULL, 'Pork', 'public', 'products/3/embutido.png', NULL, NULL, '2025-11-23', 15, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/3/embutido.png', 'http://localhost:8000/storage/products/3/embutido.png', NULL, 'in_stock', NULL, NULL, '2025-11-15 09:04:27', '2025-11-26 18:06:11', '2025-11-26 18:06:11', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(4, NULL, NULL, 'Salami', NULL, NULL, NULL, 'Pork', 'public', 'products/4/salami.png', NULL, NULL, '2025-11-26', 0, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/4/salami.png', 'http://localhost:8000/storage/products/4/salami.png', NULL, 'out_of_stock', NULL, NULL, '2025-11-22 00:05:22', '2025-11-26 10:17:24', '2025-11-26 10:17:24', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(5, NULL, NULL, 'Sweet ham', NULL, NULL, NULL, 'Sweet Ham', 'public', 'products/5/sweet-ham.png', '', '', '2025-11-25', 0, NULL, 0.00, NULL, NULL, 36, 'http://localhost:8000/storage/products/5/sweet-ham.png', 'http://localhost:8000/storage/products/5/sweet-ham.png', NULL, 'out_of_stock', NULL, NULL, '2025-11-23 06:23:08', '2025-11-26 17:54:31', '2025-11-26 17:54:31', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(6, NULL, NULL, 'Pork tapa', NULL, NULL, NULL, 'Pork Tapa', 'public', 'products/6/pork-tapa.png', '', '', '2025-11-23', 20, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/6/pork-tapa.png', 'http://localhost:8000/storage/products/6/pork-tapa.png', NULL, 'in_stock', NULL, NULL, '2025-11-23 11:18:27', '2025-11-26 17:59:15', '2025-11-26 17:59:15', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(7, NULL, NULL, 'Embutido', NULL, NULL, NULL, 'Pork', 'public', 'products/7/embutido.png', NULL, NULL, '2025-11-28', 100, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/7/embutido.png', 'http://localhost:8000/storage/products/7/embutido.png', NULL, 'in_stock', NULL, NULL, '2025-11-28 01:23:30', '2025-12-05 05:54:32', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(8, NULL, NULL, 'Pork tapa', NULL, NULL, NULL, 'Pork', 'public', 'products/8/pork-tapa.png', NULL, NULL, '2025-11-28', 65, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/8/pork-tapa.png', 'http://localhost:8000/storage/products/8/pork-tapa.png', NULL, 'in_stock', NULL, NULL, '2025-11-28 01:27:53', '2025-11-28 01:27:53', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(9, NULL, NULL, 'Salami', NULL, NULL, NULL, 'Pork', 'public', 'products/9/salami.png', NULL, NULL, '2025-11-28', 83, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/9/salami.png', 'http://localhost:8000/storage/products/9/salami.png', NULL, 'in_stock', NULL, NULL, '2025-11-28 01:37:40', '2025-11-28 01:44:58', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(10, NULL, NULL, 'Pork tocino', NULL, NULL, NULL, 'Pork', 'public', 'products/10/pork-tocino.png', NULL, NULL, NULL, 0, NULL, 0.00, NULL, NULL, 0, 'http://localhost:8000/storage/products/10/pork-tocino.png', 'http://localhost:8000/storage/products/10/pork-tocino.png', NULL, 'out_of_stock', NULL, NULL, '2025-11-28 01:46:04', '2025-12-05 03:36:12', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -507,14 +591,78 @@ CREATE TABLE `product_recipes` (
 --
 
 INSERT INTO `product_recipes` (`id`, `product_id`, `material_id`, `ingredient_id`, `qty`, `quantity_per_unit`, `wastage_pct`, `unit`, `unit_price_snapshot`, `created_at`, `updated_at`) VALUES
-(1, 1, 2, NULL, 2.000, NULL, 0.00, 'kg', 40.00, '2025-11-14 05:58:16', '2025-11-14 05:58:16'),
-(2, 1, 1, NULL, 3.000, NULL, 0.00, 'kg', 30.00, '2025-11-14 05:58:24', '2025-11-14 05:58:24'),
-(14, 2, 3, NULL, 1.000, NULL, 0.00, 'kg', 400.00, '2025-11-25 09:29:58', '2025-11-25 09:29:58'),
-(15, 2, 2, NULL, 1.000, NULL, 0.00, 'kg', 40.00, '2025-11-25 09:30:02', '2025-11-25 09:30:02'),
-(16, 2, 1, NULL, 1.000, NULL, 0.00, 'kg', 30.00, '2025-11-25 09:30:07', '2025-11-25 09:30:07'),
-(17, 2, 3, NULL, 1.000, NULL, 0.00, 'kg', 400.00, '2025-11-25 09:32:38', '2025-11-25 09:32:38'),
-(18, 2, 2, NULL, 1.000, NULL, 0.00, 'kg', 40.00, '2025-11-25 09:32:38', '2025-11-25 09:32:38'),
-(19, 2, 1, NULL, 1.000, NULL, 0.00, 'kg', 30.00, '2025-11-25 09:32:38', '2025-11-25 09:32:38');
+(1, 1, 2, 2, 2.000, NULL, 0.00, 'kg', 40.00, '2025-11-14 05:58:16', '2025-12-17 05:33:10'),
+(2, 1, 1, 1, 3.000, NULL, 0.00, 'kg', 30.00, '2025-11-14 05:58:24', '2025-12-17 05:33:10'),
+(14, 2, 3, 3, 1.000, NULL, 0.00, 'kg', 400.00, '2025-11-25 09:29:58', '2025-12-17 05:33:10'),
+(15, 2, 2, 2, 1.000, NULL, 0.00, 'kg', 40.00, '2025-11-25 09:30:02', '2025-12-17 05:33:10'),
+(16, 2, 1, 1, 1.000, NULL, 0.00, 'kg', 30.00, '2025-11-25 09:30:07', '2025-12-17 05:33:10'),
+(17, 2, 3, 3, 1.000, NULL, 0.00, 'kg', 400.00, '2025-11-25 09:32:38', '2025-12-17 05:33:10'),
+(18, 2, 2, 2, 1.000, NULL, 0.00, 'kg', 40.00, '2025-11-25 09:32:38', '2025-12-17 05:33:10'),
+(19, 2, 1, 1, 1.000, NULL, 0.00, 'kg', 30.00, '2025-11-25 09:32:38', '2025-12-17 05:33:10'),
+(20, 2, 4, 4, 1.000, NULL, 0.00, 'kg', 50.00, '2025-12-05 03:52:37', '2025-12-17 05:33:10'),
+(21, 2, 3, 3, 1.000, NULL, 0.00, 'kg', 400.00, '2025-12-05 05:53:50', '2025-12-17 05:33:10'),
+(22, 2, 3, 3, 1.000, NULL, 0.00, 'kg', 400.00, '2025-12-05 06:00:24', '2025-12-17 05:33:10');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `reservations`
+--
+
+CREATE TABLE `reservations` (
+  `id` bigint(20) UNSIGNED NOT NULL,
+  `product_id` bigint(20) UNSIGNED NOT NULL,
+  `production_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `reserved_date` date NOT NULL,
+  `units` int(10) UNSIGNED NOT NULL,
+  `unit_type` varchar(20) NOT NULL DEFAULT 'pack',
+  `customer_name` varchar(255) DEFAULT NULL,
+  `reference_code` varchar(255) DEFAULT NULL,
+  `notes` varchar(1000) DEFAULT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'reserved',
+  `sale_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `user_id` bigint(20) UNSIGNED DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT NULL,
+  `updated_at` timestamp NULL DEFAULT NULL,
+  `deleted_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `reservations`
+--
+
+INSERT INTO `reservations` (`id`, `product_id`, `production_id`, `reserved_date`, `units`, `unit_type`, `customer_name`, `reference_code`, `notes`, `status`, `sale_id`, `user_id`, `created_at`, `updated_at`, `deleted_at`) VALUES
+(1, 2, NULL, '2025-11-23', 5, 'bag', NULL, NULL, 'Jethro Mandalones', 'reserved', NULL, 1, '2025-11-27 21:29:36', '2025-11-27 21:29:36', NULL),
+(2, 2, NULL, '2025-11-29', 3, 'pack', NULL, NULL, NULL, 'reserved', NULL, 1, '2025-11-27 21:30:21', '2025-11-27 21:30:21', NULL),
+(3, 2, NULL, '2025-11-27', 2, 'bag', NULL, NULL, 'Jethro Mandalones', 'reserved', NULL, 1, '2025-11-27 22:21:32', '2025-11-27 22:21:32', NULL),
+(4, 2, NULL, '2025-11-28', 2, 'pack', NULL, NULL, '2', 'reserved', NULL, 1, '2025-11-27 22:22:04', '2025-11-27 22:22:04', NULL),
+(5, 2, NULL, '2025-11-23', 3, 'pack', NULL, NULL, 'Jethro Mandalones', 'reserved', NULL, 1, '2025-11-27 22:52:33', '2025-11-27 22:52:33', NULL),
+(6, 2, NULL, '2025-11-27', 3, 'pack', NULL, NULL, 'Jethro Mandalones', 'reserved', NULL, 1, '2025-11-27 22:53:18', '2025-11-27 22:53:18', NULL),
+(7, 1, NULL, '2025-11-28', 2, 'pack', NULL, NULL, 'Jethro Mandalones', 'reserved', NULL, 1, '2025-11-27 23:20:58', '2025-11-27 23:20:58', NULL),
+(8, 2, NULL, '2025-11-29', 3, 'pack', NULL, NULL, 'Jethro mandalones', 'reserved', NULL, 1, '2025-11-27 23:23:25', '2025-11-27 23:23:25', NULL),
+(9, 2, NULL, '2025-11-28', 2, 'pack', NULL, NULL, 'Jethro Mandalones', 'reserved', NULL, 1, '2025-11-27 23:44:47', '2025-11-27 23:44:47', NULL),
+(10, 8, NULL, '2025-11-27', 5, 'pack', NULL, NULL, 'Jethro Mandalones', 'reserved', NULL, 1, '2025-11-28 01:48:59', '2025-11-28 01:48:59', NULL),
+(11, 2, NULL, '2025-12-08', 3, 'pack', NULL, NULL, 'Ms. Hycian Bonilla', 'reserved', NULL, 1, '2025-12-05 04:11:21', '2025-12-05 04:11:21', NULL),
+(12, 2, NULL, '2025-12-08', 3, 'pack', NULL, NULL, 'Ms. Hycian Bonilla', 'reserved', NULL, 1, '2025-12-05 04:11:42', '2025-12-05 04:11:42', NULL),
+(13, 2, NULL, '2025-12-08', 3, 'pack', NULL, NULL, NULL, 'reserved', NULL, 1, '2025-12-05 04:12:09', '2025-12-05 04:12:09', NULL),
+(14, 8, NULL, '2025-12-10', 2, 'pack', NULL, NULL, 'Ms. Lykah joy', 'reserved', NULL, 1, '2025-12-05 05:06:34', '2025-12-05 05:06:34', NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Stand-in structure for view `reservation_events`
+-- (See below for the actual view)
+--
+CREATE TABLE `reservation_events` (
+`id` bigint(20) unsigned
+,`product_id` bigint(20) unsigned
+,`product_name` varchar(255)
+,`title` varchar(190)
+,`start_date` date
+,`end_date` date
+,`reserved_qty` decimal(12,3)
+,`status` varchar(20)
+);
 
 -- --------------------------------------------------------
 
@@ -555,12 +703,16 @@ CREATE TABLE `sales` (
 --
 
 INSERT INTO `sales` (`id`, `product_id`, `unit_price`, `order_date`, `production_date`, `expiration_date`, `production_id`, `invoice_number`, `order_number`, `product`, `type_label`, `product_name`, `date`, `quantity`, `quantity_kg`, `unit_type`, `price`, `total_price`, `total`, `status`, `customer_name`, `notes`, `created_at`, `updated_at`, `deleted_at`) VALUES
-(48, 2, 30.00, '2025-11-23', NULL, NULL, 42, 'INV-20251123-003', 'INV-20251123-003', 'Bologna', 'Pork', NULL, '2025-11-23 00:00:00', 5, 5.000, 'pack', 30.00, 150.00, 150.00, 'Paid', 'Jethro Mandalones', NULL, '2025-11-23 10:43:25', '2025-11-23 10:43:54', NULL),
-(49, 2, 30.00, '2025-11-23', NULL, NULL, 44, 'INV-20251123-004', 'INV-20251123-004', 'Bologna', 'Pork', NULL, '2025-11-23 00:00:00', 2, 2.000, 'pack', 30.00, 60.00, 60.00, 'Pending', NULL, NULL, '2025-11-23 10:54:58', '2025-11-23 10:54:58', NULL),
-(50, 2, 540.00, '2025-11-23', NULL, NULL, 42, 'INV-20251123-005', 'INV-20251123-005', 'Bologna', 'Pork', NULL, '2025-11-23 00:00:00', 3, 3.000, 'bag', 540.00, 1620.00, 1620.00, 'Pending', NULL, NULL, '2025-11-23 10:55:54', '2025-11-23 10:55:54', NULL),
-(51, 2, 620.00, '2025-11-23', NULL, NULL, 46, 'INV-20251123-006', 'INV-20251123-006', 'Bologna', 'Chicken', NULL, '2025-11-23 00:00:00', 2, 2.000, 'bag', 620.00, 1240.00, 1240.00, 'Pending', NULL, NULL, '2025-11-23 10:58:12', '2025-11-23 10:58:12', NULL),
-(52, 2, 31.00, '2025-11-24', NULL, NULL, 46, 'INV-20251124-001', 'INV-20251124-001', 'Bologna', 'Chicken', NULL, '2025-11-24 00:00:00', 5, 5.000, 'pack', 31.00, 155.00, 155.00, 'Paid', NULL, NULL, '2025-11-23 21:09:44', '2025-11-23 21:11:19', NULL),
-(53, 5, 27.00, '2025-11-25', NULL, NULL, 57, 'INV-20251125-001', 'INV-20251125-001', 'Sweet ham', 'Sweet Ham', NULL, '2025-11-25 00:00:00', 39, 39.000, 'pack', 27.00, 1053.00, 1053.00, 'Pending', NULL, NULL, '2025-11-25 07:01:03', '2025-11-25 07:01:03', NULL);
+(57, 2, 30.00, '2025-11-28', NULL, NULL, 91, 'INV-20251128-001', 'INV-20251128-001', 'Bologna', 'Pork', NULL, '2025-11-28 00:00:00', 5, 5.000, 'pack', 30.00, 150.00, 150.00, 'Pending', NULL, NULL, '2025-11-28 01:32:33', '2025-11-28 01:32:33', NULL),
+(58, 2, 620.00, '2025-11-28', NULL, NULL, 84, 'INV-20251128-002', 'INV-20251128-002', 'Bologna', 'Chicken', NULL, '2025-11-28 00:00:00', 5, 5.000, 'bag', 620.00, 3100.00, 3100.00, 'Pending', NULL, NULL, '2025-11-28 01:32:53', '2025-11-28 01:32:53', NULL),
+(59, 7, 540.00, '2025-11-28', NULL, NULL, 87, 'INV-20251128-003', 'INV-20251128-003', 'Embutido', 'Chicken', NULL, '2025-11-28 00:00:00', 4, 4.000, 'bag', 540.00, 2160.00, 2160.00, 'Paid', 'Jethro Mandalones', NULL, '2025-11-28 01:46:41', '2025-11-28 18:30:10', '2025-11-28 18:30:10'),
+(60, 2, 30.00, '2025-12-05', NULL, NULL, 91, 'INV-20251205-001', 'INV-20251205-001', 'Bologna', 'Pork', NULL, '2025-12-05 00:00:00', 3, 3.000, 'pack', 30.00, 90.00, 90.00, 'Pending', NULL, NULL, '2025-12-05 03:33:20', '2025-12-05 03:33:20', NULL),
+(61, 2, 620.00, '2025-12-05', NULL, NULL, 84, 'INV-20251205-003', 'INV-20251205-003', 'Bologna', 'Chicken', NULL, '2025-12-05 00:00:00', 3, 3.000, 'bag', 620.00, 1860.00, 1860.00, 'Paid', NULL, NULL, '2025-12-05 03:34:01', '2025-12-05 04:18:44', NULL),
+(62, 2, 31.00, '2025-12-05', NULL, NULL, 84, 'INV-20251205-004', 'INV-20251205-004', 'Bologna', 'Chicken', NULL, '2025-12-05 00:00:00', 5, 5.000, 'pack', 31.00, 155.00, 155.00, 'Pending', 'Cleo Fae Jantar', NULL, '2025-12-05 04:21:12', '2025-12-05 05:42:14', NULL),
+(63, 2, 27.00, '2025-12-05', NULL, NULL, 98, 'INV-20251205-005', 'INV-20251205-005', 'Bologna', 'Pork', NULL, '2025-12-05 00:00:00', 5, 5.000, 'pack', 27.00, 135.00, 135.00, 'Paid', 'Cleo Fae Jantar', NULL, '2025-12-05 05:13:34', '2025-12-05 05:17:29', '2025-12-05 05:17:29'),
+(64, 7, 540.00, '2025-12-05', NULL, NULL, 87, 'INV-20251205-006', 'INV-20251205-006', 'Embutido', 'Chicken', NULL, '2025-12-05 00:00:00', 2, 2.000, 'bag', 540.00, 1080.00, 1080.00, 'Pending', NULL, NULL, '2025-12-05 05:33:38', '2025-12-05 05:54:32', '2025-12-05 05:54:32'),
+(65, 2, 1390.00, '2025-12-05', NULL, NULL, 99, 'INV-20251205-007', 'INV-20251205-007', 'Bologna', 'Pork', NULL, '2025-12-05 00:00:00', 3, 3.000, 'pack', 1390.00, 4170.00, 4170.00, 'Pending', NULL, NULL, '2025-12-05 05:59:27', '2025-12-05 05:59:48', '2025-12-05 05:59:48'),
+(66, 2, 27.00, '2025-12-17', NULL, NULL, 98, 'INV-20251217-001', 'INV-20251217-001', 'Bologna', 'Pork', NULL, '2025-12-17 00:00:00', 2, 2.000, 'pack', 27.00, 54.00, 54.00, 'Pending', NULL, NULL, '2025-12-16 23:05:59', '2025-12-16 23:05:59', NULL);
 
 -- --------------------------------------------------------
 
@@ -583,14 +735,28 @@ CREATE TABLE `sale_audits` (
 --
 
 INSERT INTO `sale_audits` (`id`, `sale_id`, `order_item_id`, `message`, `at`, `created_at`, `updated_at`) VALUES
-(58, 48, NULL, 'Deducted 5 pack(s) from batch 1 (Production #42).', '2025-11-23 18:43:25', '2025-11-23 10:43:25', '2025-11-23 10:43:25'),
-(59, 49, NULL, 'Deducted 2 pack(s) from batch 2 (Production #44).', '2025-11-23 18:54:58', '2025-11-23 10:54:58', '2025-11-23 10:54:58'),
-(60, 50, NULL, 'Deducted 3 bag(s) from batch 1 (Production #42).', '2025-11-23 18:55:54', '2025-11-23 10:55:54', '2025-11-23 10:55:54'),
-(61, 51, NULL, 'Deducted 2 bag(s) from batch 3 (Production #46).', '2025-11-23 18:58:12', '2025-11-23 10:58:12', '2025-11-23 10:58:12'),
-(62, 52, NULL, 'Deducted 5 pack(s) from batch 3 (Production #46).', '2025-11-24 05:09:44', '2025-11-23 21:09:44', '2025-11-23 21:09:44'),
-(63, 52, NULL, 'Returned 5 pack(s) to batch 3 (Production #46).', '2025-11-24 05:11:19', '2025-11-23 21:11:19', '2025-11-23 21:11:19'),
-(64, 52, NULL, 'Deducted 5 pack(s) from batch 3 (Production #46).', '2025-11-24 05:11:19', '2025-11-23 21:11:19', '2025-11-23 21:11:19'),
-(65, 53, NULL, 'Deducted 39 pack(s) from batch 1 (Production #57).', '2025-11-25 15:01:03', '2025-11-25 07:01:03', '2025-11-25 07:01:03');
+(75, 57, NULL, 'Deducted 5 pack(s) from batch 3 (Production #91).', '2025-11-28 09:32:33', '2025-11-28 01:32:33', '2025-11-28 01:32:33'),
+(76, 58, NULL, 'Deducted 5 bag(s) from batch 2 (Production #84).', '2025-11-28 09:32:53', '2025-11-28 01:32:53', '2025-11-28 01:32:53'),
+(77, 59, NULL, 'Deducted 5 bag(s) from batch 2 (Production #87).', '2025-11-28 09:46:41', '2025-11-28 01:46:41', '2025-11-28 01:46:41'),
+(78, 59, NULL, 'Returned 5 bag(s) to batch 2 (Production #87).', '2025-11-28 11:17:42', '2025-11-28 03:17:42', '2025-11-28 03:17:42'),
+(79, 59, NULL, 'Deducted 3 bag(s) from batch 2 (Production #87).', '2025-11-28 11:17:43', '2025-11-28 03:17:43', '2025-11-28 03:17:43'),
+(80, 59, NULL, 'Returned 3 bag(s) to batch 2 (Production #87).', '2025-11-28 11:18:23', '2025-11-28 03:18:23', '2025-11-28 03:18:23'),
+(81, 59, NULL, 'Deducted 4 bag(s) from batch 2 (Production #87).', '2025-11-28 11:18:23', '2025-11-28 03:18:23', '2025-11-28 03:18:23'),
+(82, 59, NULL, 'Returned 4 bag(s) to batch 2 (Production #87).', '2025-11-29 02:30:10', '2025-11-28 18:30:10', '2025-11-28 18:30:10'),
+(83, 60, NULL, 'Deducted 3 pack(s) from batch 3 (Production #91).', '2025-12-05 11:33:20', '2025-12-05 03:33:20', '2025-12-05 03:33:20'),
+(84, 61, NULL, 'Deducted 3 bag(s) from batch 2 (Production #84).', '2025-12-05 11:34:01', '2025-12-05 03:34:01', '2025-12-05 03:34:01'),
+(85, 61, NULL, 'Returned 3 bag(s) to batch 2 (Production #84).', '2025-12-05 12:18:44', '2025-12-05 04:18:44', '2025-12-05 04:18:44'),
+(86, 61, NULL, 'Deducted 3 bag(s) from batch 2 (Production #84).', '2025-12-05 12:18:45', '2025-12-05 04:18:45', '2025-12-05 04:18:45'),
+(87, 62, NULL, 'Deducted 5 pack(s) from batch 2 (Production #84).', '2025-12-05 12:21:12', '2025-12-05 04:21:12', '2025-12-05 04:21:12'),
+(88, 63, NULL, 'Deducted 5 pack(s) from batch 4 (Production #98).', '2025-12-05 13:13:34', '2025-12-05 05:13:34', '2025-12-05 05:13:34'),
+(89, 63, NULL, 'Returned 5 pack(s) to batch 4 (Production #98).', '2025-12-05 13:14:25', '2025-12-05 05:14:25', '2025-12-05 05:14:25'),
+(90, 63, NULL, 'Deducted 5 pack(s) from batch 4 (Production #98).', '2025-12-05 13:14:25', '2025-12-05 05:14:25', '2025-12-05 05:14:25'),
+(91, 63, NULL, 'Returned 5 pack(s) to batch 4 (Production #98).', '2025-12-05 13:17:29', '2025-12-05 05:17:29', '2025-12-05 05:17:29'),
+(92, 64, NULL, 'Deducted 2 bag(s) from batch 2 (Production #87).', '2025-12-05 13:33:38', '2025-12-05 05:33:38', '2025-12-05 05:33:38'),
+(93, 64, NULL, 'Returned 2 bag(s) to batch 2 (Production #87).', '2025-12-05 13:54:32', '2025-12-05 05:54:32', '2025-12-05 05:54:32'),
+(94, 65, NULL, 'Deducted 3 pack(s) from batch 5 (Production #99).', '2025-12-05 13:59:27', '2025-12-05 05:59:27', '2025-12-05 05:59:27'),
+(95, 65, NULL, 'Returned 3 pack(s) to batch 5 (Production #99).', '2025-12-05 13:59:48', '2025-12-05 05:59:48', '2025-12-05 05:59:48'),
+(96, 66, NULL, 'Deducted 2 pack(s) from batch 4 (Production #98).', '2025-12-17 07:05:59', '2025-12-16 23:05:59', '2025-12-16 23:05:59');
 
 -- --------------------------------------------------------
 
@@ -659,6 +825,15 @@ INSERT INTO `user_settings` (`id`, `user_id`, `appearance`, `created_at`, `updat
 -- --------------------------------------------------------
 
 --
+-- Structure for view `reservation_events`
+--
+DROP TABLE IF EXISTS `reservation_events`;
+
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `reservation_events`  AS SELECT `de`.`id` AS `id`, `de`.`product_id` AS `product_id`, `p`.`product_name` AS `product_name`, `de`.`title` AS `title`, `de`.`start_date` AS `start_date`, `de`.`end_date` AS `end_date`, `de`.`reserved_qty` AS `reserved_qty`, `de`.`status` AS `status` FROM (`demand_events` `de` left join `products` `p` on(`p`.`id` = `de`.`product_id`)) WHERE `de`.`event_type` = 'reservation' AND `de`.`status` <> 'cancelled' AND `de`.`deleted_at` is null ;
+
+-- --------------------------------------------------------
+
+--
 -- Structure for view `users`
 --
 DROP TABLE IF EXISTS `users`;
@@ -697,6 +872,13 @@ ALTER TABLE `batch_allocations`
   ADD KEY `batch_allocations_sale_id_index` (`sale_id`),
   ADD KEY `batch_allocations_order_item_id_index` (`order_item_id`),
   ADD KEY `batch_allocations_production_id_index` (`production_id`);
+
+--
+-- Indexes for table `demand_events`
+--
+ALTER TABLE `demand_events`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_demand_events_product` (`product_id`);
 
 --
 -- Indexes for table `employees`
@@ -787,6 +969,14 @@ ALTER TABLE `product_recipes`
   ADD KEY `product_recipes_ingredient_id_index` (`ingredient_id`);
 
 --
+-- Indexes for table `reservations`
+--
+ALTER TABLE `reservations`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_reservations_user_id` (`user_id`),
+  ADD KEY `idx_reservations_product_id` (`product_id`);
+
+--
 -- Indexes for table `sales`
 --
 ALTER TABLE `sales`
@@ -827,7 +1017,7 @@ ALTER TABLE `user_settings`
 -- AUTO_INCREMENT for table `app_users`
 --
 ALTER TABLE `app_users`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `batches`
@@ -839,13 +1029,19 @@ ALTER TABLE `batches`
 -- AUTO_INCREMENT for table `batch_allocations`
 --
 ALTER TABLE `batch_allocations`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=53;
+
+--
+-- AUTO_INCREMENT for table `demand_events`
+--
+ALTER TABLE `demand_events`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `employees`
 --
 ALTER TABLE `employees`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `inventory`
@@ -863,19 +1059,19 @@ ALTER TABLE `inventory_ledgers`
 -- AUTO_INCREMENT for table `invoice_sequences`
 --
 ALTER TABLE `invoice_sequences`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `login_activities`
 --
 ALTER TABLE `login_activities`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=43;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=79;
 
 --
 -- AUTO_INCREMENT for table `materials`
 --
 ALTER TABLE `materials`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `order_sequences`
@@ -887,31 +1083,37 @@ ALTER TABLE `order_sequences`
 -- AUTO_INCREMENT for table `productions`
 --
 ALTER TABLE `productions`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=73;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=102;
 
 --
 -- AUTO_INCREMENT for table `products`
 --
 ALTER TABLE `products`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT for table `product_recipes`
 --
 ALTER TABLE `product_recipes`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+
+--
+-- AUTO_INCREMENT for table `reservations`
+--
+ALTER TABLE `reservations`
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `sales`
 --
 ALTER TABLE `sales`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=54;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=67;
 
 --
 -- AUTO_INCREMENT for table `sale_audits`
 --
 ALTER TABLE `sale_audits`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=66;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=97;
 
 --
 -- AUTO_INCREMENT for table `settings`
@@ -944,6 +1146,12 @@ ALTER TABLE `batch_allocations`
   ADD CONSTRAINT `batch_allocations_sale_fk` FOREIGN KEY (`sale_id`) REFERENCES `sales` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
+-- Constraints for table `demand_events`
+--
+ALTER TABLE `demand_events`
+  ADD CONSTRAINT `fk_demand_events_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE SET NULL;
+
+--
 -- Constraints for table `employees`
 --
 ALTER TABLE `employees`
@@ -971,6 +1179,13 @@ ALTER TABLE `login_activities`
 ALTER TABLE `product_recipes`
   ADD CONSTRAINT `product_recipes_ingredient_id_foreign` FOREIGN KEY (`ingredient_id`) REFERENCES `materials` (`id`),
   ADD CONSTRAINT `product_recipes_product_id_foreign` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `reservations`
+--
+ALTER TABLE `reservations`
+  ADD CONSTRAINT `fk_reservations_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `fk_reservations_user` FOREIGN KEY (`user_id`) REFERENCES `app_users` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `sales`

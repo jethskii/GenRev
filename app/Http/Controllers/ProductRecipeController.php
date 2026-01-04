@@ -14,18 +14,19 @@ class ProductRecipeController extends Controller
 {
     /**
      * GET /products/{product}/materials
-     * Render the per-product BOM editor.
      * View: resources/views/products/materials/index.blade.php
      */
     public function index(Product $product, Request $request)
     {
-        // Current recipe lines with their material loaded
+        // ✅ Keep legacy/material columns synced (only for this product)
+        $this->syncLegacyColumnsForProduct($product->id);
+
         $recipe = $product->recipes()
             ->with(['material:id,material_name,unit,unit_price'])
             ->orderBy('id')
             ->get();
 
-        // Materials for the dropdown; expose unit_price as default_unit_price
+        // Materials for dropdown
         $materials = Material::query()
             ->select('id', 'material_name', 'unit')
             ->addSelect(DB::raw('unit_price as default_unit_price'))
@@ -35,7 +36,7 @@ class ProductRecipeController extends Controller
         if ($request->wantsJson()) {
             return response()->json([
                 'ok'        => true,
-                'product'   => $product->only(['id','product_name','unit','category']),
+                'product'   => $product->only(['id', 'product_name', 'unit', 'category']),
                 'recipe'    => $recipe,
                 'materials' => $materials,
             ]);
@@ -47,81 +48,116 @@ class ProductRecipeController extends Controller
     /**
      * POST /products/{product}/materials
      *
-     * Accepts multiple rows from the BOM add-lines form:
-     *   rows[n][material_id]
-     *   rows[n][qty]
-     *   rows[n][unit_price]
-     *   rows[n][unit] (optional)
+     * Accepts your Blade payload:
+     *  rows[][ingredient_id]           (material id)
+     *  rows[][quantity_per_unit]
+     *  rows[][wastage_pct]
+     *  rows[][unit_price_snapshot]
      *
-     * We:
-     * - upsert by (product_id, ingredient_id/material_id)
-     * - keep legacy columns in sync (ingredient_id, qty)
-     * - update product.unit_cost based on all recipe lines.
+     * Behavior:
+     * - UPSERT each posted line (unique per product + material_id)
+     * - DELETE existing lines not included anymore (SYNC)
+     * - Recompute product.unit_cost (uses wastage + snapshot)
      */
     public function store(Request $request, Product $product)
     {
+        // Allow saving an empty recipe (if user removes all rows)
+        $rows = $request->input('rows', []);
+        if (!is_array($rows)) $rows = [];
+
+        // Filter out completely empty rows (safety)
+        $rows = array_values(array_filter($rows, function ($r) {
+            if (!is_array($r)) return false;
+            $id = $r['ingredient_id'] ?? $r['material_id'] ?? null;
+            return !empty($id);
+        }));
+
         $validated = $request->validate([
-            'rows'               => ['required','array','min:1'],
-            'rows.*.material_id' => ['required','integer','exists:materials,id'],
-            'rows.*.qty'         => ['required','numeric','min:0'],
-            'rows.*.unit_price'  => ['required','numeric','min:0'],
-            'rows.*.unit'        => ['nullable','string','max:20'],
+            'rows'                             => ['nullable', 'array'],
+            'rows.*.ingredient_id'             => ['nullable', 'integer', 'exists:materials,id'],
+            'rows.*.material_id'               => ['nullable', 'integer', 'exists:materials,id'],
+
+            'rows.*.quantity_per_unit'         => ['nullable', 'numeric', 'min:0'],
+            'rows.*.qty'                       => ['nullable', 'numeric', 'min:0'], // legacy fallback
+
+            'rows.*.wastage_pct'               => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'rows.*.unit_price_snapshot'       => ['nullable', 'numeric', 'min:0'],
+            'rows.*.unit_price'                => ['nullable', 'numeric', 'min:0'], // fallback
+            'rows.*.unit'                      => ['nullable', 'string', 'max:50'],
         ]);
 
-        DB::transaction(function () use ($validated, $product) {
-            foreach ($validated['rows'] as $row) {
-                $matId = (int) $row['material_id'];
-                $qty   = (float) $row['qty'];
-                $snap  = round((float) $row['unit_price'], 2);
-                $unit  = isset($row['unit']) ? trim((string) $row['unit']) : null;
+        DB::transaction(function () use ($product, $rows) {
 
-                // Fallback snapshot from Material if 0
-                if ($snap === 0.0) {
+            // ✅ Always sync old records first for this product
+            $this->syncLegacyColumnsForProduct($product->id);
+
+            $postedMatIds = [];
+
+            foreach ($rows as $row) {
+                $matId = (int) ($row['ingredient_id'] ?? $row['material_id'] ?? 0);
+                if ($matId <= 0) continue;
+
+                $postedMatIds[] = $matId;
+
+                // qty base: quantity_per_unit preferred, else qty
+                $qtyBase = (float) ($row['quantity_per_unit'] ?? $row['qty'] ?? 0);
+
+                $wastage = (float) ($row['wastage_pct'] ?? 0);
+
+                // snapshot price preferred
+                $snap = (float) ($row['unit_price_snapshot'] ?? $row['unit_price'] ?? 0);
+                $snap = round($snap, 2);
+
+                // fallback snapshot from materials table
+                if ($snap <= 0) {
                     $snap = (float) (Material::whereKey($matId)->value('unit_price') ?? 0);
                 }
 
-                $payload = [
-                    // legacy & modern columns kept in sync
-                    'material_id'         => $matId,
-                    'ingredient_id'       => $matId,
-                    'qty'                 => $qty,
-                    'quantity_per_unit'   => $qty,
-                    'unit_price_snapshot' => $snap,
-                ];
-
-                if (!is_null($unit)) {
-                    $payload['unit'] = $unit;
+                $unit = isset($row['unit']) ? trim((string) $row['unit']) : null;
+                if ($unit === '' || $unit === null) {
+                    $unit = (string) (Material::whereKey($matId)->value('unit') ?? 'kg');
                 }
 
+                // ✅ UPSERT key MUST be product_id + material_id
                 ProductRecipe::updateOrCreate(
                     [
-                        'product_id'    => (int) $product->id,
-                        'ingredient_id' => $matId,
+                        'product_id'  => (int) $product->id,
+                        'material_id' => $matId,
                     ],
-                    $payload
+                    [
+                        // keep both columns synced forever
+                        'material_id'         => $matId,
+                        'ingredient_id'       => $matId,
+
+                        // keep legacy + modern qty synced
+                        'quantity_per_unit'   => $qtyBase,
+                        'qty'                 => $qtyBase,
+
+                        'wastage_pct'         => $wastage,
+                        'unit'                => $unit,
+                        'unit_price_snapshot' => $snap,
+                    ]
                 );
             }
 
-            // Recompute product.unit_cost from all recipe lines
-            $totalCost = ProductRecipe::with('material:id,unit_price')
-                ->where('product_id', $product->id)
-                ->get()
-                ->sum(function (ProductRecipe $r) {
-                    $qty = method_exists($r, 'getQtyEffectiveAttribute')
-                        ? $r->qty_effective
-                        : (float) ($r->quantity_per_unit ?? $r->qty ?? 0);
+            // ✅ SYNC DELETE: remove any lines not posted anymore
+            $postedMatIds = array_values(array_unique($postedMatIds));
 
-                    $snap = $r->unit_price_snapshot ?: (float) ($r->material->unit_price ?? 0);
-                    return round($qty * (float) $snap, 2);
-                });
+            ProductRecipe::where('product_id', $product->id)
+                ->when(count($postedMatIds) > 0, fn ($q) => $q->whereNotIn('material_id', $postedMatIds))
+                ->when(count($postedMatIds) === 0, fn ($q) => $q) // delete all if none posted
+                ->delete();
 
-            $product->update(['unit_cost' => $totalCost]);
+            // ✅ Update product unit cost
+            $product->update([
+                'unit_cost' => $this->computeProductUnitCost($product->id),
+            ]);
         });
 
         if ($request->wantsJson()) {
             return response()->json([
                 'ok'         => true,
-                'message'    => 'Recipe lines saved.',
+                'message'    => 'Recipe saved.',
                 'product_id' => $product->id,
             ]);
         }
@@ -131,7 +167,6 @@ class ProductRecipeController extends Controller
 
     /**
      * DELETE /products/{product}/materials/{line}
-     * Used by products.materials.destroy
      */
     public function destroy(Product $product, ProductRecipe $line, Request $request)
     {
@@ -139,22 +174,12 @@ class ProductRecipeController extends Controller
             abort(404);
         }
 
-        $line->delete();
-
-        // Recalculate unit_cost after deletion
-        $totalCost = ProductRecipe::with('material:id,unit_price')
-            ->where('product_id', $product->id)
-            ->get()
-            ->sum(function (ProductRecipe $r) {
-                $qty = method_exists($r, 'getQtyEffectiveAttribute')
-                    ? $r->qty_effective
-                    : (float) ($r->quantity_per_unit ?? $r->qty ?? 0);
-
-                $snap = $r->unit_price_snapshot ?: (float) ($r->material->unit_price ?? 0);
-                return round($qty * (float) $snap, 2);
-            });
-
-        $product->update(['unit_cost' => $totalCost]);
+        DB::transaction(function () use ($product, $line) {
+            $line->delete();
+            $product->update([
+                'unit_cost' => $this->computeProductUnitCost($product->id),
+            ]);
+        });
 
         if ($request->wantsJson()) {
             return response()->json(['ok' => true, 'message' => 'Line removed.']);
@@ -165,186 +190,145 @@ class ProductRecipeController extends Controller
 
     /**
      * GET /products/{product}/materials/defaults
-     *
-     * Used by "Load Defaults" button in the BOM view.
-     *
-     * Logic:
-     * 1. If this product already has a recipe → use that.
-     * 2. Else try:
-     *    - parent with recipe
-     *    - siblings (variants) with recipe
-     *    - children with recipe
-     *    - another product in same category with recipe
-     *    - similar-name product (same base name) with recipe
-     *
-     * Returns an array of rows compatible with your JS loader:
-     *   [
-     *     {
-     *       ingredient_id,
-     *       material_id,
-     *       unit,
-     *       qty,
-     *       quantity_per_unit,
-     *       wastage_pct,
-     *       unit_price_snapshot,
-     *       unit_price,
-     *       default_unit_price
-     *     },
-     *     ...
-     *   ]
+     * Returns: { ok, from, rows }
      */
-    public function defaults(Product $product)
-{
-    // Try to find a "base" product whose recipe we can reuse:
-    // 1) Parent product (if this is a variant)
-    // 2) A sibling variant that already has a recipe
-    // 3) Any other product in the same category with a recipe
-    $base = null;
+    public function defaults(Product $product, Request $request)
+    {
+        $base = $this->findTemplateProductForDefaults($product);
 
-    // 1) Parent
-    if ($product->parent_id) {
-        $base = Product::with(['recipes.material'])
-            ->where('id', $product->parent_id)
-            ->whereHas('recipes')
-            ->first();
-    }
+        if (!$base) {
+            return response()->json([
+                'ok'   => true,
+                'from' => null,
+                'rows' => [],
+            ]);
+        }
 
-    // 2) Sibling variant (same parent, different id)
-    if (! $base && $product->parent_id) {
-        $base = Product::with(['recipes.material'])
-            ->where('parent_id', $product->parent_id)
-            ->where('id', '<>', $product->id)
-            ->whereHas('recipes')
-            ->orderBy('id')
-            ->first();
-    }
+        $base->loadMissing(['recipes.material:id,material_name,unit,unit_price']);
 
-    // 3) Same category
-    if (! $base && $product->category) {
-        $base = Product::with(['recipes.material'])
-            ->where('category', $product->category)
-            ->where('id', '<>', $product->id)
-            ->whereHas('recipes')
-            ->orderBy('id')
-            ->first();
-    }
+        $rows = $base->recipes->map(function (ProductRecipe $r) {
+            $matId = (int) ($r->material_id ?? $r->ingredient_id ?? 0);
 
-    // If nothing found, just return empty rows
-    if (! $base) {
+            return [
+                'id'                  => (int) $r->id,
+                'material_id'         => $matId,
+                'ingredient_id'       => $matId,
+
+                'quantity_per_unit'   => (float) ($r->quantity_per_unit ?? $r->qty ?? 0),
+                'qty'                 => (float) ($r->qty ?? $r->quantity_per_unit ?? 0),
+
+                'unit'                => (string) ($r->unit ?? optional($r->material)->unit ?? 'kg'),
+                'wastage_pct'         => (float) ($r->wastage_pct ?? 0),
+
+                'unit_price_snapshot' => (float) ($r->unit_price_snapshot ?? optional($r->material)->unit_price ?? 0),
+                'default_unit_price'  => (float) (optional($r->material)->unit_price ?? 0),
+                'material_name'       => (string) (optional($r->material)->material_name ?? ''),
+            ];
+        })->values();
+
         return response()->json([
-            'from' => null,
-            'rows' => [],
+            'ok'   => true,
+            'from' => [
+                'id'   => (int) $base->id,
+                'name' => (string) $base->product_name,
+            ],
+            'rows' => $rows,
         ]);
     }
 
-    // Build rows payload from base recipe
-    $rows = $base->recipes->map(function (ProductRecipe $r) {
-        return [
-            'id'                  => $r->id,
-            'material_id'         => $r->material_id ?? $r->ingredient_id,
-            'ingredient_id'       => $r->ingredient_id ?? $r->material_id,
-            'quantity_per_unit'   => (float) ($r->quantity_per_unit ?? $r->qty ?? 0),
-            'qty'                 => (float) ($r->qty ?? $r->quantity_per_unit ?? 0),
-            'unit'                => $r->unit,
-            'wastage_pct'         => (float) ($r->wastage_pct ?? 0),
-            'unit_price_snapshot' => (float) ($r->unit_price_snapshot ?? $r->unit_price ?? 0),
-            'default_unit_price'  => (float) optional($r->material)->unit_price,
-            'material_name'       => optional($r->material)->material_name,
-        ];
-    })->values();
-
-    return response()->json([
-        'from' => [
-            'id'   => $base->id,
-            'name' => $base->product_name,
-        ],
-        'rows' => $rows,
-    ]);
-}
-
-    /* ======================================================================
+    /* =========================================================
      * INTERNAL HELPERS
-     * ====================================================================*/
+     * ======================================================= */
 
-    /**
-     * Find a "template" product whose recipe we should use as defaults for
-     * the given product.
-     *
-     * This is where your "same type / same variant auto record" logic lives:
-     * - Prefer this product's own recipe.
-     * - Then parent.
-     * - Then siblings (same parent_id).
-     * - Then children.
-     * - Then same category.
-     * - Then similar-name product.
-     */
-    protected function findTemplateProductForDefaults(Product $product): ?Product
+    private function computeProductUnitCost(int $productId): float
     {
-        // 1) If this product already has a recipe, just use it.
-        if ($product->recipes()->exists()) {
-            return $product;
-        }
+        $lines = ProductRecipe::with('material:id,unit_price')
+            ->where('product_id', $productId)
+            ->get();
 
-        // 2) Parent with recipe
-        if ($product->parent_id) {
-            $parent = Product::withCount('recipes')->find($product->parent_id);
-            if ($parent && $parent->recipes_count > 0) {
-                return $parent;
+        $total = 0.0;
+
+        foreach ($lines as $r) {
+            $baseQty = (float) ($r->quantity_per_unit ?? $r->qty ?? 0);
+            $wastage = (float) ($r->wastage_pct ?? 0);
+            $effQty  = $baseQty * (1 + ($wastage / 100));
+
+            $snap = (float) ($r->unit_price_snapshot ?? 0);
+            if ($snap <= 0) {
+                $snap = (float) (optional($r->material)->unit_price ?? 0);
             }
 
-            // 3) Siblings (same parent_id) with recipe
+            $total += ($effQty * $snap);
+        }
+
+        return round($total, 2);
+    }
+
+    /**
+     * ✅ Ensures material_id and ingredient_id are always filled together.
+     * Runs fast and only for the current product.
+     */
+    private function syncLegacyColumnsForProduct(int $productId): void
+    {
+        DB::table('product_recipes')
+            ->where('product_id', $productId)
+            ->whereNull('material_id')
+            ->whereNotNull('ingredient_id')
+            ->update(['material_id' => DB::raw('ingredient_id')]);
+
+        DB::table('product_recipes')
+            ->where('product_id', $productId)
+            ->whereNull('ingredient_id')
+            ->whereNotNull('material_id')
+            ->update(['ingredient_id' => DB::raw('material_id')]);
+    }
+
+    protected function findTemplateProductForDefaults(Product $product): ?Product
+    {
+        if ($product->recipes()->exists()) return $product;
+
+        if ($product->parent_id) {
+            $parent = Product::whereKey($product->parent_id)->whereHas('recipes')->first();
+            if ($parent) return $parent;
+
             $sibling = Product::where('parent_id', $product->parent_id)
                 ->where('id', '<>', $product->id)
                 ->whereHas('recipes')
                 ->orderBy('id')
                 ->first();
 
-            if ($sibling) {
-                return $sibling;
-            }
+            if ($sibling) return $sibling;
         }
 
-        // 4) Children with recipe (if this is the parent / base product)
-        $child = $product->children()
-            ->whereHas('recipes')
-            ->orderBy('id')
-            ->first();
-
-        if ($child) {
-            return $child;
+        if (method_exists($product, 'children')) {
+            $child = $product->children()->whereHas('recipes')->orderBy('id')->first();
+            if ($child) return $child;
         }
 
-        // 5) Another product in same category with recipe
         if (!empty($product->category)) {
-            $catProduct = Product::where('category', $product->category)
+            $cat = Product::where('category', $product->category)
                 ->where('id', '<>', $product->id)
                 ->whereHas('recipes')
                 ->orderBy('id')
                 ->first();
 
-            if ($catProduct) {
-                return $catProduct;
-            }
+            if ($cat) return $cat;
         }
 
-        // 6) Similar-name product with recipe
         $baseName = trim(preg_replace('/\s*\(.*\)$/', '', (string) $product->product_name));
         if ($baseName !== '') {
             $similar = Product::where('id', '<>', $product->id)
                 ->whereHas('recipes')
                 ->where(function ($q) use ($baseName) {
-                    $q->where('product_name', 'LIKE', $baseName.'%')
-                      ->orWhere('product_name', 'LIKE', '%'.$baseName.'%');
+                    $q->where('product_name', 'LIKE', $baseName . '%')
+                      ->orWhere('product_name', 'LIKE', '%' . $baseName . '%');
                 })
                 ->orderBy('id')
                 ->first();
 
-            if ($similar) {
-                return $similar;
-            }
+            if ($similar) return $similar;
         }
 
-        // No suitable template found
         return null;
     }
 }
