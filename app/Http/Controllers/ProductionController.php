@@ -514,6 +514,10 @@ class ProductionController extends Controller
     {
         $product = Product::findOrFail($id);
 
+        // ✅ AUTO-ARCHIVE expired batches for this parent product on page load
+        // (expiration_date is today or already passed)
+        $this->autoArchiveExpiredBatchesForParent((int) $id);
+
         $orders = Production::query()
             ->where(function ($q) use ($id) {
                 $q->where('parent_product_id', $id)
@@ -1000,6 +1004,63 @@ class ProductionController extends Controller
     }
 
     /* ================================= HELPERS ================================= */
+
+    /**
+     * ✅ NEW: Auto-archive expired production batches for a "parent" product context:
+     * - expiry date is today or already passed (<= today)
+     * - uses same soft-delete behavior so it appears in Archived page
+     * - sets archived_at / archived_reason when those columns exist
+     */
+    private function autoArchiveExpiredBatchesForParent(int $parentId): int
+    {
+        $today = Carbon::today()->toDateString();
+
+        $hasArchivedAt = Schema::hasColumn('productions', 'archived_at');
+        $hasArchivedReason = Schema::hasColumn('productions', 'archived_reason');
+
+        $expired = Production::query()
+            ->where(function ($q) use ($parentId) {
+                $q->where('parent_product_id', $parentId)
+                    ->orWhere(function ($q2) use ($parentId) {
+                        $q2->whereNull('parent_product_id')
+                            ->where('product_id', $parentId);
+                    });
+            })
+            ->whereNotNull('expiration_date')
+            ->whereDate('expiration_date', '<=', $today)
+            ->get();
+
+        if ($expired->isEmpty()) {
+            return 0;
+        }
+
+        DB::transaction(function () use ($expired, $hasArchivedAt, $hasArchivedReason) {
+            foreach ($expired as $p) {
+                if ($hasArchivedAt) {
+                    $p->archived_at = now();
+                }
+                if ($hasArchivedReason) {
+                    $p->archived_reason = $p->archived_reason ?: 'production expiry (auto)';
+                }
+
+                $p->save();
+                $p->delete(); // soft delete -> goes to Archived page
+            }
+        });
+
+        // Recompute balances for affected product_ids (could include variants)
+        $expired->pluck('product_id')->unique()->each(function ($pid) {
+            $this->recomputeProductBalance((int) $pid);
+        });
+
+        Log::info('Auto-archived expired batches', [
+            'parent_product_id' => $parentId,
+            'count' => $expired->count(),
+            'today' => $today,
+        ]);
+
+        return $expired->count();
+    }
 
     private function respondNeedsRecipe(Request $request, Product $product)
     {

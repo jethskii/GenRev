@@ -68,17 +68,7 @@
     return ['count'=>$cnt,'valuation'=>$sum,'low'=>$low];
   })($rows);
 
-  // === Predictive usage data from controller (optional) ===
-  $sparkData = (isset($sparkData) && is_array($sparkData) && count($sparkData) > 0)
-      ? $sparkData
-      : [0,0,0,0,0,0];
-
-  $avg30 = (float)($avg30 ?? 0.0);
-  $avg7  = (float)($avg7  ?? 0.0);
-
-  $trendUp        = $avg7 >= $avg30;
-  $predictedNext7 = $avg7;
-
+  // === Usage data from controller (optional) ===
   $usageLabels    = $usageLabels ?? [];
   $usageValues    = $usageValues ?? [];
   $forecastLabels = $forecastLabels ?? [];
@@ -156,7 +146,7 @@
   .btn-danger:hover{ background:#fecaca; }
 
   .pixel-kpi-wrap{ display:grid; grid-template-columns:repeat(1,minmax(0,1fr)); gap:0.9rem; }
-  @media (min-width:640px){ .pixel-kpi-wrap{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
+  @media (min-width:640px){ .pixel-kpi-wrap{ grid-template-columns:repeat(3,minmax(0,1fr)); } }
   .pixel-kpi{
     border-radius:12px; border:1px solid rgba(15,23,42,0.08);
     background:var(--kpi-bg); padding:.8rem .9rem;
@@ -167,15 +157,6 @@
     text-transform:uppercase; letter-spacing:.04em;
   }
   .pixel-kpi-value{ font-size:20px; font-weight:700; color:var(--accent-red); }
-
-  .spark-card{ display:flex; flex-direction:column; gap:4px; }
-  .spark-bars{ display:flex; align-items:flex-end; gap:3px; height:32px; margin-top:2px; }
-  .spark-bar{ flex:1; border-radius:4px 4px 0 0; background:#fed7aa; transition:transform .15s ease,background .15s ease,opacity .15s ease; }
-  .spark-bar-strong{ background:#b45309; }
-  .spark-card:hover .spark-bar{ transform:translateY(-1px); }
-  .spark-caption{ font-size:11px; color:var(--text-muted); }
-  .spark-caption span{ font-weight:600; color:var(--accent-green); }
-  .spark-caption span.spark-worse{ color:var(--accent-red); }
 
   .input-light{
     width:100%; padding:6px 8px; border-radius:8px;
@@ -330,7 +311,7 @@
       </button>
     </div>
 
-    {{-- KPI cards --}}
+    {{-- KPI cards (Forecast KPI removed) --}}
     <div class="pixel-kpi-wrap mb-6">
       <div class="pixel-kpi">
         <div class="pixel-kpi-label">Total Items</div>
@@ -345,32 +326,6 @@
       <div class="pixel-kpi">
         <div class="pixel-kpi-label">Low Stock Materials</div>
         <div class="pixel-kpi-value">{{ number_format($stats['low']) }}</div>
-      </div>
-
-      {{-- Predictive usage trend graph (mini spark) --}}
-      <div class="pixel-kpi spark-card">
-        <div class="pixel-kpi-label">Material Usage Forecast</div>
-        <div class="spark-bars">
-          @php
-            $maxVal    = max($sparkData ?: [1]);
-            $totalBars = count($sparkData);
-          @endphp
-          @foreach($sparkData as $i => $val)
-            @php
-              $height  = 12 + ($maxVal > 0 ? ($val / $maxVal) * 18 : 0);
-              $opacity = 0.35 + (($i + 1) / max($totalBars,1)) * 0.45;
-            @endphp
-            <div class="spark-bar {{ $i === $totalBars - 1 ? 'spark-bar-strong' : '' }}"
-                 style="height:{{ $height }}px;opacity:{{ $opacity }};">
-            </div>
-          @endforeach
-        </div>
-        <div class="spark-caption">
-          Projected daily usage next 7 days
-          ≈ <span>{{ number_format($predictedNext7, 1) }} kg</span>
-          vs 30-day baseline
-          <span class="{{ $trendUp ? '' : 'spark-worse' }}">{{ number_format($avg30, 1) }} kg</span>
-        </div>
       </div>
     </div>
 
@@ -485,7 +440,7 @@
               $expiryClass = 'b-green';
             }
 
-            // Detail payload (removed Days of stock + Used in)
+            // Detail payload
             $pred = $predictions[$m->id] ?? null;
             $detailPayload = [
               'name'           => $m->material_name,
@@ -527,16 +482,9 @@
                 </div>
               </td>
 
-              <td>
-                <span class="badge {{ $badgeClass }}">{{ $category }}</span>
-              </td>
-
-              <td>
-                <span class="badge b-gray">{{ $m->unit }}</span>
-              </td>
-
+              <td><span class="badge {{ $badgeClass }}">{{ $category }}</span></td>
+              <td><span class="badge b-gray">{{ $m->unit }}</span></td>
               <td class="text-right">₱ {{ number_format($price, 2) }}</td>
-
               <td class="text-right">{{ number_format($qty, 3) }}</td>
 
               <td class="text-center">
@@ -544,7 +492,6 @@
               </td>
 
               <td class="text-right">₱ {{ number_format($lineVal, 2) }}</td>
-
               <td class="text-gray-600">{{ optional($m->updated_at)->format('Y-m-d H:i') }}</td>
 
               <td>
@@ -610,69 +557,24 @@
     </div>
     <div class="detail-body">
       <div class="detail-grid">
-        <div>
-          <div class="detail-label">Material</div>
-          <div class="detail-value" id="detailName">—</div>
-        </div>
-        <div>
-          <div class="detail-label">SKU</div>
-          <div class="detail-value" id="detailSku">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Category</div>
-          <div class="detail-value" id="detailCategory">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Storage</div>
-          <div class="detail-value" id="detailStorage">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Unit / Price</div>
-          <div class="detail-value" id="detailUnitPrice">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Qty / Min stock</div>
-          <div class="detail-value" id="detailQtyMin">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Expiry</div>
-          <div class="detail-value" id="detailExpiry">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Last updated</div>
-          <div class="detail-value" id="detailUpdated">—</div>
-        </div>
+        <div><div class="detail-label">Material</div><div class="detail-value" id="detailName">—</div></div>
+        <div><div class="detail-label">SKU</div><div class="detail-value" id="detailSku">—</div></div>
+        <div><div class="detail-label">Category</div><div class="detail-value" id="detailCategory">—</div></div>
+        <div><div class="detail-label">Storage</div><div class="detail-value" id="detailStorage">—</div></div>
+        <div><div class="detail-label">Unit / Price</div><div class="detail-value" id="detailUnitPrice">—</div></div>
+        <div><div class="detail-label">Qty / Min stock</div><div class="detail-value" id="detailQtyMin">—</div></div>
+        <div><div class="detail-label">Expiry</div><div class="detail-value" id="detailExpiry">—</div></div>
+        <div><div class="detail-label">Last updated</div><div class="detail-value" id="detailUpdated">—</div></div>
 
         {{-- Optional predictive --}}
-        <div>
-          <div class="detail-label">Burn rate</div>
-          <div class="detail-value" id="detailBurn">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Days to min stock</div>
-          <div class="detail-value" id="detailDaysToMin">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Reorder date</div>
-          <div class="detail-value" id="detailReorderDate">—</div>
-        </div>
+        <div><div class="detail-label">Burn rate</div><div class="detail-value" id="detailBurn">—</div></div>
+        <div><div class="detail-label">Days to min stock</div><div class="detail-value" id="detailDaysToMin">—</div></div>
+        <div><div class="detail-label">Reorder date</div><div class="detail-value" id="detailReorderDate">—</div></div>
 
-        <div>
-          <div class="detail-label">Supplier</div>
-          <div class="detail-value" id="detailSupplier">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Batch code</div>
-          <div class="detail-value" id="detailBatch">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Manufactured</div>
-          <div class="detail-value" id="detailMfg">—</div>
-        </div>
-        <div>
-          <div class="detail-label">Received</div>
-          <div class="detail-value" id="detailReceived">—</div>
-        </div>
+        <div><div class="detail-label">Supplier</div><div class="detail-value" id="detailSupplier">—</div></div>
+        <div><div class="detail-label">Batch code</div><div class="detail-value" id="detailBatch">—</div></div>
+        <div><div class="detail-label">Manufactured</div><div class="detail-value" id="detailMfg">—</div></div>
+        <div><div class="detail-label">Received</div><div class="detail-value" id="detailReceived">—</div></div>
       </div>
 
       <div class="detail-notes">

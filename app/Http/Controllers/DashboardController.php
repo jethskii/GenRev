@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Log;
 
 class DashboardController extends Controller
 {
@@ -132,6 +133,138 @@ class DashboardController extends Controller
     }
 
     /* ================================================================
+     |  NEW: Auto-archive expired batches (expiry today or already passed)
+     * ================================================================ */
+
+    /**
+     * Auto-archive (soft delete) production batches whose expiration date
+     * is today or already passed (<= today).
+     *
+     * - Skips batches that have linked sales (to preserve production_id links).
+     * - Sets archived_at / archived_reason if those columns exist.
+     * - Updates product balance after archiving.
+     */
+    private function autoArchiveExpiredProductions(Carbon $today): int
+    {
+        $todayYmd = $today->toDateString();
+
+        $hasArchivedAt     = Schema::hasColumn('productions', 'archived_at');
+        $hasArchivedReason = Schema::hasColumn('productions', 'archived_reason');
+
+        $expired = collect();
+
+        // 1) Explicit expiration_date
+        $expired = $expired->merge(
+            Production::query()
+                ->with('product:id,shelf_life_days')
+                ->whereNotNull('expiration_date')
+                ->whereDate('expiration_date', '<=', $todayYmd)
+                ->get()
+        );
+
+        // 2) No expiration_date -> compute via shelf_life_days (default 7)
+        $computed = Production::query()
+            ->with('product:id,shelf_life_days')
+            ->whereNull('expiration_date')
+            ->whereNotNull('production_date')
+            ->whereDate('production_date', '<=', $todayYmd)
+            ->get();
+
+        foreach ($computed as $b) {
+            $shelf = (int) ($b->product->shelf_life_days ?? 7);
+            $exp   = Carbon::parse($b->production_date)->addDays($shelf);
+
+            if ($exp->toDateString() <= $todayYmd) {
+                $expired->push($b);
+            }
+        }
+
+        $expired = $expired->unique('id')->values();
+
+        if ($expired->isEmpty()) {
+            return 0;
+        }
+
+        $archivedCount = 0;
+        $affectedProductIds = [];
+
+        DB::transaction(function () use (
+            $expired,
+            $hasArchivedAt,
+            $hasArchivedReason,
+            &$archivedCount,
+            &$affectedProductIds
+        ) {
+            foreach ($expired as $p) {
+                // Skip if linked sales exist (keep existing rule behavior)
+                if (Sale::where('production_id', $p->id)->exists()) {
+                    continue;
+                }
+
+                if ($hasArchivedAt) {
+                    $p->archived_at = now();
+                }
+                if ($hasArchivedReason) {
+                    $p->archived_reason = $p->archived_reason ?: 'production expiry (auto)';
+                }
+
+                $p->save();
+                $p->delete(); // soft delete -> archived listing
+
+                $archivedCount++;
+                $affectedProductIds[] = (int) $p->product_id;
+            }
+        });
+
+        $affectedProductIds = array_values(array_unique($affectedProductIds));
+        foreach ($affectedProductIds as $pid) {
+            $this->recomputeProductBalance($pid);
+        }
+
+        if ($archivedCount > 0) {
+            Log::info('Dashboard auto-archived expired batches', [
+                'count' => $archivedCount,
+                'today' => $todayYmd,
+            ]);
+        }
+
+        return $archivedCount;
+    }
+
+    /**
+     * Minimal balance recompute (matches your ProductionController logic)
+     * so product.quantity stays accurate after auto-archiving.
+     */
+    private function recomputeProductBalance(int $productId): void
+    {
+        $produced = (float) Production::where('product_id', $productId)->sum('quantity');
+
+        $sold = (float) Sale::where('product_id', $productId)
+            ->select(DB::raw(
+                'COALESCE(SUM(quantity_kg), 0) + COALESCE(SUM(quantity), 0) as s'
+            ))
+            ->value('s');
+
+        $balance = max(0.0, $produced - $sold);
+        $latestProdDate = Production::where('product_id', $productId)->max('production_date');
+
+        $product = Product::find($productId);
+        if (!$product) {
+            Product::where('id', $productId)->update([
+                'quantity' => $balance,
+                'stock_status' => $balance > 0 ? 'in_stock' : 'out_of_stock',
+                'production_date' => $latestProdDate,
+            ]);
+            return;
+        }
+
+        $product->quantity = $balance;
+        $product->stock_status = $balance > 0 ? 'in_stock' : 'out_of_stock';
+        $product->production_date = $latestProdDate;
+        $product->save();
+    }
+
+    /* ================================================================
      |  Shared blocks: expiry snapshot + trends + forecast
      * ================================================================ */
 
@@ -223,8 +356,8 @@ class DashboardController extends Controller
                     'product_id'         => $b->product_id,
                     'production_id'      => $b->id,
                     'product_name'       => $b->product->product_name ?? 'Product',
-                    'batch_number'       => $batchNumber,   // canonical batch field
-                    'batch_code'         => $batchNumber,   // kept for backward-compat in Blade
+                    'batch_number'       => $batchNumber,
+                    'batch_code'         => $batchNumber,
                     'variant_label'      => $variantLabel,
                     'days_left'          => $daysLeft,
                     'units_at_risk'      => $unitsRemaining,
@@ -246,7 +379,6 @@ class DashboardController extends Controller
             ->values()
             ->take(10)
             ->map(function ($row, $index) {
-                // Human-friendly display number 1,2,3... for UI (Batch 1, Batch 2...)
                 $row['batch_display_number'] = $index + 1;
                 return $row;
             });
@@ -460,7 +592,11 @@ class DashboardController extends Controller
     {
         [$start, $end] = $this->resolveDateRange($request);
 
-        $today       = Carbon::today();
+        $today = Carbon::today();
+
+        // ✅ AUTO-ARCHIVE expired batches globally (expiry today or already passed)
+        $this->autoArchiveExpiredProductions($today);
+
         $expiryStart = $today->copy();
         $expiryEnd   = $today->copy()->addDays(6);
 
