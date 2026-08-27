@@ -179,7 +179,7 @@
 
     <h2 class="title"><span class="underline">Register New Account</span></h2>
     <p class="sub">
-      Step 1. Send a code to the Masters Admin. Step 2. Enter the OTP and create your account.
+      Step 1. We'll send a code to your email. Step 2. Enter the OTP and create your account.
     </p>
 
     {{-- Server flash messages (for final submit or full-page errors) --}}
@@ -317,7 +317,7 @@
             Send OTP
           </button>
         </div>
-        <p class="help">Ask the Masters Admin for the code after it’s sent.</p>
+        <p class="help">Check your email for the code after it’s sent.</p>
       </div>
 
       {{-- Hidden flag so backend can check that OTP was requested --}}
@@ -485,7 +485,7 @@
           } else {
             // success
             if (otpSuccessMsg && otpSuccessBox) {
-              otpSuccessMsg.textContent = data.message || 'OTP has been sent to the Masters Admin.';
+              otpSuccessMsg.textContent = data.message || 'OTP has been sent to your email.';
               otpSuccessBox.style.display = 'flex';
             }
             if (otpFlag) otpFlag.value = '1';

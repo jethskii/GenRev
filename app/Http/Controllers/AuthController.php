@@ -295,12 +295,12 @@ class AuthController extends Controller
             ]);
             $request->session()->put('otp_pending', true);
 
-            // Send OTP via Laravel Mail (updated)
-            $this->sendOtpToAdmin($otp, $validated);
+            // Send OTP via Laravel Mail
+            $this->sendOtpToApplicant($otp, $validated);
 
             return response()->json([
                 'ok'      => true,
-                'message' => 'OTP has been sent to the Masters Admin. Ask them for the code, then enter it to finish registration.',
+                'message' => 'OTP has been sent to your email. Enter it below to finish registration.',
             ]);
 
         } catch (\Throwable $e) {
@@ -312,7 +312,7 @@ class AuthController extends Controller
 
             return response()->json([
                 'ok'      => false,
-                'message' => 'Unable to send OTP email to the admin. Please contact the administrator.',
+                'message' => 'Unable to send OTP email. Please try again or contact support.',
             ], 500);
         }
     }
@@ -339,7 +339,7 @@ class AuthController extends Controller
 
         if (!hash_equals((string) $pending['otp'], (string) $request->input('otp'))) {
             return back()
-                ->withErrors(['otp' => 'Invalid OTP. Please ask the Masters Admin to confirm the correct code.'])
+                ->withErrors(['otp' => 'Invalid OTP. Please check the code sent to your email and try again.'])
                 ->withInput($request->except('password', 'password_confirmation'));
         }
 
@@ -445,13 +445,10 @@ class AuthController extends Controller
      * ========================*/
 
     /**
-     * Send OTP to admin via Laravel Mail (Gmail SMTP).
+     * Send the OTP to the person registering, via Laravel Mail (Gmail SMTP).
      */
-    private function sendOtpToAdmin(string $otp, array $validated): void
+    private function sendOtpToApplicant(string $otp, array $validated): void
     {
-        // Get admin email from .env (ADMIN_EMAIL) or fall back to default
-        $adminEmail = config('mail.admin_address', env('ADMIN_EMAIL', 'mandalonesjeth748@gmail.com'));
-
         $name = $validated['name']
             ?? trim(($validated['first_name'] ?? '') . ' ' . ($validated['last_name'] ?? ''));
 
@@ -459,15 +456,14 @@ class AuthController extends Controller
         $email = $validated['email'] ?? '';
 
         Mail::raw(
-            "A new GenRev registration request has been submitted.\n\n" .
-            "Name: {$name}\n" .
-            "Email: {$email}\n" .
-            "Role: {$role}\n\n" .
-            "OTP for approval: {$otp}\n\n" .
-            "Share this code ONLY if you approve this registration.",
-            function ($message) use ($adminEmail) {
-                $message->to($adminEmail)
-                        ->subject('GenRev Registration OTP');
+            "Hi {$name},\n\n" .
+            "Use the code below to finish creating your GenRev account:\n\n" .
+            "OTP: {$otp}\n\n" .
+            "Role requested: {$role}\n\n" .
+            "If you didn't request this, you can ignore this email.",
+            function ($message) use ($email) {
+                $message->to($email)
+                        ->subject('Your GenRev Registration OTP');
             }
         );
     }
