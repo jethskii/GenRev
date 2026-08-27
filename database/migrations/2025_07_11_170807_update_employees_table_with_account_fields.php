@@ -12,11 +12,23 @@ return new class extends Migration
     public function up()
 {
     Schema::table('employees', function (Blueprint $table) {
-        $table->unsignedBigInteger('user_id')->nullable()->after('id');
-        $table->string('username')->nullable()->after('email');
-        $table->string('password')->nullable()->after('username');
-        $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+        if (!Schema::hasColumn('employees', 'user_id')) {
+            $table->unsignedBigInteger('user_id')->nullable()->after('id');
+        }
+        if (!Schema::hasColumn('employees', 'username')) {
+            $table->string('username')->nullable()->after('email');
+        }
+        if (!Schema::hasColumn('employees', 'password')) {
+            $table->string('password')->nullable()->after('username');
+        }
     });
+
+    $hasFk = collect(Schema::getForeignKeys('employees'))->pluck('name')->contains('employees_user_id_foreign');
+    if (!$hasFk) {
+        Schema::table('employees', function (Blueprint $table) {
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+        });
+    }
 }
 
 public function down()

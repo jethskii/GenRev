@@ -12,9 +12,17 @@ return new class extends Migration
     public function up()
 {
     Schema::table('employees', function (Blueprint $table) {
-        $table->unsignedBigInteger('user_id')->after('id')->nullable();
-        $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+        if (!Schema::hasColumn('employees', 'user_id')) {
+            $table->unsignedBigInteger('user_id')->after('id')->nullable();
+        }
     });
+
+    $hasFk = collect(Schema::getForeignKeys('employees'))->pluck('name')->contains('employees_user_id_foreign');
+    if (!$hasFk) {
+        Schema::table('employees', function (Blueprint $table) {
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+        });
+    }
 }
 
 public function down()

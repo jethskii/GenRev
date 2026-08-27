@@ -12,7 +12,9 @@ return new class extends Migration
     public function up()
 {
     Schema::table('products', function (Blueprint $table) {
-        $table->string('batch_number')->unique()->after('product_name');
+        if (!Schema::hasColumn('products', 'batch_number')) {
+            $table->string('batch_number')->unique()->after('product_name');
+        }
     });
 }
 

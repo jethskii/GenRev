@@ -8,7 +8,9 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('products', function (Blueprint $table) {
-            $table->softDeletes(); // Adds the deleted_at column
+            if (!Schema::hasColumn('products', 'deleted_at')) {
+                $table->softDeletes(); // Adds the deleted_at column
+            }
         });
     }
 

@@ -10,6 +10,15 @@ return new class extends Migration {
     {
         if (!Schema::hasTable('sales')) return;
 
+        // Skip entirely if id is already a proper auto-increment primary key (e.g. fresh install)
+        $idCol = DB::selectOne("
+            SELECT EXTRA, COLUMN_KEY FROM information_schema.columns
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sales' AND COLUMN_NAME = 'id'
+        ");
+        if ($idCol && str_contains($idCol->EXTRA, 'auto_increment') && $idCol->COLUMN_KEY === 'PRI') {
+            return;
+        }
+
         // If some other column is auto_increment, drop that first
         $auto = DB::table('information_schema.columns')
             ->select('COLUMN_NAME')

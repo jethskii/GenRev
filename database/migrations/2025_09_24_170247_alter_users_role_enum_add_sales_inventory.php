@@ -20,9 +20,7 @@ return new class extends Migration {
 
         // Optional but recommended: index role for quick filters
         Schema::table('users', function (Blueprint $table) {
-            $sm = Schema::getConnection()->getDoctrineSchemaManager();
-            $indexes = array_map(fn($i) => $i->getName(), $sm->listTableIndexes('users'));
-            if (! in_array('users_role_index', $indexes)) {
+            if (! Schema::hasIndex('users', 'users_role_index')) {
                 $table->index('role');
             }
         });

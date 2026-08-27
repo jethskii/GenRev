@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
 {
+    if (Schema::hasTable('invoice_sequences')) {
+        return;
+    }
+
     Schema::create('invoice_sequences', function (Blueprint $table) {
         $table->id();
         $table->date('date_key')->unique();

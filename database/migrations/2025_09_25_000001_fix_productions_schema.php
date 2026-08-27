@@ -39,10 +39,6 @@ return new class extends Migration {
 
     private function indexExists(string $table, string $name): bool
     {
-        $schema = Schema::getConnection()->getDoctrineSchemaManager();
-        foreach ($schema->listTableIndexes($table) as $idx) {
-            if ($idx->getName() === $name) return true;
-        }
-        return false;
+        return Schema::hasIndex($table, $name);
     }
 };

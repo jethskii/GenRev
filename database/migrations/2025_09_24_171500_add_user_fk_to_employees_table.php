@@ -32,10 +32,14 @@ return new class extends Migration {
             $this->dropForeignIfExists('employees', 'employees_user_id_foreign');
 
             // Recreate FK to the configured users table
-            $table->foreign('user_id', 'employees_user_id_foreign')
-                  ->references('id')->on($usersTable)
-                  ->cascadeOnUpdate()
-                  ->nullOnDelete();
+            try {
+                $table->foreign('user_id', 'employees_user_id_foreign')
+                      ->references('id')->on($usersTable)
+                      ->cascadeOnUpdate()
+                      ->nullOnDelete();
+            } catch (\Throwable $e) {
+                // FK already exists
+            }
         });
     }
 
@@ -52,18 +56,16 @@ return new class extends Migration {
     /** Helpers (scoped to this anonymous class) */
     private function hasIndex(string $table, string $index): bool
     {
-        $sm = Schema::getConnection()->getDoctrineSchemaManager();
-        $doctrineTable = $sm->listTableDetails($table);
-        return $doctrineTable->hasIndex($index);
+        return Schema::hasIndex($table, $index);
     }
 
     private function dropForeignIfExists(string $table, string $name): void
     {
-        $connection = Schema::getConnection();
-        $schema = $connection->getDoctrineSchemaManager();
-        $doctrineTable = $schema->listTableDetails($table);
+        $exists = collect(Schema::getForeignKeys($table))
+            ->pluck('name')
+            ->contains($name);
 
-        if ($doctrineTable->hasForeignKey($name)) {
+        if ($exists) {
             Schema::table($table, function (Blueprint $t) use ($name) {
                 $t->dropForeign($name);
             });

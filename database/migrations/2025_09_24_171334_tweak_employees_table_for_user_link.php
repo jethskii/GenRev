@@ -14,20 +14,33 @@ return new class extends Migration {
                 $table->string('status', 20)->default('active')->change();
             }
 
-            // Ensure username & email are unique for clean lookups
-            $table->unique('username', 'employees_username_unique');
-            $table->unique('email', 'employees_email_unique');
-
             // Link to users (nullable, keep data if user is deleted)
             if (!Schema::hasColumn('employees', 'user_id')) {
                 $table->unsignedBigInteger('user_id')->nullable()->after('id');
             }
-
-            $table->foreign('user_id')
-                ->references('id')->on('users')
-                ->nullOnDelete()
-                ->cascadeOnUpdate();
         });
+
+        // Ensure username & email are unique for clean lookups
+        if (!Schema::hasIndex('employees', 'employees_username_unique')) {
+            Schema::table('employees', function (Blueprint $table) {
+                $table->unique('username', 'employees_username_unique');
+            });
+        }
+        if (!Schema::hasIndex('employees', 'employees_email_unique')) {
+            Schema::table('employees', function (Blueprint $table) {
+                $table->unique('email', 'employees_email_unique');
+            });
+        }
+
+        $hasFk = collect(Schema::getForeignKeys('employees'))->pluck('name')->contains('employees_user_id_foreign');
+        if (!$hasFk) {
+            Schema::table('employees', function (Blueprint $table) {
+                $table->foreign('user_id')
+                    ->references('id')->on('users')
+                    ->nullOnDelete()
+                    ->cascadeOnUpdate();
+            });
+        }
     }
 
     public function down(): void

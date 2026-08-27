@@ -8,6 +8,9 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('productions', function (Blueprint $table) {
+            if (!Schema::hasColumn('productions', 'product_id')) {
+                $table->foreignId('product_id')->after('id')->constrained('products')->restrictOnDelete()->cascadeOnUpdate();
+            }
             if (!Schema::hasColumn('productions', 'batch_number')) {
                 $table->string('batch_number')->nullable()->after('product_id');
             }

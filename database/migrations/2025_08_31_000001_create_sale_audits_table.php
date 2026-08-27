@@ -1,18 +1,29 @@
 <?php
 
-namespace App\Models;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
-use Illuminate\Database\Eloquent\Model;
-
-class SaleAudit extends Model
+return new class extends Migration
 {
-    protected $fillable = ['sale_id','user_id','changes'];
-    protected $casts = [
-        'changes' => 'array',
-    ];
-
-    public function sale()
+    public function up(): void
     {
-        return $this->belongsTo(Sale::class);
+        Schema::create('sale_audits', function (Blueprint $table) {
+            $table->id();
+
+            $table->unsignedInteger('sale_id');
+            $table->foreign('sale_id')->references('id')->on('sales')->cascadeOnDelete();
+
+            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+
+            $table->json('changes')->nullable();
+
+            $table->timestamps();
+        });
     }
-}
+
+    public function down(): void
+    {
+        Schema::dropIfExists('sale_audits');
+    }
+};

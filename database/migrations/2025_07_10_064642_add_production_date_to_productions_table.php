@@ -13,9 +13,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('productions', function (Blueprint $table) {
-            $table->date('production_date')
-                  ->after('current_inventory')
-                  ->default(DB::raw('CURRENT_DATE'));
+            if (!Schema::hasColumn('productions', 'production_date')) {
+                $table->date('production_date')
+                      ->default(DB::raw('(CURRENT_DATE)'));
+            }
         });
     }
 

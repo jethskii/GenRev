@@ -9,22 +9,18 @@ return new class extends Migration {
     public function up(): void
     {
         // PRODUCTS
-        Schema::table('products', function (Blueprint $table) {
-            // Ensure 'id' is primary auto-increment BIGINT
-            // 1) drop conflicting PK if needed
+        if (! $this->hasAutoIncrementPrimaryKey('products')) {
             try { DB::statement('ALTER TABLE products DROP PRIMARY KEY'); } catch (\Throwable $e) {}
-            // 2) make id auto-increment
             DB::statement('ALTER TABLE products MODIFY COLUMN id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT');
-            // 3) set id as PK
-            DB::statement('ALTER TABLE products ADD PRIMARY KEY (id)');
-        });
+            try { DB::statement('ALTER TABLE products ADD PRIMARY KEY (id)'); } catch (\Throwable $e) {}
+        }
 
         // PRODUCTIONS (safety)
-        Schema::table('productions', function (Blueprint $table) {
+        if (! $this->hasAutoIncrementPrimaryKey('productions')) {
             try { DB::statement('ALTER TABLE productions DROP PRIMARY KEY'); } catch (\Throwable $e) {}
             DB::statement('ALTER TABLE productions MODIFY COLUMN id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT');
-            DB::statement('ALTER TABLE productions ADD PRIMARY KEY (id)');
-        });
+            try { DB::statement('ALTER TABLE productions ADD PRIMARY KEY (id)'); } catch (\Throwable $e) {}
+        }
 
         // PRODUCT_RECIPES (you had an error here too)
         // If this table should have a simple surrogate key:
@@ -54,5 +50,15 @@ return new class extends Migration {
     public function down(): void
     {
         // Usually you can leave this empty or reverse changes if you want.
+    }
+
+    private function hasAutoIncrementPrimaryKey(string $table): bool
+    {
+        $col = DB::selectOne("
+            SELECT EXTRA, COLUMN_KEY FROM information_schema.columns
+            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = 'id'
+        ", [$table]);
+
+        return $col && str_contains($col->EXTRA, 'auto_increment') && $col->COLUMN_KEY === 'PRI';
     }
 };
