@@ -189,7 +189,8 @@ class Production extends Model
 
             case 'batch':
                 // Numeric-friendly ordering, so "2" comes before "10"
-                return $q->orderBy(DB::raw('CAST(batch_number AS UNSIGNED)'))->orderBy('id');
+                $castType = DB::getDriverName() === 'pgsql' ? 'INTEGER' : 'UNSIGNED';
+                return $q->orderBy(DB::raw("CAST(batch_number AS $castType)"))->orderBy('id');
 
             case 'qty':
                 return $q->orderByDesc('quantity')->orderByDesc('id');

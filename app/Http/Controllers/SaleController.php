@@ -22,7 +22,7 @@ class SalesController extends Controller
                 'productRef:id,product_name',
                 'production:id,product_id,batch_number,quantity,current_inventory'
             ])
-            ->orderByDesc(DB::raw('COALESCE(order_date, `date`)'))
+            ->orderByDesc(DB::raw('COALESCE(order_date, date)'))
             ->orderByDesc('id')
             ->get();
 

@@ -50,19 +50,13 @@ class DashboardController extends Controller
         $hasDate  = Schema::hasColumn('sales', 'date');
 
         if ($hasOrder && $hasDate) {
-            $coalesce = "COALESCE(order_date, `date`)";
+            $coalesce = "COALESCE(order_date, date)";
         } elseif ($hasOrder) {
             $coalesce = "order_date";
         } elseif ($hasDate) {
-            $coalesce = "`date`";
+            $coalesce = "date";
         } else {
             $coalesce = "created_at";
-        }
-
-        $driver = DB::getDriverName();
-
-        if ($driver === 'sqlite') {
-            return "DATE($coalesce)";
         }
 
         return "DATE($coalesce)";

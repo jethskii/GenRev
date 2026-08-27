@@ -1384,11 +1384,11 @@ class SalesController extends Controller
         $hasDate  = Schema::hasColumn('sales','date');
 
         if ($hasOrder && $hasDate) {
-            $coalesce = "COALESCE(order_date, `date`)";
+            $coalesce = "COALESCE(order_date, date)";
         } elseif ($hasOrder) {
             $coalesce = "order_date";
         } elseif ($hasDate) {
-            $coalesce = "`date`";
+            $coalesce = "date";
         } else {
             $coalesce = "created_at";
         }
@@ -1397,6 +1397,9 @@ class SalesController extends Controller
         if ($driver === 'sqlite') {
             $dateExpr = "DATE($coalesce)";
             $ymExpr   = "strftime('%Y-%m', $coalesce)";
+        } elseif ($driver === 'pgsql') {
+            $dateExpr = "DATE($coalesce)";
+            $ymExpr   = "TO_CHAR($coalesce, 'YYYY-MM')";
         } else {
             $dateExpr = "DATE($coalesce)";
             $ymExpr   = "DATE_FORMAT($coalesce, '%Y-%m')";
