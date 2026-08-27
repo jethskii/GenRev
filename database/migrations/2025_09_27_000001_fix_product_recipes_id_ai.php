@@ -8,6 +8,11 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        // MySQL-only repair migration; Postgres/other drivers get correct types from create_product_recipes_table.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         if (Schema::hasTable('product_recipes')) {
             // Ensure primary key & AUTO_INCREMENT on MySQL
             DB::statement('

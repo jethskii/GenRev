@@ -7,6 +7,11 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        // MySQL-only repair migration; Postgres/other drivers get correct types from create_materials_table.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         if (Schema::hasTable('materials')) {
             // Ensure primary key/AI id
             if (!Schema::hasColumn('materials', 'id')) {

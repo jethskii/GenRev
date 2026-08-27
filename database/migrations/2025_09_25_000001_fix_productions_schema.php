@@ -9,9 +9,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        // Ensure 'id' is BIGINT UNSIGNED AUTO_INCREMENT
-        DB::statement("ALTER TABLE `productions`
-            MODIFY `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT");
+        // The raw id/AUTO_INCREMENT fixup below is MySQL-only; create_productions_table already
+        // gives every driver a correct auto-increment id, so just skip that part elsewhere.
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE `productions`
+                MODIFY `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT");
+        }
 
         // Align product_id to unsignedBigInteger (to match products.id)
         if (Schema::hasColumn('productions', 'product_id')) {

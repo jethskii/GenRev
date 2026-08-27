@@ -6,6 +6,11 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration {
     public function up(): void
     {
+        // MySQL-only repair migration; Postgres/other drivers get correct types from create_materials_table.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         // Skip entirely if id is already a proper auto-increment primary key (e.g. fresh install)
         $col = DB::selectOne("
             SELECT EXTRA, COLUMN_KEY FROM information_schema.columns

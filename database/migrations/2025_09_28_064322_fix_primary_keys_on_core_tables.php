@@ -8,6 +8,11 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration {
     public function up(): void
     {
+        // MySQL-only repair migration; Postgres/other drivers get correct types from the create migrations.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         // PRODUCTS
         if (! $this->hasAutoIncrementPrimaryKey('products')) {
             try { DB::statement('ALTER TABLE products DROP PRIMARY KEY'); } catch (\Throwable $e) {}

@@ -8,6 +8,12 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
+        // MySQL-only: native ALTER ... MODIFY ENUM syntax. On Postgres (and others), create_users_table's
+        // enum() already permits 'sales'/'inventory' via its CHECK constraint, so there's nothing to widen.
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         // Ensure column exists before altering
         if (! Schema::hasColumn('users', 'role')) return;
 
