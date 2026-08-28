@@ -447,13 +447,13 @@ class SalesOrderItem extends Model
                 }
             }
 
-            // FIFO across freshest batches
+            // FIFO: oldest production_date first, so older stock (closer to expiry) sells first.
             if ($remaining > 0) {
                 $batches = Production::query()
                     ->whereNull('deleted_at')
                     ->where('product_id', $this->product_id)
-                    ->orderByDesc('production_date')
-                    ->orderByDesc('id')
+                    ->orderBy('production_date')
+                    ->orderBy('id')
                     ->lockForUpdate()
                     ->get(['id','batch_number','current_inventory','available_pack','available_bag']);
 
@@ -514,7 +514,7 @@ class SalesOrderItem extends Model
             $batches = Production::query()
                 ->whereNull('deleted_at')
                 ->where('product_id', $this->product_id)
-                ->orderByDesc('production_date')->orderByDesc('id')
+                ->orderBy('production_date')->orderBy('id')
                 ->lockForUpdate()
                 ->get(['id','batch_number','current_inventory','available_pack','available_bag']);
 

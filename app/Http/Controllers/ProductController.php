@@ -438,7 +438,10 @@ class ProductController extends Controller
     {
         $rules = [
             'parent_id'           => ['nullable', 'integer', Rule::exists('products', 'id')->whereNull('deleted_at')],
-            'product_name'        => ['required', 'string', 'max:255', Rule::unique('products', 'product_name')->ignore($productId)],
+            // whereNull('deleted_at') matters: Rule::unique checks the raw table, not Eloquent's
+            // soft-delete scope, so without it an archived product permanently blocks reusing
+            // its name for a new product.
+            'product_name'        => ['required', 'string', 'max:255', Rule::unique('products', 'product_name')->ignore($productId)->where(fn ($q) => $q->whereNull('deleted_at'))],
             'category'            => ['nullable', 'string', 'max:100'],
             'unit'                => ['nullable', Rule::in(['kg', 'pcs', 'lt'])],
             'status'              => ['nullable', Rule::in(['active', 'inactive', 'pending', 'on_sale'])],

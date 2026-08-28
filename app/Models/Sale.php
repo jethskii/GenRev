@@ -487,7 +487,17 @@ class Sale extends Model
             $prodId = $m->production_id ? (int) $m->production_id : null;
             $mode   = $m->resolveMode();
 
-            if ($pid > 0 && $requestedQty > 0) {
+            if ($pid > 0) {
+                // A non-positive requested quantity used to skip this guard entirely (the
+                // condition was `$requestedQty > 0`), so any caller of Sale::create() that
+                // didn't itself validate quantity - unlike SalesController, which does - could
+                // slip a zero/negative-quantity sale through with no stock check at all.
+                if ($requestedQty <= 0) {
+                    throw ValidationException::withMessages([
+                        'quantity' => 'Quantity must be greater than zero.',
+                    ]);
+                }
+
                 $available = self::availableForMode($pid, $prodId, $mode);
 
                 if ($available <= 0) {
@@ -710,13 +720,14 @@ class Sale extends Model
                 }
             }
 
-            // Then FIFO across other batches for this product
+            // Then FIFO across other batches for this product: oldest production_date first,
+            // so older stock (closer to expiry) is sold before newer stock.
             if ($remaining > 0) {
                 $batches = \App\Models\Production::query()
                     ->whereNull('deleted_at')
                     ->where('product_id', $this->product_id)
-                    ->orderByDesc('production_date')
-                    ->orderByDesc('id')
+                    ->orderBy('production_date')
+                    ->orderBy('id')
                     ->lockForUpdate()
                     ->get(['id', 'batch_number', 'current_inventory', 'available_pack', 'available_bag']);
 

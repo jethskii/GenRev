@@ -475,7 +475,12 @@ class ProductionController extends Controller
                         Production::create($payload);
                         break;
                     } catch (QueryException $e) {
-                        if ($e->getCode() === '23000' && $attempt < 2) {
+                        // MySQL reports duplicate-key as SQLSTATE 23000; Postgres uses 23505
+                        // specifically. Checking only '23000' meant this retry never fired on
+                        // Postgres/Neon, so a batch-number collision (e.g. reusing a number that
+                        // still exists on an archived/soft-deleted row) surfaced as a raw 500
+                        // instead of silently retrying with the next number.
+                        if (in_array($e->getCode(), ['23000', '23505'], true) && $attempt < 2) {
                             $batchNumber = $this->uniqueBatchNumber($product);
                             $payload['batch_number'] = $batchNumber;
                             continue;
@@ -1332,7 +1337,8 @@ class ProductionController extends Controller
                 Production::create($payload);
                 break;
             } catch (QueryException $e) {
-                if ($e->getCode() === '23000' && $attempt < 2) {
+                // See note in storeOrder(): Postgres reports duplicate-key as 23505, not 23000.
+                if (in_array($e->getCode(), ['23000', '23505'], true) && $attempt < 2) {
                     $batchNumber = $this->uniqueBatchNumber($product);
                     $payload['batch_number'] = $batchNumber;
                     continue;
