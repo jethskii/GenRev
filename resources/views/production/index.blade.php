@@ -674,6 +674,9 @@
     }
 
     function hidePreview(){
+      if (currentPreviewUrl) {
+        URL.revokeObjectURL(currentPreviewUrl);
+      }
       currentPreviewUrl = null;
       if (previewWrap) previewWrap.classList.add('hidden');
       if (previewImg) previewImg.src = '';
@@ -682,7 +685,9 @@
 
     function bytesToMB(b){ return (b / (1024*1024)).toFixed(2); }
 
-    // FileReader-based preview
+    // Object-URL-based preview: lighter and more broadly compatible than reading the
+    // whole file into a base64 data URL first (no encoding overhead, and lets the
+    // browser decode straight from the file's own bytes/type).
     imageInput?.addEventListener('change', () => {
       const f = imageInput.files?.[0];
       if (!f) {
@@ -707,47 +712,37 @@
 
       hidePreview();
 
-      const reader = new FileReader();
+      if (!previewImg) {
+        toast('Preview unavailable in this browser, but the image can still be uploaded.', 'notice');
+        return;
+      }
 
-      reader.onload = (e) => {
-        const url = e.target?.result;
-        if (!url || !previewImg) {
-          toast('Preview failed, but the image can still be uploaded.', 'notice');
+      const objectUrl = URL.createObjectURL(f);
+      currentPreviewUrl = objectUrl;
+
+      previewImg.onload = () => {
+        const w = previewImg.naturalWidth;
+        const h = previewImg.naturalHeight;
+
+        if (w < MIN_W || h < MIN_H){
+          toast(`Image too small. Min ${MIN_W}×${MIN_H}.`, 'notice');
+          imageInput.value = '';
+          hidePreview();
           return;
         }
 
-        currentPreviewUrl = url;
-
-        previewImg.onload = () => {
-          const w = previewImg.naturalWidth;
-          const h = previewImg.naturalHeight;
-
-          if (w < MIN_W || h < MIN_H){
-            toast(`Image too small. Min ${MIN_W}×${MIN_H}.`, 'notice');
-            imageInput.value = '';
-            hidePreview();
-            return;
-          }
-
-          if (imageMeta) {
-            imageMeta.textContent = `${f.name} • ${bytesToMB(f.size)} MB • ${w}×${h}`;
-          }
-          if (previewWrap) previewWrap.classList.remove('hidden');
-        };
-
-        previewImg.onerror = () => {
-          toast('Preview failed, but the image can still be uploaded.', 'notice');
-          if (previewWrap) previewWrap.classList.add('hidden');
-        };
-
-        previewImg.src = url;
+        if (imageMeta) {
+          imageMeta.textContent = `${f.name} • ${bytesToMB(f.size)} MB • ${w}×${h}`;
+        }
+        if (previewWrap) previewWrap.classList.remove('hidden');
       };
 
-      reader.onerror = () => {
-        toast('Could not read file for preview, but the image can still be uploaded.', 'notice');
+      previewImg.onerror = () => {
+        toast('This image format can\'t be previewed in your browser, but it can still be uploaded.', 'notice');
+        if (previewWrap) previewWrap.classList.add('hidden');
       };
 
-      reader.readAsDataURL(f);
+      previewImg.src = objectUrl;
     });
 
     clearBtn?.addEventListener('click', () => {
