@@ -2,9 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\Production;
-use App\Models\ProductRecipe;
-use App\Models\Sale;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -23,7 +20,9 @@ class Product extends Model
     protected $table = 'products';
 
     protected $primaryKey = 'id';
+
     public $incrementing = true;
+
     protected $keyType = 'int';
 
     /** Columns expected from controllers + schema (includes parent_id) */
@@ -193,6 +192,7 @@ class Product extends Model
     {
         return Attribute::get(function () {
             $raw = $this->getAttributes();
+
             return Arr::get($raw, 'name', $this->product_name);
         });
     }
@@ -207,6 +207,7 @@ class Product extends Model
 
                 if (is_string($value) && $value !== '') {
                     $decoded = json_decode($value, true);
+
                     return is_array($decoded) ? $decoded : $value;
                 }
 
@@ -219,8 +220,8 @@ class Product extends Model
     protected function image(): Attribute
     {
         return Attribute::make(
-            get: fn() => $this->image_path,
-            set: fn($value) => ['image_path' => $value],
+            get: fn () => $this->image_path,
+            set: fn ($value) => ['image_path' => $value],
         );
     }
 
@@ -233,26 +234,24 @@ class Product extends Model
         return $this->image_disk ?: 'public';
     }
 
-
-
     /**
      * Public URL for images, prefer DB image_url if present.
      */
     public function getImageUrlAttribute($value): string
     {
         // If DB already stores a full URL, use it.
-        if (!empty($value) && is_string($value)) {
+        if (! empty($value) && is_string($value)) {
             return $value;
         }
 
         $disk = $this->imageDisk();
 
         // Try physical path columns
-        if (!empty($this->image_path)) {
+        if (! empty($this->image_path)) {
             try {
                 return Storage::disk($disk)->url(ltrim($this->image_path, '/'));
             } catch (\Throwable $e) {
-                return asset('storage/' . ltrim($this->image_path, '/'));
+                return asset('storage/'.ltrim($this->image_path, '/'));
             }
         }
 
@@ -273,15 +272,15 @@ class Product extends Model
         $disk = $this->imageDisk();
 
         try {
-            if (!empty($this->image_thumb_path)) {
+            if (! empty($this->image_thumb_path)) {
                 return Storage::disk($disk)->url($this->image_thumb_path);
             }
 
-            if (!empty($this->image_medium_path)) {
+            if (! empty($this->image_medium_path)) {
                 return Storage::disk($disk)->url($this->image_medium_path);
             }
 
-            if (!empty($this->image_path)) {
+            if (! empty($this->image_path)) {
                 return Storage::disk($disk)->url($this->image_path);
             }
         } catch (\Throwable $e) {
@@ -301,7 +300,7 @@ class Product extends Model
      */
     public function getCardImageUrlAttribute($value): string
     {
-        if (!empty($value) && is_string($value)) {
+        if (! empty($value) && is_string($value)) {
             return $value;
         }
 
@@ -318,7 +317,7 @@ class Product extends Model
      */
     public function getCardImageSrcsetAttribute($value): ?string
     {
-        if (!empty($value) && is_string($value)) {
+        if (! empty($value) && is_string($value)) {
             return $value;
         }
 
@@ -326,14 +325,14 @@ class Product extends Model
         $parts = [];
 
         $push = function (?string $path, string $size) use (&$parts, $disk) {
-            if (!$path) {
+            if (! $path) {
                 return;
             }
 
             try {
                 $url = Storage::disk($disk)->url($path);
             } catch (\Throwable $e) {
-                $url = asset('storage/' . ltrim($path, '/'));
+                $url = asset('storage/'.ltrim($path, '/'));
             }
 
             $parts[] = "{$url} {$size}";
@@ -365,6 +364,7 @@ class Product extends Model
     public function getEffectiveUnitCostAttribute(): float
     {
         $declared = $this->unit_cost !== null ? (float) $this->unit_cost : null;
+
         return $declared !== null ? $declared : (float) $this->unit_material_cost;
     }
 
@@ -412,12 +412,13 @@ class Product extends Model
     public function getAvailableStockKgAttribute(): float
     {
         $available = $this->produced_qty_kg - $this->sold_qty_kg;
+
         return $available > 0 ? (float) $available : 0.0;
     }
 
     public function getIsVariantAttribute(): bool
     {
-        return !empty($this->parent_id);
+        return ! empty($this->parent_id);
     }
 
     public function getBaseNameAttribute(): ?string
@@ -434,7 +435,7 @@ class Product extends Model
         $parentName = trim((string) ($this->parent?->product_name ?? ''));
         $category = trim((string) ($this->category ?? ''));
 
-        if (!$this->is_variant) {
+        if (! $this->is_variant) {
             return $category !== '' ? $category : 'Base';
         }
 
@@ -480,11 +481,12 @@ class Product extends Model
     /** Convenience: compute an expiry date from a given production date. */
     public function computeExpiryFrom(\DateTimeInterface|string|null $productionDate): ?string
     {
-        if (!$productionDate || !$this->shelf_life_days) {
+        if (! $productionDate || ! $this->shelf_life_days) {
             return null;
         }
 
         $c = \Carbon\Carbon::make($productionDate) ?? \Carbon\Carbon::parse($productionDate);
+
         return $c->addDays((int) $this->shelf_life_days)->toDateString();
     }
 
@@ -616,7 +618,7 @@ class Product extends Model
         $disk = $this->imageDisk() ?: 'public';
 
         try {
-            if (!class_exists(Image::class)) {
+            if (! class_exists(Image::class)) {
                 throw new \RuntimeException('Intervention Image facade not available');
             }
 
@@ -677,8 +679,6 @@ class Product extends Model
         }
     }
 
-
-
     /**
      * Replace image_path and delete the previous file.
      */
@@ -700,7 +700,7 @@ class Product extends Model
     protected static function booted()
     {
         static::saving(function (self $m) {
-            $has = fn(string $c) => Schema::hasColumn($m->getTable(), $c);
+            $has = fn (string $c) => Schema::hasColumn($m->getTable(), $c);
 
             if ($has('quantity') && $m->quantity === null) {
                 $m->quantity = 0;
@@ -715,13 +715,43 @@ class Product extends Model
             }
         });
 
-        static::updating(function (self $model) {
-            if (Schema::hasColumn($model->getTable(), 'image_path') && $model->isDirty('image_path')) {
-                $old = $model->getOriginal('image_path');
-                $disk = $model->imageDisk();
+        static::updated(function (self $model) {
+            // Runs after the row is committed, not before (static::updating fired too
+            // early: deleting the old file first meant a failed UPDATE would leave the
+            // database still pointing at a file that was already gone). Also covers
+            // image_medium_path/image_thumb_path, which the previous version never
+            // cleaned up at all - every rename-triggered image replace orphaned the
+            // 800w/400w webp variants permanently.
+            $table = $model->getTable();
+            $imageColumns = array_filter(
+                ['image_path', 'image_medium_path', 'image_thumb_path'],
+                fn (string $c) => Schema::hasColumn($table, $c)
+            );
 
-                if ($old && Storage::disk($disk)->exists($old)) {
-                    Storage::disk($disk)->delete($old);
+            $changed = array_filter($imageColumns, fn (string $c) => $model->wasChanged($c));
+            if (empty($changed)) {
+                return;
+            }
+
+            $disk = $model->imageDisk();
+            $newPaths = array_filter(array_map(fn (string $c) => $model->getAttribute($c), $imageColumns));
+
+            foreach ($changed as $c) {
+                $old = $model->getOriginal($c);
+                if (! $old || in_array($old, $newPaths, true)) {
+                    continue;
+                }
+
+                try {
+                    if (Storage::disk($disk)->exists($old)) {
+                        Storage::disk($disk)->delete($old);
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Failed to delete orphaned product image after replace', [
+                        'product_id' => $model->id,
+                        'path' => $old,
+                        'error' => $e->getMessage(),
+                    ]);
                 }
             }
         });
@@ -752,7 +782,7 @@ class Product extends Model
      * ---------------------------------------------------------------------*/
     public function scopeSearch($q, ?string $term)
     {
-        if (!$term) {
+        if (! $term) {
             return $q;
         }
 
@@ -777,7 +807,7 @@ class Product extends Model
 
     public function scopeCategory($q, ?string $category)
     {
-        if (!$category) {
+        if (! $category) {
             return $q;
         }
 
@@ -795,7 +825,7 @@ class Product extends Model
             ? 'status'
             : (self::has('stock_status') ? 'stock_status' : null);
 
-        if (!$col) {
+        if (! $col) {
             return $q;
         }
 
@@ -818,7 +848,7 @@ class Product extends Model
             'recent' => ['updated_at', 'desc'],
         ];
 
-        if (!$sort || !isset($map[$sort])) {
+        if (! $sort || ! isset($map[$sort])) {
             return $q->orderBy('product_name', 'asc');
         }
 
@@ -918,5 +948,4 @@ class Product extends Model
 
         return "products/{$productId}/{$baseName}";
     }
-
 }
