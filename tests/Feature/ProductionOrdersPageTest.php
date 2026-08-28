@@ -43,7 +43,7 @@ class ProductionOrdersPageTest extends TestCase
         ]);
         $product = Product::create(['product_name' => 'Orders Page Test 2']);
 
-        $errors = new \Illuminate\Support\ViewErrorBag();
+        $errors = new \Illuminate\Support\ViewErrorBag;
         $errors = $errors->put('default', new \Illuminate\Support\MessageBag(['materials' => 'Insufficient stock for Flour.']));
 
         $response = $this->actingAs($user)
