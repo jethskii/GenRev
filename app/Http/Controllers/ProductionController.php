@@ -1348,8 +1348,20 @@ class ProductionController extends Controller
 
     private function enrichProductsForCards($products)
     {
-        return $products->map(function ($p) {
-            $this->attachCardMedia($p);
+        // Batch-fetch the latest expiration date per product in one query instead of letting
+        // attachCardMedia() run one query per product (N+1 on this listing's main hot path -
+        // every product card render), mirroring the same batching pattern InventoryController
+        // already uses for stock balances.
+        $productIds = $products->pluck('id');
+        $latestExpirationMap = Production::query()
+            ->whereIn('product_id', $productIds)
+            ->whereNotNull('expiration_date')
+            ->groupBy('product_id')
+            ->select('product_id', DB::raw('MAX(expiration_date) as latest_exp'))
+            ->pluck('latest_exp', 'product_id');
+
+        return $products->map(function ($p) use ($latestExpirationMap) {
+            $this->attachCardMedia($p, $latestExpirationMap);
             return $p;
         });
     }
@@ -1389,7 +1401,7 @@ class ProductionController extends Controller
      * Attach media + expiry snapshot fields used by the dashboard
      * product cards (product-cards.blade.php).
      */
-    private function attachCardMedia($p): void
+    private function attachCardMedia($p, $latestExpirationMap = null): void
     {
         if (!$p) {
             return;
@@ -1397,10 +1409,15 @@ class ProductionController extends Controller
 
         // === Latest expiry snapshot for "Next Expiry" stat chip ===
         try {
-            $latestExp = Production::where('product_id', $p->id)
-                ->whereNotNull('expiration_date')
-                ->orderByDesc('expiration_date')
-                ->value('expiration_date');
+            if ($latestExpirationMap !== null) {
+                // Pre-fetched by enrichProductsForCards() - avoids one query per product.
+                $latestExp = $latestExpirationMap[$p->id] ?? null;
+            } else {
+                $latestExp = Production::where('product_id', $p->id)
+                    ->whereNotNull('expiration_date')
+                    ->orderByDesc('expiration_date')
+                    ->value('expiration_date');
+            }
 
             if ($latestExp) {
                 $p->latest_expiration_date = $latestExp;
