@@ -3,14 +3,18 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class GenrevNotificationMail extends Mailable implements ShouldQueue
+// Not currently sent anywhere in the app, and its view (emails.genrev.notification) doesn't
+// exist yet either. Deliberately NOT implementing ShouldQueue: nothing runs a queue worker in
+// this app's deployment, so a queued mail here would silently sit in the jobs table forever.
+// If this gets wired up and volume genuinely needs queuing, add ShouldQueue back together with
+// an actual worker process.
+class GenrevNotificationMail extends Mailable
 {
     use Queueable, SerializesModels;
 

@@ -87,6 +87,7 @@ Route::middleware('guest')->group(function () {
         ->name('register.submit');
 
     Route::post('/register/otp', [AuthController::class, 'requestOtp'])
+        ->middleware('throttle:5,1') // avoid OTP email abuse
         ->name('register.otp');
 });
 
