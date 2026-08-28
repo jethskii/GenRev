@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Production;
 use App\Models\Sale;
 use App\Models\Reservation; // ✅ NEW: for reservation → sale conversion
+use App\Services\InventoryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,8 @@ use Illuminate\Support\Str;              // debug UUIDs
 
 class SalesController extends Controller
 {
+    public function __construct(private InventoryService $inventory) {}
+
     /** List sales + feed Add-Sale modal + dashboard KPIs & charts */
     public function index()
     {
@@ -1225,45 +1228,16 @@ class SalesController extends Controller
      * Recompute product stock using Production + Sale,
      * ignoring archived rows and never forcing production_date = NULL.
      */
+    /**
+     * Delegates to InventoryService, the single source of truth for this calculation (see its
+     * docblock). This used to duplicate the same formula independently here - functionally
+     * correct in this particular copy, but one of five near-identical copies scattered across
+     * the app, two of which (ProductionController's old version and DashboardController's) had
+     * a real double-counting bug from summing quantity_kg + quantity together.
+     */
     protected function recomputeProductBalance(int $productId): void
     {
-        // only count non-archived (not soft-deleted) batches
-        $produced = (float) Production::query()
-            ->where('product_id', $productId)
-            ->whereNull('deleted_at')
-            ->sum('quantity');
-
-        $qtyCol = Schema::hasColumn('sales','quantity_kg') ? 'quantity_kg'
-               : (Schema::hasColumn('sales','quantity') ? 'quantity' : null);
-
-        if ($qtyCol) {
-            $sold = (float) Sale::query()
-                ->where('product_id', $productId)
-                ->whereNull('deleted_at')
-                ->selectRaw("SUM(COALESCE($qtyCol,0)) as total_sold")
-                ->value('total_sold');
-        } else {
-            $sold = 0.0;
-        }
-
-        $balance  = max(0.0, $produced - $sold);
-
-        $latestProdDate = Production::query()
-            ->where('product_id', $productId)
-            ->whereNull('deleted_at')
-            ->max('production_date');
-
-        $data = [
-            'quantity'     => $balance,
-            'stock_status' => $balance > 0 ? 'in_stock' : 'out_of_stock',
-        ];
-
-        // Only update production_date when we have a real value
-        if (!is_null($latestProdDate)) {
-            $data['production_date'] = $latestProdDate;
-        }
-
-        Product::where('id', $productId)->update($data);
+        $this->inventory->recomputeProductBalance($productId);
     }
 
     protected function buildProductCardHtml($productId)

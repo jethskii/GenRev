@@ -1193,7 +1193,7 @@ class ProductionController extends Controller
                 $q->whereBetween('date', [$from->toDateString(), $today->toDateString()])
                     ->orWhereBetween('created_at', [$from, $today->copy()->endOfDay()]);
             })
-            ->select(DB::raw('COALESCE(SUM(quantity_kg), 0) + COALESCE(SUM(quantity), 0) as s'))
+            ->select(DB::raw('SUM(COALESCE(quantity_kg, quantity, 0)) as s'))
             ->value('s');
 
         $totalSold = (float) $totalSold;

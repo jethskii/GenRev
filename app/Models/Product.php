@@ -399,8 +399,11 @@ class Product extends Model
 
     public function getSoldQtyKgAttribute(): float
     {
+        // Every sale-creation path writes the same value into both quantity_kg and quantity,
+        // so summing both and adding them (the old formula) double-counted every sale. This
+        // also silently understated available_stock_kg (produced - sold), which depends on it.
         $sum = $this->sales()
-            ->selectRaw('COALESCE(SUM(quantity_kg),0) + COALESCE(SUM(quantity),0) as s')
+            ->selectRaw('SUM(COALESCE(quantity_kg, quantity, 0)) as s')
             ->value('s');
 
         return (float) ($sum ?? 0);

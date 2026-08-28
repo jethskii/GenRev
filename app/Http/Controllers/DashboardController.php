@@ -226,36 +226,15 @@ class DashboardController extends Controller
     }
 
     /**
-     * Minimal balance recompute (matches your ProductionController logic)
-     * so product.quantity stays accurate after auto-archiving.
+     * Delegates to InventoryService, the single source of truth for this calculation. This
+     * used to duplicate the formula independently here with a real bug: it summed
+     * quantity_kg + quantity together as "sold", but every sale-creation path writes the same
+     * value into both columns, so this double-counted every sale and understated the
+     * displayed balance (and, downstream, available_stock_kg on the Product model).
      */
     private function recomputeProductBalance(int $productId): void
     {
-        $produced = (float) Production::where('product_id', $productId)->sum('quantity');
-
-        $sold = (float) Sale::where('product_id', $productId)
-            ->select(DB::raw(
-                'COALESCE(SUM(quantity_kg), 0) + COALESCE(SUM(quantity), 0) as s'
-            ))
-            ->value('s');
-
-        $balance = max(0.0, $produced - $sold);
-        $latestProdDate = Production::where('product_id', $productId)->max('production_date');
-
-        $product = Product::find($productId);
-        if (!$product) {
-            Product::where('id', $productId)->update([
-                'quantity' => $balance,
-                'stock_status' => $balance > 0 ? 'in_stock' : 'out_of_stock',
-                'production_date' => $latestProdDate,
-            ]);
-            return;
-        }
-
-        $product->quantity = $balance;
-        $product->stock_status = $balance > 0 ? 'in_stock' : 'out_of_stock';
-        $product->production_date = $latestProdDate;
-        $product->save();
+        app(\App\Services\InventoryService::class)->recomputeProductBalance($productId);
     }
 
     /* ================================================================

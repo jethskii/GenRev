@@ -159,6 +159,33 @@ class InventorySalesIntegrityTest extends TestCase
         $this->assertEquals(70, $product->refresh()->quantity);
     }
 
+    /**
+     * The same double-counting formula (SUM(quantity_kg)+SUM(quantity)) was independently
+     * duplicated in five places total; two of them (Product::sold_qty_kg/available_stock_kg
+     * and ProductionController::computeForecastForProduct, which feeds forecasted_demand)
+     * were only found during the Reports/Dashboard audit pass, after the first three
+     * (InventoryService, ProductionController::recomputeProductBalance,
+     * Production::recomputeProductBalanceInternal) were already fixed. This locks in the
+     * model-accessor half of that fix.
+     */
+    public function test_product_sold_and_available_accessors_do_not_double_count(): void
+    {
+        $product = Product::create(['product_name' => 'Accessor Widget']);
+        Production::create([
+            'product_id' => $product->id, 'batch_number' => '1',
+            'quantity' => 100, 'current_inventory' => 100, 'production_date' => '2025-01-01',
+        ]);
+        Sale::create([
+            'product_id' => $product->id, 'product_name' => 'Accessor Widget',
+            'quantity_kg' => 25, 'quantity' => 25, 'unit_price' => 10, 'date' => now(),
+        ]);
+
+        $product->refresh();
+        $this->assertEquals(25, $product->sold_qty_kg);
+        $this->assertEquals(100, $product->produced_qty_kg);
+        $this->assertEquals(75, $product->available_stock_kg);
+    }
+
     /** Production creation must immediately reflect in the product's aggregate balance. */
     public function test_creating_a_production_batch_updates_product_inventory(): void
     {
