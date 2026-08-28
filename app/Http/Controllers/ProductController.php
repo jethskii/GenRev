@@ -414,7 +414,7 @@ class ProductController extends Controller
     public function updateImage(Request $request, Product $product)
     {
         $request->validate([
-            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
+            'image' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:min_width=300,min_height=300'],
         ]);
 
         try {
@@ -457,7 +457,7 @@ class ProductController extends Controller
             'last_cost_date'      => ['nullable', 'date'],
             'temp_requirements'   => ['nullable', 'string', 'max:2000'],
             'line_constraints'    => ['nullable'],
-            'image'               => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
+            'image'               => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:min_width=300,min_height=300'],
         ];
 
         if (Schema::hasColumn('products', 'product_code')) {

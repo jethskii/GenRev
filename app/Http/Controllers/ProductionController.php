@@ -203,8 +203,8 @@ class ProductionController extends Controller
             'remarks' => ['nullable', 'string', 'max:500'],
 
             // IMAGE
-            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
-            'product_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:min_width=300,min_height=300'],
+            'product_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:min_width=300,min_height=300'],
 
             // legacy accepted
             'current_inventory' => ['nullable', 'numeric', 'min:0'],
@@ -386,8 +386,8 @@ class ProductionController extends Controller
             'remarks' => ['nullable', 'string', 'max:500'],
             'unit_cost' => ['nullable', 'numeric', 'min:0'], // legacy
 
-            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
-            'product_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'dimensions:min_width=300,min_height=300'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:min_width=300,min_height=300'],
+            'product_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120', 'dimensions:min_width=300,min_height=300'],
         ];
 
         $validated = $request->validate($rules);
@@ -754,8 +754,12 @@ class ProductionController extends Controller
             $purgeQuery = Production::onlyTrashed()
                 ->where('deleted_at', '<=', $purgeCutoff);
 
-            $purgedCount = (clone $purgeQuery)->count();
+            $toPurge = (clone $purgeQuery)->get(['id', 'image_disk', 'image_path', 'image_medium_path', 'image_thumb_path']);
+            $purgedCount = $toPurge->count();
             if ($purgedCount > 0) {
+                foreach ($toPurge as $row) {
+                    $this->deleteProductionImages($row);
+                }
                 $purgeQuery->forceDelete();
             }
         } catch (\Throwable $e) {
@@ -928,6 +932,7 @@ class ProductionController extends Controller
         }
 
         $productId = (int) $p->product_id;
+        $this->deleteProductionImages($p);
         $p->forceDelete();
 
         $this->recomputeProductBalance($productId);
@@ -1347,6 +1352,37 @@ class ProductionController extends Controller
             $this->attachCardMedia($p);
             return $p;
         });
+    }
+
+    /**
+     * Delete a production batch's uploaded image files from storage before the row is
+     * permanently removed (forceDelete). Without this, both destroyForever() and the 30-day
+     * auto-purge in archived() left every uploaded batch photo orphaned on disk forever, with
+     * no way to ever identify or clean it up once the referencing row was gone.
+     */
+    private function deleteProductionImages($production): void
+    {
+        $disk = $production->image_disk ?: 'public';
+
+        foreach ([
+            $production->image_path ?? null,
+            $production->image_medium_path ?? null,
+            $production->image_thumb_path ?? null,
+        ] as $path) {
+            if (!$path) {
+                continue;
+            }
+
+            try {
+                Storage::disk($disk)->delete($path);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to delete production image during purge', [
+                    'production_id' => $production->id ?? null,
+                    'path' => $path,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**
