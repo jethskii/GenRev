@@ -188,9 +188,17 @@ class Production extends Model
                          ->select('productions.*');
 
             case 'batch':
-                // Numeric-friendly ordering, so "2" comes before "10"
-                $castType = DB::getDriverName() === 'pgsql' ? 'INTEGER' : 'UNSIGNED';
-                return $q->orderBy(DB::raw("CAST(batch_number AS $castType)"))->orderBy('id');
+                // Numeric-friendly ordering, so "2" comes before "10".
+                // batch_number can contain non-numeric text (e.g. when no digits were
+                // supplied), so guard the cast: MySQL's UNSIGNED cast tolerates that
+                // silently, but Postgres raises a hard error on non-numeric input.
+                if (DB::getDriverName() === 'pgsql') {
+                    return $q->orderBy(DB::raw(
+                        "CASE WHEN batch_number ~ '^[0-9]+$' THEN CAST(batch_number AS INTEGER) ELSE 0 END"
+                    ))->orderBy('id');
+                }
+
+                return $q->orderBy(DB::raw('CAST(batch_number AS UNSIGNED)'))->orderBy('id');
 
             case 'qty':
                 return $q->orderByDesc('quantity')->orderByDesc('id');

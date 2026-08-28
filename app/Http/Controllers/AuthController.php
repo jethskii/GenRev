@@ -272,7 +272,11 @@ class AuthController extends Controller
             'username'   => ['required', 'string', 'max:120', Rule::unique('employees', 'username')],
             'email'      => ['required', 'email', Rule::unique($usersTable, 'email')],
             'password'   => ['required', 'string', 'min:8', 'confirmed'],
-            'role'       => ['required', Rule::in(['masters admin', 'production manager', 'sales', 'inventory'])],
+            // 'masters admin' is deliberately excluded: it's not offered in the registration
+            // form's role dropdown, and self-service OTP verification means anyone who could
+            // submit this value directly (bypassing the dropdown) would get an unapproved admin
+            // account. New admins are created by an existing admin via the Users management page.
+            'role'       => ['required', Rule::in(['production manager', 'sales', 'inventory'])],
         ]);
 
         if ($validator->fails()) {
