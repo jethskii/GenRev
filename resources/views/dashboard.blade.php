@@ -564,6 +564,7 @@ $metrics = [
                 <a href="{{ route('sales') }}" class="btn btn-blue text-xs">View all sales</a>
               @endif
             </div>
+            <div class="overflow-x-auto">
             <table class="text-sm text-left">
               <thead class="uppercase">
                 <tr>
@@ -607,6 +608,7 @@ $metrics = [
                 @endforelse
               </tbody>
             </table>
+            </div>
           </div>
 
           <!-- Materials Snapshot (raw ingredients stay in kg) -->

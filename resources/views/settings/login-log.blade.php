@@ -76,7 +76,8 @@
   .table-shell{
     margin-top:1rem;
     border-radius:.85rem;
-    overflow:hidden;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
     border:1px solid #e2e8f0;
     background:#fff;
   }

@@ -187,7 +187,7 @@
   .pixel-table-wrap{
     border-radius:14px; border:1px solid rgba(15,23,42,0.14);
     box-shadow:0 10px 26px rgba(15,23,42,0.08);
-    background:#ffffff; overflow:hidden;
+    background:#ffffff; overflow-x:auto; -webkit-overflow-scrolling:touch;
   }
   table.pixel-table{ border-collapse:separate; border-spacing:0; width:100%; font-size:12px; }
   .pixel-table thead th{

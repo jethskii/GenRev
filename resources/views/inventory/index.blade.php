@@ -34,7 +34,7 @@
   .kpi .value{font-size:1.35rem;font-weight:800}
 
   /* Tables */
-  .table-wrap{overflow:hidden;border-radius:14px;border:1px solid var(--border);background:#fff}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;border:1px solid var(--border);background:#fff}
   .table{width:100%;border-collapse:separate;border-spacing:0}
   .table thead th{position:sticky;top:0;background:#f9fafb;border-bottom:1px solid var(--border);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;padding:.65rem .6rem;color:#334155;z-index:5}
   .table tbody td{padding:.65rem .6rem;border-bottom:1px dashed #edf2f7}

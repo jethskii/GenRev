@@ -101,7 +101,8 @@
   .table-wrap{
     border:1px solid #e5e7eb;
     border-radius:14px;
-    overflow:hidden;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
   }
 
   thead th{

@@ -124,7 +124,7 @@
 
   /* Drawer */
   .drawer{
-    position: fixed; top:0; right:-420px; width:420px; height:100vh; z-index:9998;
+    position: fixed; top:0; right:-420px; width:420px; max-width:100vw; height:100vh; z-index:9998;
     background:#ffffff; border-left:1px solid var(--line);
     box-shadow:-12px 0 24px rgba(2,6,23,.08);
     transition:right .28s ease-in-out;
