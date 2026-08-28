@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -31,6 +32,15 @@ return new class extends Migration
             DB::statement('ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check');
             DB::statement('ALTER TABLE users ALTER COLUMN role TYPE VARCHAR(255)');
             DB::statement("ALTER TABLE users ALTER COLUMN role SET DEFAULT 'sales'");
+            return;
+        }
+
+        if (DB::getDriverName() === 'sqlite') {
+            // SQLite has no ALTER COLUMN; Laravel rebuilds the table to drop the
+            // enum-derived CHECK constraint and widen the column to a plain string.
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('role', 255)->default('sales')->change();
+            });
         }
     }
 

@@ -309,6 +309,30 @@
 @section('content')
 <div class="page-card">
 
+  {{-- INLINE ALERTS (top of page) --}}
+  @if (session('success'))
+    <div class="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm">
+      {{ session('success') }}
+    </div>
+  @endif
+
+  @if (session('error'))
+    <div class="mb-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3 text-sm">
+      {{ session('error') }}
+    </div>
+  @endif
+
+  @if ($errors->any())
+    <div class="mb-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3 text-sm">
+      <div class="font-semibold mb-1">There were problems saving this order:</div>
+      <ul class="list-disc list-inside space-y-0.5">
+        @foreach ($errors->all() as $error)
+          <li>{{ $error }}</li>
+        @endforeach
+      </ul>
+    </div>
+  @endif
+
   {{-- Header --}}
   <div class="flex items-center justify-between mb-6">
     <div>
