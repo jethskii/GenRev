@@ -19,9 +19,12 @@ use App\Models\Product;
 use App\Models\Production;
 use App\Models\Sale;
 use App\Models\Material;
+use App\Services\InventoryService;
 
 class ProductionController extends Controller
 {
+    public function __construct(private InventoryService $inventory) {}
+
     /* ============================= INDEX / FILTER ============================= */
 
     // /production/{parent}/types  (route-model bound)
@@ -1144,38 +1147,26 @@ class ProductionController extends Controller
     }
 
     /**
-     * Recalculate product balance and auto-update forecasted demand
-     * based on recent sales.
+     * Recalculate product balance (delegated to InventoryService, the single source of
+     * truth - see its docblock) and additionally auto-update forecasted demand based on
+     * recent sales, which is specific to this controller's workflow.
+     *
+     * This used to duplicate InventoryService's balance formula here with a real bug: it
+     * summed `quantity_kg` AND `quantity` together as "sold", but every sale-creation path
+     * writes the same value into both columns, so this double-counted every sale and
+     * understated the displayed remaining stock. Delegating removes the duplicate (buggy)
+     * logic entirely instead of just happening to match it.
      */
     private function recomputeProductBalance(int $productId): void
     {
-        $produced = (float) Production::where('product_id', $productId)->sum('quantity');
-
-        $sold = (float) Sale::where('product_id', $productId)
-            ->select(DB::raw(
-                'COALESCE(SUM(quantity_kg), 0) + COALESCE(SUM(quantity), 0) as s'
-            ))
-            ->value('s');
-
-        $balance = max(0.0, $produced - $sold);
-        $latestProdDate = Production::where('product_id', $productId)->max('production_date');
+        $this->inventory->recomputeProductBalance($productId);
 
         $product = Product::find($productId);
         if (!$product) {
-            Product::where('id', $productId)->update([
-                'quantity' => $balance,
-                'stock_status' => $balance > 0 ? 'in_stock' : 'out_of_stock',
-                'production_date' => $latestProdDate,
-            ]);
             return;
         }
 
-        $autoForecast = $this->computeForecastForProduct($product);
-
-        $product->quantity = $balance;
-        $product->stock_status = $balance > 0 ? 'in_stock' : 'out_of_stock';
-        $product->production_date = $latestProdDate;
-        $product->forecasted_demand = $autoForecast;
+        $product->forecasted_demand = $this->computeForecastForProduct($product);
         $product->save();
     }
 

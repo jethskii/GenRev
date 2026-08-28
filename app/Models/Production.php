@@ -448,31 +448,58 @@ class Production extends Model
     protected static function booted(): void
     {
         static::saving(function (self $m) {
-            // numeric coercions and clamps
-            $m->quantity          = is_numeric($m->quantity) ? (int) $m->quantity : 0;
-            $m->current_inventory = is_numeric($m->current_inventory) ? (float) $m->current_inventory : null;
-            $m->forecasted_demand = is_numeric($m->forecasted_demand) ? (float) $m->forecasted_demand : 0.0;
-            $m->unit_cost         = is_numeric($m->unit_cost) ? max(0.0, (float) $m->unit_cost) : 0.0;
-            $m->unit_price_pack   = is_numeric($m->unit_price_pack) ? max(0.0, (float) $m->unit_price_pack) : 0.0;
-            $m->unit_price_bag    = is_numeric($m->unit_price_bag)  ? max(0.0, (float) $m->unit_price_bag)  : 0.0;
+            // CRITICAL: every rule below only applies to a column if it's actually loaded on
+            // this model instance (or the row is brand new, where "not provided" legitimately
+            // means "use the default"). Without this guard, any partial-column query - e.g.
+            // Production::query()->get(['id','current_inventory', ...]) followed by ->save(),
+            // exactly what Sale::allocateAndDeduct()'s FIFO batch loop does - would silently
+            // reset every *unselected* column below (quantity, forecasted_demand, unit_cost,
+            // unit_price_pack/bag, image_disk, production_date, parent_product_id,
+            // product_name_snapshot) to its "empty" default on every save, destroying real
+            // production data. This was a real, confirmed bug: a kg-mode sale with no batch
+            // explicitly chosen wiped the affected batch's `quantity` (total ever produced) to 0.
+            $loaded = fn (string $field): bool => $m->exists === false || array_key_exists($field, $m->getAttributes());
 
-            $m->available_pack = is_numeric($m->available_pack) ? max(0, (int) $m->available_pack) : 0;
-            $m->available_bag  = is_numeric($m->available_bag)  ? max(0, (int) $m->available_bag)  : 0;
+            // numeric coercions and clamps
+            if ($loaded('quantity')) {
+                $m->quantity = is_numeric($m->quantity) ? (int) $m->quantity : 0;
+            }
+            if ($loaded('current_inventory')) {
+                $m->current_inventory = is_numeric($m->current_inventory) ? (float) $m->current_inventory : null;
+            }
+            if ($loaded('forecasted_demand')) {
+                $m->forecasted_demand = is_numeric($m->forecasted_demand) ? (float) $m->forecasted_demand : 0.0;
+            }
+            if ($loaded('unit_cost')) {
+                $m->unit_cost = is_numeric($m->unit_cost) ? max(0.0, (float) $m->unit_cost) : 0.0;
+            }
+            if ($loaded('unit_price_pack')) {
+                $m->unit_price_pack = is_numeric($m->unit_price_pack) ? max(0.0, (float) $m->unit_price_pack) : 0.0;
+            }
+            if ($loaded('unit_price_bag')) {
+                $m->unit_price_bag = is_numeric($m->unit_price_bag) ? max(0.0, (float) $m->unit_price_bag) : 0.0;
+            }
+            if ($loaded('available_pack')) {
+                $m->available_pack = is_numeric($m->available_pack) ? max(0, (int) $m->available_pack) : 0;
+            }
+            if ($loaded('available_bag')) {
+                $m->available_bag = is_numeric($m->available_bag) ? max(0, (int) $m->available_bag) : 0;
+            }
 
             if ($m->exists === false && ($m->current_inventory === null || $m->current_inventory === '')) {
                 $m->current_inventory = (int) $m->quantity;
             }
 
-            if (empty($m->image_disk)) {
+            if ($loaded('image_disk') && empty($m->image_disk)) {
                 $m->image_disk = 'public';
             }
 
-            if (empty($m->production_date)) {
+            if ($loaded('production_date') && empty($m->production_date)) {
                 $m->production_date = Carbon::today();
             }
 
             // ensure parent_product_id
-            if (empty($m->parent_product_id) && ! empty($m->product_id)) {
+            if ($loaded('parent_product_id') && empty($m->parent_product_id) && ! empty($m->product_id)) {
                 if ($m->relationLoaded('product') && $m->product) {
                     $m->parent_product_id = (int) ($m->product->parent_id ?: $m->product_id);
                 } else {
@@ -482,7 +509,7 @@ class Production extends Model
             }
 
             // snapshot label (type-ish text)
-            if (empty($m->product_name_snapshot)) {
+            if ($loaded('product_name_snapshot') && empty($m->product_name_snapshot)) {
                 $cat   = null;
                 $pname = null;
 
@@ -499,7 +526,7 @@ class Production extends Model
             }
 
             // expiration auto-calc from product’s shelf_life_days
-            if (empty($m->expiration_date) && ! empty($m->production_date)) {
+            if ($loaded('expiration_date') && empty($m->expiration_date) && ! empty($m->production_date)) {
                 $days = null;
 
                 if ($m->relationLoaded('product') && $m->product) {
@@ -514,58 +541,22 @@ class Production extends Model
             }
         });
 
+        // InventoryService is registered as an unconditional singleton in AppServiceProvider,
+        // so it is always bound in practice - it is the single source of truth for this
+        // calculation (see its docblock). A previous local fallback here duplicated the
+        // formula with the same double-counting bug ProductionController's copy had (summing
+        // quantity_kg + quantity, which are always equal for a given sale) and was removed
+        // rather than fixed-in-place, since it was already unreachable dead code.
         $recompute = function (self $m) {
             if ($m->product_id) {
-                $productId = (int) $m->product_id;
-
-                if (App::bound(\App\Services\InventoryService::class)) {
-                    App::make(\App\Services\InventoryService::class)
-                        ->recomputeProductBalance($productId);
-                } else {
-                    $m->recomputeProductBalanceInternal($productId);
-                }
+                App::make(\App\Services\InventoryService::class)
+                    ->recomputeProductBalance((int) $m->product_id);
             }
         };
 
         static::saved($recompute);
         static::deleted($recompute);
         static::restored($recompute);
-    }
-
-    /**
-     * Local fallback recompute if no service is bound.
-     * Connected to Production + Sale, ignoring archived rows.
-     */
-    protected function recomputeProductBalanceInternal(int $productId): void
-    {
-        $produced = (float) static::query()
-            ->where('product_id', $productId)
-            ->whereNull('deleted_at')
-            ->sum('quantity');
-
-        $sold = (float) Sale::query()
-            ->where('product_id', $productId)
-            ->whereNull('deleted_at')
-            ->selectRaw('COALESCE(SUM(quantity_kg),0) + COALESCE(SUM(quantity),0) as s')
-            ->value('s');
-
-        $balance = max(0.0, $produced - $sold);
-
-        $latestProdDate = static::query()
-            ->where('product_id', $productId)
-            ->whereNull('deleted_at')
-            ->max('production_date');
-
-        $data = [
-            'quantity'     => $balance,
-            'stock_status' => $balance > 0 ? 'in_stock' : 'out_of_stock',
-        ];
-
-        if (! is_null($latestProdDate)) {
-            $data['production_date'] = $latestProdDate;
-        }
-
-        Product::whereKey($productId)->update($data);
     }
 
     /* ============================ Convenience ============================ */
