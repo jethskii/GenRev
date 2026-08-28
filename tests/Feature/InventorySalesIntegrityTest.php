@@ -296,9 +296,8 @@ class InventorySalesIntegrityTest extends TestCase
     }
 
     /**
-     * Database-level constraint check (portable across MySQL/Postgres/SQLite, unlike the
-     * partial unique index which is Postgres-only): productions_product_batch_unique must
-     * reject a duplicate (product_id, batch_number) pair.
+     * Database-level constraint check (portable across MySQL/Postgres/SQLite):
+     * productions_product_batch_unique must reject a duplicate (product_id, batch_number) pair.
      */
     public function test_duplicate_batch_number_for_the_same_product_is_rejected_by_the_database(): void
     {
@@ -315,5 +314,33 @@ class InventorySalesIntegrityTest extends TestCase
             'product_id' => $product->id, 'batch_number' => '1',
             'quantity' => 5, 'current_inventory' => 5, 'production_date' => '2025-02-01',
         ]);
+    }
+
+    /**
+     * products.product_name uniqueness (excluding soft-deleted rows) was originally enforced
+     * at the DB level on Postgres only (2025_11_27_000001), leaving MySQL/SQLite with no real
+     * protection beyond the app-level Rule::unique() check - and meaning this constraint had
+     * zero automated test coverage, since the test suite runs on SQLite. Phase 3 closed that
+     * gap for both drivers (2025_11_28_000001), so this now runs for real on every test run.
+     */
+    public function test_duplicate_active_product_name_is_rejected_by_the_database(): void
+    {
+        Product::create(['product_name' => 'Unique Name Widget']);
+
+        $this->expectException(\Illuminate\Database\QueryException::class);
+
+        Product::create(['product_name' => 'Unique Name Widget']);
+    }
+
+    /** Soft-deleting a product must free up its name for reuse, not just at the app level. */
+    public function test_product_name_can_be_reused_after_the_original_is_soft_deleted(): void
+    {
+        $original = Product::create(['product_name' => 'Reusable Name Widget']);
+        $original->delete();
+
+        $reused = Product::create(['product_name' => 'Reusable Name Widget']);
+
+        $this->assertNotEquals($original->id, $reused->id);
+        $this->assertTrue($reused->exists);
     }
 }
