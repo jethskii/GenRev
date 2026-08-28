@@ -94,7 +94,15 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
-            'sslmode' => 'prefer',
+            'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Neon SNI workaround for older libpq clients - see
+            // App\Database\Connectors\NeonPostgresConnector. Set DB_LIBPQ_OPTIONS=endpoint=<id>
+            // (the first label of your Neon host, e.g. "ep-winter-dream-aee01zsf") only if
+            // you hit "Endpoint ID is not specified" errors; leave unset otherwise.
+            // Deliberately NOT named 'options' - that key is already reserved by Laravel's
+            // base Connector for an array of PDO driver options (PDO::ATTR_*), and colliding
+            // with it breaks every connection with a TypeError.
+            'libpq_options' => env('DB_LIBPQ_OPTIONS'),
         ],
 
         'sqlsrv' => [
