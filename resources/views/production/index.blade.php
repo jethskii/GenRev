@@ -231,6 +231,30 @@
 
 <div class="production-shell bg-white text-gray-900 p-6 rounded-2xl shadow-sm border border-gray-200">
 
+    {{-- INLINE ALERTS (top of page) --}}
+    @if (session('success'))
+      <div class="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm">
+        {{ session('success') }}
+      </div>
+    @endif
+
+    @if (session('error'))
+      <div class="mb-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3 text-sm">
+        {{ session('error') }}
+      </div>
+    @endif
+
+    @if ($errors->any())
+      <div class="mb-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 px-4 py-3 text-sm">
+        <div class="font-semibold mb-1">There were problems with your request:</div>
+        <ul class="list-disc list-inside space-y-0.5">
+          @foreach ($errors->all() as $error)
+            <li>{{ $error }}</li>
+          @endforeach
+        </ul>
+      </div>
+    @endif
+
     {{-- Header --}}
     <div class="flex justify-between items-center mb-2">
         <h2 class="prod-header-title text-2xl font-bold tracking-wide">
